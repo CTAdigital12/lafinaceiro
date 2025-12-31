@@ -1,25 +1,61 @@
-import { Wallet, TrendingUp, TrendingDown, CreditCard } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, CreditCard, Loader2 } from "lucide-react";
 import { SummaryCard } from "@/components/dashboard/SummaryCard";
 import { CategoryChart } from "@/components/dashboard/CategoryChart";
 import { BalanceChart } from "@/components/dashboard/BalanceChart";
-
-const expenseData = [
-  { name: "Moradia", value: 1500, color: "hsl(217, 91%, 60%)" },
-  { name: "Alimentação", value: 800, color: "hsl(142, 71%, 45%)" },
-  { name: "Transporte", value: 450, color: "hsl(45, 93%, 47%)" },
-  { name: "Lazer", value: 350, color: "hsl(280, 65%, 60%)" },
-  { name: "Saúde", value: 200, color: "hsl(0, 84%, 60%)" },
-  { name: "Outros", value: 400, color: "hsl(190, 80%, 45%)" },
-];
-
-const incomeData = [
-  { name: "Salário", value: 5500, color: "hsl(142, 71%, 45%)" },
-  { name: "Freelance", value: 1200, color: "hsl(217, 91%, 60%)" },
-  { name: "Investimentos", value: 350, color: "hsl(45, 93%, 47%)" },
-  { name: "Outros", value: 150, color: "hsl(280, 65%, 60%)" },
-];
+import { useAccounts } from "@/hooks/useAccounts";
+import { useTransactions } from "@/hooks/useTransactions";
+import { useCreditCards } from "@/hooks/useCreditCards";
+import { useCategories } from "@/hooks/useCategories";
 
 export default function Dashboard() {
+  const { totalBalance, isLoading: accountsLoading } = useAccounts();
+  const { transactions, totalIncome, totalExpense, isLoading: transactionsLoading } = useTransactions();
+  const { totalInvoice, isLoading: cardsLoading } = useCreditCards();
+  const { expenseCategories, incomeCategories, isLoading: categoriesLoading } = useCategories();
+
+  const isLoading = accountsLoading || transactionsLoading || cardsLoading || categoriesLoading;
+
+  // Calculate expenses by category
+  const expensesByCategory = expenseCategories.map((cat) => {
+    const total = transactions
+      .filter((t) => t.type === "expense" && t.category_id === cat.id)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    return {
+      name: cat.name,
+      value: total,
+      color: cat.color,
+    };
+  }).filter((c) => c.value > 0);
+
+  // Calculate income by category
+  const incomeByCategory = incomeCategories.map((cat) => {
+    const total = transactions
+      .filter((t) => t.type === "income" && t.category_id === cat.id)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    return {
+      name: cat.name,
+      value: total,
+      color: cat.color,
+    };
+  }).filter((c) => c.value > 0);
+
+  // Default data for empty states
+  const defaultExpenseData = expensesByCategory.length > 0 ? expensesByCategory : [
+    { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)" },
+  ];
+
+  const defaultIncomeData = incomeByCategory.length > 0 ? incomeByCategory : [
+    { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)" },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-balance" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
@@ -32,31 +68,28 @@ export default function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           title="Saldo Atual"
-          value="R$ 12.450,00"
-          subtitle="Atualizado agora"
+          value={`R$ ${totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+          subtitle="Todas as contas"
           icon={Wallet}
           variant="balance"
-          trend={{ value: 12.5, isPositive: true }}
         />
         <SummaryCard
           title="Receitas"
-          value="R$ 7.200,00"
+          value={`R$ ${totalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           subtitle="Este mês"
           icon={TrendingUp}
           variant="income"
-          trend={{ value: 8.2, isPositive: true }}
         />
         <SummaryCard
           title="Despesas"
-          value="R$ 3.700,00"
+          value={`R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           subtitle="Este mês"
           icon={TrendingDown}
           variant="expense"
-          trend={{ value: 5.4, isPositive: false }}
         />
         <SummaryCard
           title="Cartão de Crédito"
-          value="R$ 1.850,00"
+          value={`R$ ${totalInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           subtitle="Fatura atual"
           icon={CreditCard}
           variant="card"
@@ -65,8 +98,8 @@ export default function Dashboard() {
 
       {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <CategoryChart title="Despesas por Categoria" data={expenseData} />
-        <CategoryChart title="Receitas por Categoria" data={incomeData} />
+        <CategoryChart title="Despesas por Categoria" data={defaultExpenseData} />
+        <CategoryChart title="Receitas por Categoria" data={defaultIncomeData} />
       </div>
 
       {/* Balance Chart */}
