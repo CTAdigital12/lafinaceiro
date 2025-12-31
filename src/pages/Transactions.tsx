@@ -10,6 +10,7 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,41 +25,35 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-
-interface Transaction {
-  id: string;
-  date: string;
-  description: string;
-  category: string;
-  account: string;
-  amount: number;
-  type: "income" | "expense";
-  status: "completed" | "pending";
-}
-
-const transactions: Transaction[] = [
-  { id: "1", date: "2024-01-15", description: "Salário", category: "Salário", account: "Itaú", amount: 5500, type: "income", status: "completed" },
-  { id: "2", date: "2024-01-14", description: "Aluguel", category: "Moradia", account: "Itaú", amount: 1500, type: "expense", status: "completed" },
-  { id: "3", date: "2024-01-13", description: "Supermercado Extra", category: "Alimentação", account: "Nubank", amount: 450, type: "expense", status: "completed" },
-  { id: "4", date: "2024-01-12", description: "Freelance - Projeto X", category: "Freelance", account: "Nubank", amount: 1200, type: "income", status: "completed" },
-  { id: "5", date: "2024-01-11", description: "Uber", category: "Transporte", account: "Nubank", amount: 85, type: "expense", status: "pending" },
-  { id: "6", date: "2024-01-10", description: "Netflix", category: "Lazer", account: "Nubank", amount: 55, type: "expense", status: "completed" },
-  { id: "7", date: "2024-01-09", description: "Farmácia", category: "Saúde", account: "Carteira", amount: 120, type: "expense", status: "completed" },
-  { id: "8", date: "2024-01-08", description: "Dividendos", category: "Investimentos", account: "Bradesco", amount: 350, type: "income", status: "completed" },
-];
+import { useTransactions } from "@/hooks/useTransactions";
+import { useAccounts } from "@/hooks/useAccounts";
+import { NewTransactionModal } from "@/components/modals/NewTransactionModal";
 
 export default function Transactions() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const { transactions, isLoading, totalIncome, totalExpense, deleteTransaction } = useTransactions();
+  const { totalBalance } = useAccounts();
 
-  const totalIncome = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
-  const currentBalance = totalIncome - totalExpense;
+  const filteredTransactions = transactions.filter((t) =>
+    t.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const toggleTransaction = (id: string) => {
     setSelectedTransactions((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
     );
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-balance" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex gap-6">
@@ -70,7 +65,7 @@ export default function Transactions() {
             <h1 className="text-2xl font-bold text-foreground">Transações</h1>
             <p className="text-muted-foreground">Gerencie suas receitas e despesas</p>
           </div>
-          <Button className="gap-2 bg-primary hover:bg-primary/90">
+          <Button onClick={() => setIsModalOpen(true)} className="gap-2 bg-primary hover:bg-primary/90">
             <Plus className="h-4 w-4" />
             Nova Transação
           </Button>
@@ -80,7 +75,12 @@ export default function Transactions() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar transações..." className="pl-9" />
+            <Input 
+              placeholder="Buscar transações..." 
+              className="pl-9" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
           <Button variant="outline" className="gap-2">
             <Filter className="h-4 w-4" />
@@ -89,72 +89,101 @@ export default function Transactions() {
         </div>
 
         {/* Transactions Table */}
-        <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-12"></TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead>Conta</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="w-20">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions.map((transaction) => (
-                <TableRow key={transaction.id} className="group">
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedTransactions.includes(transaction.id)}
-                      onCheckedChange={() => toggleTransaction(transaction.id)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {transaction.status === "completed" ? (
-                      <CheckCircle2 className="h-4 w-4 text-income" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(transaction.date).toLocaleDateString("pt-BR")}
-                  </TableCell>
-                  <TableCell className="font-medium">{transaction.description}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="font-normal">
-                      {transaction.category}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{transaction.account}</TableCell>
-                  <TableCell className="text-right">
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        transaction.type === "income" ? "text-income" : "text-expense"
-                      )}
-                    >
-                      {transaction.type === "income" ? "+" : "-"} R${" "}
-                      {transaction.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-expense hover:text-expense">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+        {filteredTransactions.length === 0 ? (
+          <div className="bg-card rounded-xl border border-border p-12 text-center shadow-card">
+            <Wallet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              {searchQuery ? "Nenhuma transação encontrada" : "Nenhuma transação cadastrada"}
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              {searchQuery ? "Tente buscar por outro termo" : "Adicione sua primeira transação para começar"}
+            </p>
+            {!searchQuery && (
+              <Button onClick={() => setIsModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Transação
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-12"></TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Conta</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="w-20">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {filteredTransactions.map((transaction) => (
+                  <TableRow key={transaction.id} className="group">
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedTransactions.includes(transaction.id)}
+                        onCheckedChange={() => toggleTransaction(transaction.id)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {transaction.status === "completed" ? (
+                        <CheckCircle2 className="h-4 w-4 text-income" />
+                      ) : (
+                        <Circle className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                    </TableCell>
+                    <TableCell className="font-medium">{transaction.description}</TableCell>
+                    <TableCell>
+                      {transaction.categories ? (
+                        <Badge variant="secondary" className="font-normal">
+                          {transaction.categories.icon} {transaction.categories.name}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {transaction.accounts?.name || "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span
+                        className={cn(
+                          "font-semibold",
+                          transaction.type === "income" ? "text-income" : "text-expense"
+                        )}
+                      >
+                        {transaction.type === "income" ? "+" : "-"} R${" "}
+                        {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-expense hover:text-expense"
+                          onClick={() => deleteTransaction.mutate(transaction.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
 
       {/* Sidebar Summary */}
@@ -169,7 +198,7 @@ export default function Transactions() {
               <div>
                 <p className="text-xs text-muted-foreground">Saldo Atual</p>
                 <p className="text-lg font-bold text-foreground">
-                  R$ {currentBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -206,6 +235,8 @@ export default function Transactions() {
           </div>
         </div>
       </div>
+
+      <NewTransactionModal open={isModalOpen} onOpenChange={setIsModalOpen} />
     </div>
   );
 }

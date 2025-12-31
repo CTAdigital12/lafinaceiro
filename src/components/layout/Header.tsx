@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Bell, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, Bell, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -9,27 +9,46 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const months = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
 ];
 
-export function Header() {
-  const [currentDate, setCurrentDate] = useState(new Date());
+interface HeaderProps {
+  currentDate: Date;
+  onDateChange: (date: Date) => void;
+}
+
+export function Header({ currentDate, onDateChange }: HeaderProps) {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const navigateMonth = (direction: "prev" | "next") => {
-    setCurrentDate((prev) => {
-      const newDate = new Date(prev);
-      if (direction === "prev") {
-        newDate.setMonth(newDate.getMonth() - 1);
-      } else {
-        newDate.setMonth(newDate.getMonth() + 1);
-      }
-      return newDate;
-    });
+    const newDate = new Date(currentDate);
+    if (direction === "prev") {
+      newDate.setMonth(newDate.getMonth() - 1);
+    } else {
+      newDate.setMonth(newDate.getMonth() + 1);
+    }
+    onDateChange(newDate);
   };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
+
+  const userInitials = user?.user_metadata?.full_name
+    ?.split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || user?.email?.slice(0, 2).toUpperCase() || "US";
+
+  const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuário";
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-6">
@@ -63,9 +82,6 @@ export function Header() {
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-expense text-[10px] font-medium text-expense-foreground">
-            3
-          </span>
         </Button>
 
         {/* Profile */}
@@ -75,22 +91,23 @@ export function Header() {
               <Avatar className="h-8 w-8">
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-balance text-balance-foreground text-sm">
-                  US
+                  {userInitials}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden sm:inline text-sm font-medium">Usuário</span>
+              <span className="hidden sm:inline text-sm font-medium">{userName}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              Perfil
+            <DropdownMenuItem onClick={() => navigate("/settings")}>
+              Configurações
             </DropdownMenuItem>
-            <DropdownMenuItem>Configurações</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-expense">Sair</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSignOut} className="text-expense">
+              <LogOut className="mr-2 h-4 w-4" />
+              Sair
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
