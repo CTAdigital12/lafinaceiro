@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Plus, CreditCard, Calendar, Wallet, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,62 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-
-interface CreditCardData {
-  id: string;
-  name: string;
-  lastDigits: string;
-  brand: string;
-  currentInvoice: number;
-  limit: number;
-  availableLimit: number;
-  dueDate: string;
-  closingDate: string;
-  status: "open" | "closed" | "paid";
-  color: string;
-}
-
-const creditCards: CreditCardData[] = [
-  {
-    id: "1",
-    name: "Nubank",
-    lastDigits: "4523",
-    brand: "Mastercard",
-    currentInvoice: 1850.0,
-    limit: 8000.0,
-    availableLimit: 6150.0,
-    dueDate: "2024-02-10",
-    closingDate: "2024-02-03",
-    status: "open",
-    color: "from-purple-500 via-purple-600 to-purple-700",
-  },
-  {
-    id: "2",
-    name: "Itaú Platinum",
-    lastDigits: "8891",
-    brand: "Visa",
-    currentInvoice: 3200.0,
-    limit: 12000.0,
-    availableLimit: 8800.0,
-    dueDate: "2024-02-15",
-    closingDate: "2024-02-08",
-    status: "closed",
-    color: "from-orange-500 via-orange-600 to-amber-600",
-  },
-  {
-    id: "3",
-    name: "Inter Black",
-    lastDigits: "2156",
-    brand: "Mastercard",
-    currentInvoice: 0,
-    limit: 5000.0,
-    availableLimit: 5000.0,
-    dueDate: "2024-02-20",
-    closingDate: "2024-02-13",
-    status: "paid",
-    color: "from-gray-800 via-gray-900 to-black",
-  },
-];
+import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditCards";
+import { NewCreditCardModal } from "@/components/modals/NewCreditCardModal";
 
 const statusConfig = {
   open: { label: "Fatura Aberta", variant: "default" as const, className: "bg-balance text-balance-foreground" },
@@ -72,9 +19,10 @@ const statusConfig = {
   paid: { label: "Paga", variant: "secondary" as const, className: "bg-income/10 text-income" },
 };
 
-function CreditCardComponent({ card }: { card: CreditCardData }) {
-  const usagePercent = ((card.limit - card.availableLimit) / card.limit) * 100;
-  const status = statusConfig[card.status];
+function CreditCardComponent({ card, onDelete }: { card: CreditCardType; onDelete: () => void }) {
+  const availableLimit = Number(card.credit_limit) - Number(card.current_invoice);
+  const usagePercent = (Number(card.current_invoice) / Number(card.credit_limit)) * 100;
+  const status = statusConfig[card.status as keyof typeof statusConfig] || statusConfig.open;
 
   return (
     <div className="space-y-4 animate-scale-in">
@@ -109,7 +57,7 @@ function CreditCardComponent({ card }: { card: CreditCardData }) {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem>Ver fatura</DropdownMenuItem>
                 <DropdownMenuItem>Editar</DropdownMenuItem>
-                <DropdownMenuItem className="text-expense">Bloquear</DropdownMenuItem>
+                <DropdownMenuItem className="text-expense" onClick={onDelete}>Excluir</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -119,7 +67,7 @@ function CreditCardComponent({ card }: { card: CreditCardData }) {
             <span className="opacity-50">••••</span>
             <span className="opacity-50">••••</span>
             <span className="opacity-50">••••</span>
-            <span>{card.lastDigits}</span>
+            <span>{card.last_digits}</span>
           </div>
 
           {/* Footer */}
@@ -139,13 +87,13 @@ function CreditCardComponent({ card }: { card: CreditCardData }) {
           <div>
             <p className="text-sm text-muted-foreground">Fatura Atual</p>
             <p className="text-xl font-bold text-foreground">
-              R$ {card.currentInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              R$ {Number(card.current_invoice).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Limite Disponível</p>
             <p className="text-lg font-semibold text-income">
-              R$ {card.availableLimit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              R$ {availableLimit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
           </div>
         </div>
@@ -171,18 +119,14 @@ function CreditCardComponent({ card }: { card: CreditCardData }) {
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-xs text-muted-foreground">Vencimento</p>
-              <p className="text-sm font-medium">
-                {new Date(card.dueDate).toLocaleDateString("pt-BR")}
-              </p>
+              <p className="text-sm font-medium">Dia {card.due_date}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-xs text-muted-foreground">Fechamento</p>
-              <p className="text-sm font-medium">
-                {new Date(card.closingDate).toLocaleDateString("pt-BR")}
-              </p>
+              <p className="text-sm font-medium">Dia {card.closing_date}</p>
             </div>
           </div>
         </div>
@@ -192,9 +136,8 @@ function CreditCardComponent({ card }: { card: CreditCardData }) {
 }
 
 export default function CreditCards() {
-  const totalInvoice = creditCards.reduce((sum, card) => sum + card.currentInvoice, 0);
-  const totalLimit = creditCards.reduce((sum, card) => sum + card.limit, 0);
-  const totalAvailable = creditCards.reduce((sum, card) => sum + card.availableLimit, 0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { creditCards, isLoading, totalInvoice, totalLimit, totalAvailable, deleteCreditCard } = useCreditCards();
 
   return (
     <div className="space-y-6">
@@ -204,7 +147,7 @@ export default function CreditCards() {
           <h1 className="text-2xl font-bold text-foreground">Cartões de Crédito</h1>
           <p className="text-muted-foreground">Gerencie seus cartões e faturas</p>
         </div>
-        <Button className="gap-2 bg-primary hover:bg-primary/90">
+        <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={() => setIsModalOpen(true)}>
           <Plus className="h-4 w-4" />
           Novo Cartão
         </Button>
@@ -254,11 +197,31 @@ export default function CreditCards() {
       </div>
 
       {/* Credit Cards Grid */}
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {creditCards.map((card) => (
-          <CreditCardComponent key={card.id} card={card} />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="text-center py-8 text-muted-foreground">Carregando cartões...</div>
+      ) : creditCards.length === 0 ? (
+        <div className="text-center py-12">
+          <CreditCard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">Nenhum cartão cadastrado</h3>
+          <p className="text-muted-foreground mb-4">Adicione seu primeiro cartão de crédito</p>
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Cartão
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {creditCards.map((card) => (
+            <CreditCardComponent 
+              key={card.id} 
+              card={card} 
+              onDelete={() => deleteCreditCard.mutate(card.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      <NewCreditCardModal open={isModalOpen} onOpenChange={setIsModalOpen} />
     </div>
   );
 }
