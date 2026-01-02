@@ -16,12 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts } from "@/hooks/useAccounts";
+import { useAccounts, Account } from "@/hooks/useAccounts";
 import { detectBankFromName } from "@/lib/bankConfig";
 
-interface NewAccountModalProps {
+interface AccountModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  account?: Account | null;
 }
 
 const accountTypes = [
@@ -40,7 +41,7 @@ const colorOptions = [
   { value: "from-gray-700 to-gray-800", label: "Cinza" },
 ];
 
-export function NewAccountModal({ open, onOpenChange }: NewAccountModalProps) {
+export function AccountModal({ open, onOpenChange, account }: AccountModalProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"bank" | "wallet" | "savings" | "investment">("bank");
   const [balance, setBalance] = useState("");
@@ -48,50 +49,72 @@ export function NewAccountModal({ open, onOpenChange }: NewAccountModalProps) {
   const [icon, setIcon] = useState("🏦");
   const [detectedBank, setDetectedBank] = useState<string | null>(null);
   
-  const { createAccount } = useAccounts();
+  const { createAccount, updateAccount } = useAccounts();
+  const isEditing = !!account;
+
+  // Initialize form with account data when editing
+  useEffect(() => {
+    if (account) {
+      setName(account.name);
+      setType(account.type);
+      setBalance(String(account.current_balance));
+      setColor(account.color);
+      setIcon(account.icon);
+    } else {
+      setName("");
+      setType("bank");
+      setBalance("");
+      setColor("from-blue-500 to-blue-600");
+      setIcon("🏦");
+      setDetectedBank(null);
+    }
+  }, [account, open]);
 
   // Detect bank from name
   useEffect(() => {
-    const bank = detectBankFromName(name);
-    if (bank) {
-      setColor(bank.color);
-      setIcon(bank.icon);
-      setDetectedBank(bank.name);
-    } else {
-      setDetectedBank(null);
-      const selectedType = accountTypes.find((t) => t.value === type);
-      setIcon(selectedType?.icon || "🏦");
+    if (!isEditing) {
+      const bank = detectBankFromName(name);
+      if (bank) {
+        setColor(bank.color);
+        setIcon(bank.icon);
+        setDetectedBank(bank.name);
+      } else {
+        setDetectedBank(null);
+        const selectedType = accountTypes.find((t) => t.value === type);
+        setIcon(selectedType?.icon || "🏦");
+      }
     }
-  }, [name, type]);
+  }, [name, type, isEditing]);
 
   const selectedType = accountTypes.find((t) => t.value === type);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    await createAccount.mutateAsync({
+    const accountData = {
       name,
       type,
       current_balance: parseFloat(balance) || 0,
       icon: detectedBank ? icon : (selectedType?.icon || "🏦"),
       color,
-    });
+    };
 
-    // Reset form
-    setName("");
-    setType("bank");
-    setBalance("");
-    setColor("from-blue-500 to-blue-600");
-    setIcon("🏦");
-    setDetectedBank(null);
+    if (isEditing && account) {
+      await updateAccount.mutateAsync({ id: account.id, ...accountData });
+    } else {
+      await createAccount.mutateAsync(accountData);
+    }
+
     onOpenChange(false);
   };
+
+  const isPending = createAccount.isPending || updateAccount.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Nova Conta</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Conta" : "Nova Conta"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name */}
@@ -128,9 +151,9 @@ export function NewAccountModal({ open, onOpenChange }: NewAccountModalProps) {
             </Select>
           </div>
 
-          {/* Initial Balance */}
+          {/* Balance */}
           <div className="space-y-2">
-            <Label htmlFor="balance">Saldo Inicial</Label>
+            <Label htmlFor="balance">{isEditing ? "Saldo Atual" : "Saldo Inicial"}</Label>
             <Input
               id="balance"
               type="number"
@@ -162,12 +185,14 @@ export function NewAccountModal({ open, onOpenChange }: NewAccountModalProps) {
           </div>
 
           {/* Submit */}
-          <Button type="submit" className="w-full" disabled={createAccount.isPending}>
-            {createAccount.isPending ? (
+          <Button type="submit" className="w-full" disabled={isPending}>
+            {isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Salvando...
               </>
+            ) : isEditing ? (
+              "Salvar Alterações"
             ) : (
               "Criar Conta"
             )}

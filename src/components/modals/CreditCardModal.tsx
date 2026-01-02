@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreditCards } from "@/hooks/useCreditCards";
-import { detectBankFromName, detectCardBrandColor } from "@/lib/bankConfig";
+import { useCreditCards, CreditCard } from "@/hooks/useCreditCards";
+import { detectBankFromName } from "@/lib/bankConfig";
 import { Loader2 } from "lucide-react";
 
-interface NewCreditCardModalProps {
+interface CreditCardModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  creditCard?: CreditCard | null;
 }
 
 const brandOptions = [
@@ -31,63 +32,92 @@ const colorOptions = [
   { value: "from-red-500 via-red-600 to-red-700", label: "Vermelho" },
 ];
 
-export function NewCreditCardModal({ open, onOpenChange }: NewCreditCardModalProps) {
-  const { createCreditCard } = useCreditCards();
+export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardModalProps) {
+  const { createCreditCard, updateCreditCard } = useCreditCards();
   const [name, setName] = useState("");
   const [lastDigits, setLastDigits] = useState("");
   const [brand, setBrand] = useState("");
   const [creditLimit, setCreditLimit] = useState("");
+  const [currentInvoice, setCurrentInvoice] = useState("");
   const [dueDate, setDueDate] = useState("10");
   const [closingDate, setClosingDate] = useState("3");
   const [color, setColor] = useState("from-purple-500 via-purple-600 to-purple-700");
   const [detectedBank, setDetectedBank] = useState<string | null>(null);
 
-  // Detect bank from name and auto-set color
+  const isEditing = !!creditCard;
+
+  // Initialize form with credit card data when editing
   useEffect(() => {
-    const bank = detectBankFromName(name);
-    if (bank) {
-      setColor(bank.color);
-      setDetectedBank(bank.name);
+    if (creditCard) {
+      setName(creditCard.name);
+      setLastDigits(creditCard.last_digits);
+      setBrand(creditCard.brand);
+      setCreditLimit(String(creditCard.credit_limit));
+      setCurrentInvoice(String(creditCard.current_invoice));
+      setDueDate(String(creditCard.due_date));
+      setClosingDate(String(creditCard.closing_date));
+      setColor(creditCard.color);
     } else {
+      setName("");
+      setLastDigits("");
+      setBrand("");
+      setCreditLimit("");
+      setCurrentInvoice("");
+      setDueDate("10");
+      setClosingDate("3");
+      setColor("from-purple-500 via-purple-600 to-purple-700");
       setDetectedBank(null);
     }
-  }, [name]);
+  }, [creditCard, open]);
+
+  // Detect bank from name and auto-set color
+  useEffect(() => {
+    if (!isEditing) {
+      const bank = detectBankFromName(name);
+      if (bank) {
+        setColor(bank.color);
+        setDetectedBank(bank.name);
+      } else {
+        setDetectedBank(null);
+      }
+    }
+  }, [name, isEditing]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    createCreditCard.mutate({
+    const cardData = {
       name,
       last_digits: lastDigits,
       brand,
       credit_limit: parseFloat(creditLimit) || 0,
-      current_invoice: 0,
+      current_invoice: parseFloat(currentInvoice) || 0,
       due_date: parseInt(dueDate) || 10,
       closing_date: parseInt(closingDate) || 3,
       color,
-      status: "open",
-    }, {
-      onSuccess: () => {
-        setName("");
-        setLastDigits("");
-        setBrand("");
-        setCreditLimit("");
-        setDueDate("10");
-        setClosingDate("3");
-        setColor("from-purple-500 via-purple-600 to-purple-700");
-        setDetectedBank(null);
-        onOpenChange(false);
-      }
-    });
+      status: "open" as const,
+    };
+
+    if (isEditing && creditCard) {
+      updateCreditCard.mutate({ id: creditCard.id, ...cardData }, {
+        onSuccess: () => onOpenChange(false)
+      });
+    } else {
+      createCreditCard.mutate(cardData, {
+        onSuccess: () => onOpenChange(false)
+      });
+    }
   };
+
+  const isPending = createCreditCard.isPending || updateCreditCard.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Novo Cartão de Crédito</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Cartão de Crédito" : "Novo Cartão de Crédito"}</DialogTitle>
           <DialogDescription>
-            Adicione um novo cartão para gerenciar suas faturas
+            {isEditing ? "Atualize as informações do seu cartão" : "Adicione um novo cartão para gerenciar suas faturas"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -136,17 +166,32 @@ export function NewCreditCardModal({ open, onOpenChange }: NewCreditCardModalPro
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="limit">Limite</Label>
-            <Input
-              id="limit"
-              type="number"
-              step="0.01"
-              placeholder="0,00"
-              value={creditLimit}
-              onChange={(e) => setCreditLimit(e.target.value)}
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="limit">Limite</Label>
+              <Input
+                id="limit"
+                type="number"
+                step="0.01"
+                placeholder="0,00"
+                value={creditLimit}
+                onChange={(e) => setCreditLimit(e.target.value)}
+                required
+              />
+            </div>
+            {isEditing && (
+              <div className="space-y-2">
+                <Label htmlFor="invoice">Fatura Atual</Label>
+                <Input
+                  id="invoice"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={currentInvoice}
+                  onChange={(e) => setCurrentInvoice(e.target.value)}
+                />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -201,8 +246,17 @@ export function NewCreditCardModal({ open, onOpenChange }: NewCreditCardModalPro
             <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" className="flex-1" disabled={createCreditCard.isPending}>
-              {createCreditCard.isPending ? "Salvando..." : "Salvar"}
+            <Button type="submit" className="flex-1" disabled={isPending}>
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : isEditing ? (
+                "Salvar Alterações"
+              ) : (
+                "Salvar"
+              )}
             </Button>
           </div>
         </form>
