@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { format } from "date-fns";
+import { useState, useEffect } from "react";
+import { format, parseISO } from "date-fns";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,57 +26,89 @@ import {
 import { cn } from "@/lib/utils";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
-import { useTransactions } from "@/hooks/useTransactions";
+import { useCreditCards } from "@/hooks/useCreditCards";
+import { useTransactions, Transaction } from "@/hooks/useTransactions";
 
-interface NewTransactionModalProps {
+interface TransactionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  transaction?: Transaction | null;
 }
 
-export function NewTransactionModal({ open, onOpenChange }: NewTransactionModalProps) {
+export function TransactionModal({ open, onOpenChange, transaction }: TransactionModalProps) {
   const [type, setType] = useState<"income" | "expense">("expense");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [accountId, setAccountId] = useState("");
+  const [creditCardId, setCreditCardId] = useState("");
   const [date, setDate] = useState<Date>(new Date());
   const [status, setStatus] = useState<"completed" | "pending">("completed");
+  const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_card">("account");
   
   const { incomeCategories, expenseCategories } = useCategories();
   const { accounts } = useAccounts();
-  const { createTransaction } = useTransactions();
+  const { creditCards } = useCreditCards();
+  const { createTransaction, updateTransaction } = useTransactions();
 
+  const isEditing = !!transaction;
   const categories = type === "income" ? incomeCategories : expenseCategories;
+
+  // Initialize form with transaction data when editing
+  useEffect(() => {
+    if (transaction) {
+      setType(transaction.type as "income" | "expense");
+      setDescription(transaction.description);
+      setAmount(String(transaction.amount));
+      setCategoryId(transaction.category_id || "");
+      setAccountId(transaction.account_id || "");
+      setCreditCardId(transaction.credit_card_id || "");
+      setDate(parseISO(transaction.date));
+      setStatus(transaction.status as "completed" | "pending");
+      setPaymentMethod(transaction.credit_card_id ? "credit_card" : "account");
+    } else {
+      setType("expense");
+      setDescription("");
+      setAmount("");
+      setCategoryId("");
+      setAccountId("");
+      setCreditCardId("");
+      setDate(new Date());
+      setStatus("completed");
+      setPaymentMethod("account");
+    }
+  }, [transaction, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    await createTransaction.mutateAsync({
+    const transactionData = {
       description,
       amount: parseFloat(amount),
       type,
       category_id: categoryId || null,
-      account_id: accountId || null,
-      credit_card_id: null,
+      account_id: paymentMethod === "account" ? (accountId || null) : null,
+      credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
       date: format(date, "yyyy-MM-dd"),
       status,
-    });
+    };
 
-    // Reset form
-    setDescription("");
-    setAmount("");
-    setCategoryId("");
-    setAccountId("");
-    setDate(new Date());
-    setStatus("completed");
+    if (isEditing && transaction) {
+      await updateTransaction.mutateAsync({ id: transaction.id, ...transactionData });
+    } else {
+      await createTransaction.mutateAsync(transactionData);
+    }
+
     onOpenChange(false);
   };
+
+  const isPending = createTransaction.isPending || updateTransaction.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Nova Transação</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Transação" : "Nova Transação"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Type Toggle */}
@@ -151,22 +183,71 @@ export function NewTransactionModal({ open, onOpenChange }: NewTransactionModalP
             </Select>
           </div>
 
-          {/* Account */}
+          {/* Payment Method Toggle */}
           <div className="space-y-2">
-            <Label>Conta</Label>
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma conta" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((acc) => (
-                  <SelectItem key={acc.id} value={acc.id}>
-                    {acc.icon} {acc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Método de Pagamento</Label>
+            <div className="flex rounded-lg bg-muted p-1">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("account")}
+                className={cn(
+                  "flex-1 rounded-md py-2 text-sm font-medium transition-all",
+                  paymentMethod === "account"
+                    ? "bg-background shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Conta
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("credit_card")}
+                className={cn(
+                  "flex-1 rounded-md py-2 text-sm font-medium transition-all",
+                  paymentMethod === "credit_card"
+                    ? "bg-background shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Cartão de Crédito
+              </button>
+            </div>
           </div>
+
+          {/* Account or Credit Card */}
+          {paymentMethod === "account" ? (
+            <div className="space-y-2">
+              <Label>Conta</Label>
+              <Select value={accountId} onValueChange={setAccountId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.icon} {acc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Cartão de Crédito</Label>
+              <Select value={creditCardId} onValueChange={setCreditCardId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um cartão" />
+                </SelectTrigger>
+                <SelectContent>
+                  {creditCards.map((card) => (
+                    <SelectItem key={card.id} value={card.id}>
+                      💳 {card.name} (*{card.last_digits})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Date */}
           <div className="space-y-2">
@@ -211,12 +292,14 @@ export function NewTransactionModal({ open, onOpenChange }: NewTransactionModalP
           </div>
 
           {/* Submit */}
-          <Button type="submit" className="w-full" disabled={createTransaction.isPending}>
-            {createTransaction.isPending ? (
+          <Button type="submit" className="w-full" disabled={isPending}>
+            {isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Salvando...
               </>
+            ) : isEditing ? (
+              "Salvar Alterações"
             ) : (
               "Salvar Transação"
             )}

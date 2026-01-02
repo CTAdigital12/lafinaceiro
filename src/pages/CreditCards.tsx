@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditCards";
-import { NewCreditCardModal } from "@/components/modals/NewCreditCardModal";
+import { CreditCardModal } from "@/components/modals/CreditCardModal";
 
 const statusConfig = {
   open: { label: "Fatura Aberta", variant: "default" as const, className: "bg-balance text-balance-foreground" },
@@ -19,7 +19,13 @@ const statusConfig = {
   paid: { label: "Paga", variant: "secondary" as const, className: "bg-income/10 text-income" },
 };
 
-function CreditCardComponent({ card, onDelete }: { card: CreditCardType; onDelete: () => void }) {
+interface CreditCardComponentProps {
+  card: CreditCardType;
+  onEdit: (card: CreditCardType) => void;
+  onDelete: () => void;
+}
+
+function CreditCardComponent({ card, onEdit, onDelete }: CreditCardComponentProps) {
   const availableLimit = Number(card.credit_limit) - Number(card.current_invoice);
   const usagePercent = (Number(card.current_invoice) / Number(card.credit_limit)) * 100;
   const status = statusConfig[card.status as keyof typeof statusConfig] || statusConfig.open;
@@ -56,7 +62,7 @@ function CreditCardComponent({ card, onDelete }: { card: CreditCardType; onDelet
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem>Ver fatura</DropdownMenuItem>
-                <DropdownMenuItem>Editar</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onEdit(card)}>Editar</DropdownMenuItem>
                 <DropdownMenuItem className="text-expense" onClick={onDelete}>Excluir</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -137,7 +143,20 @@ function CreditCardComponent({ card, onDelete }: { card: CreditCardType; onDelet
 
 export default function CreditCards() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
   const { creditCards, isLoading, totalInvoice, totalLimit, totalAvailable, deleteCreditCard } = useCreditCards();
+
+  const handleEdit = (card: CreditCardType) => {
+    setEditingCard(card);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = (open: boolean) => {
+    setIsModalOpen(open);
+    if (!open) {
+      setEditingCard(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -214,14 +233,19 @@ export default function CreditCards() {
           {creditCards.map((card) => (
             <CreditCardComponent 
               key={card.id} 
-              card={card} 
+              card={card}
+              onEdit={handleEdit}
               onDelete={() => deleteCreditCard.mutate(card.id)}
             />
           ))}
         </div>
       )}
 
-      <NewCreditCardModal open={isModalOpen} onOpenChange={setIsModalOpen} />
+      <CreditCardModal 
+        open={isModalOpen} 
+        onOpenChange={handleModalClose} 
+        creditCard={editingCard}
+      />
     </div>
   );
 }

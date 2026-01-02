@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useAccounts, Account } from "@/hooks/useAccounts";
-import { NewAccountModal } from "@/components/modals/NewAccountModal";
+import { AccountModal } from "@/components/modals/AccountModal";
 
 const iconComponents = {
   bank: Building2,
@@ -25,7 +25,13 @@ const typeLabels = {
   investment: "Investimentos",
 };
 
-function AccountCard({ account, onDelete }: { account: Account; onDelete: (id: string) => void }) {
+interface AccountCardProps {
+  account: Account;
+  onEdit: (account: Account) => void;
+  onDelete: (id: string) => void;
+}
+
+function AccountCard({ account, onEdit, onDelete }: AccountCardProps) {
   const Icon = iconComponents[account.type] || Building2;
 
   return (
@@ -49,7 +55,7 @@ function AccountCard({ account, onDelete }: { account: Account; onDelete: (id: s
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Editar</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(account)}>Editar</DropdownMenuItem>
               <DropdownMenuItem onClick={() => onDelete(account.id)} className="text-expense">
                 Excluir
               </DropdownMenuItem>
@@ -73,7 +79,20 @@ function AccountCard({ account, onDelete }: { account: Account; onDelete: (id: s
 
 export default function Accounts() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const { accounts, isLoading, totalBalance, deleteAccount } = useAccounts();
+
+  const handleEdit = (account: Account) => {
+    setEditingAccount(account);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = (open: boolean) => {
+    setIsModalOpen(open);
+    if (!open) {
+      setEditingAccount(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -129,13 +148,18 @@ export default function Accounts() {
             <AccountCard 
               key={account.id} 
               account={account} 
+              onEdit={handleEdit}
               onDelete={(id) => deleteAccount.mutate(id)}
             />
           ))}
         </div>
       )}
 
-      <NewAccountModal open={isModalOpen} onOpenChange={setIsModalOpen} />
+      <AccountModal 
+        open={isModalOpen} 
+        onOpenChange={handleModalClose} 
+        account={editingAccount}
+      />
     </div>
   );
 }

@@ -28,14 +28,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { useTransactions } from "@/hooks/useTransactions";
+import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
-import { NewTransactionModal } from "@/components/modals/NewTransactionModal";
+import { TransactionModal } from "@/components/modals/TransactionModal";
 
 type TransactionTab = "checking" | "credit";
 
 export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TransactionTab>("checking");
@@ -68,6 +69,18 @@ export default function Transactions() {
     setSelectedTransactions((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
     );
+  };
+
+  const handleEdit = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = (open: boolean) => {
+    setIsModalOpen(open);
+    if (!open) {
+      setEditingTransaction(null);
+    }
   };
 
   if (isLoading) {
@@ -202,7 +215,12 @@ export default function Transactions() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={() => handleEdit(transaction)}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button 
@@ -279,7 +297,11 @@ export default function Transactions() {
         </div>
       </div>
 
-      <NewTransactionModal open={isModalOpen} onOpenChange={setIsModalOpen} />
+      <TransactionModal 
+        open={isModalOpen} 
+        onOpenChange={handleModalClose} 
+        transaction={editingTransaction}
+      />
     </div>
   );
 }
