@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Save, Bell, Palette, Globe, Shield, User } from "lucide-react";
+import { Save, Bell, Palette, Globe, Shield, User, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { MembersSection } from "@/components/settings/MembersSection";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Settings() {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState({
     email: true,
     push: false,
@@ -32,7 +35,7 @@ export default function Settings() {
 
       {/* Settings Tabs */}
       <Tabs defaultValue="preferences" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1">
+        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
           <TabsTrigger value="preferences" className="gap-2">
             <Globe className="h-4 w-4" />
             Preferências
@@ -44,6 +47,10 @@ export default function Settings() {
           <TabsTrigger value="appearance" className="gap-2">
             <Palette className="h-4 w-4" />
             Aparência
+          </TabsTrigger>
+          <TabsTrigger value="members" className="gap-2">
+            <Users className="h-4 w-4" />
+            Membros
           </TabsTrigger>
           <TabsTrigger value="account" className="gap-2">
             <User className="h-4 w-4" />
@@ -235,6 +242,17 @@ export default function Settings() {
           </div>
         </TabsContent>
 
+        {/* Members Tab */}
+        <TabsContent value="members" className="space-y-6">
+          <div className="bg-card rounded-xl border border-border p-6 shadow-card">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Gerenciar Acesso</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Convide pessoas para visualizar e gerenciar seus dados financeiros
+            </p>
+            <MembersSection />
+          </div>
+        </TabsContent>
+
         {/* Account Tab */}
         <TabsContent value="account" className="space-y-6">
           <div className="bg-card rounded-xl border border-border p-6 shadow-card">
@@ -243,11 +261,11 @@ export default function Settings() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome</Label>
-                  <Input id="name" defaultValue="Usuário" />
+                  <Input id="name" defaultValue={user?.user_metadata?.full_name || "Usuário"} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">E-mail</Label>
-                  <Input id="email" type="email" defaultValue="usuario@email.com" />
+                  <Input id="email" type="email" defaultValue={user?.email || ""} readOnly />
                 </div>
               </div>
 
