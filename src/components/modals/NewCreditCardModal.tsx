@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreditCards } from "@/hooks/useCreditCards";
+import { detectBankFromName, detectCardBrandColor } from "@/lib/bankConfig";
+import { Loader2 } from "lucide-react";
 
 interface NewCreditCardModalProps {
   open: boolean;
@@ -38,6 +40,18 @@ export function NewCreditCardModal({ open, onOpenChange }: NewCreditCardModalPro
   const [dueDate, setDueDate] = useState("10");
   const [closingDate, setClosingDate] = useState("3");
   const [color, setColor] = useState("from-purple-500 via-purple-600 to-purple-700");
+  const [detectedBank, setDetectedBank] = useState<string | null>(null);
+
+  // Detect bank from name and auto-set color
+  useEffect(() => {
+    const bank = detectBankFromName(name);
+    if (bank) {
+      setColor(bank.color);
+      setDetectedBank(bank.name);
+    } else {
+      setDetectedBank(null);
+    }
+  }, [name]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +75,7 @@ export function NewCreditCardModal({ open, onOpenChange }: NewCreditCardModalPro
         setDueDate("10");
         setClosingDate("3");
         setColor("from-purple-500 via-purple-600 to-purple-700");
+        setDetectedBank(null);
         onOpenChange(false);
       }
     });
@@ -85,6 +100,11 @@ export function NewCreditCardModal({ open, onOpenChange }: NewCreditCardModalPro
               onChange={(e) => setName(e.target.value)}
               required
             />
+            {detectedBank && (
+              <p className="text-xs text-income">
+                ✓ Banco detectado: {detectedBank}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
