@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAccounts } from "@/hooks/useAccounts";
+import { detectBankFromName } from "@/lib/bankConfig";
 
 interface NewAccountModalProps {
   open: boolean;
@@ -44,8 +45,24 @@ export function NewAccountModal({ open, onOpenChange }: NewAccountModalProps) {
   const [type, setType] = useState<"bank" | "wallet" | "savings" | "investment">("bank");
   const [balance, setBalance] = useState("");
   const [color, setColor] = useState("from-blue-500 to-blue-600");
+  const [icon, setIcon] = useState("🏦");
+  const [detectedBank, setDetectedBank] = useState<string | null>(null);
   
   const { createAccount } = useAccounts();
+
+  // Detect bank from name
+  useEffect(() => {
+    const bank = detectBankFromName(name);
+    if (bank) {
+      setColor(bank.color);
+      setIcon(bank.icon);
+      setDetectedBank(bank.name);
+    } else {
+      setDetectedBank(null);
+      const selectedType = accountTypes.find((t) => t.value === type);
+      setIcon(selectedType?.icon || "🏦");
+    }
+  }, [name, type]);
 
   const selectedType = accountTypes.find((t) => t.value === type);
 
@@ -56,7 +73,7 @@ export function NewAccountModal({ open, onOpenChange }: NewAccountModalProps) {
       name,
       type,
       current_balance: parseFloat(balance) || 0,
-      icon: selectedType?.icon || "🏦",
+      icon: detectedBank ? icon : (selectedType?.icon || "🏦"),
       color,
     });
 
@@ -65,6 +82,8 @@ export function NewAccountModal({ open, onOpenChange }: NewAccountModalProps) {
     setType("bank");
     setBalance("");
     setColor("from-blue-500 to-blue-600");
+    setIcon("🏦");
+    setDetectedBank(null);
     onOpenChange(false);
   };
 
@@ -85,6 +104,11 @@ export function NewAccountModal({ open, onOpenChange }: NewAccountModalProps) {
               placeholder="Ex: Nubank, Itaú, Carteira"
               required
             />
+            {detectedBank && (
+              <p className="text-xs text-income flex items-center gap-1">
+                {icon} Banco detectado: {detectedBank}
+              </p>
+            )}
           </div>
 
           {/* Type */}
