@@ -35,9 +35,16 @@ serve(async (req) => {
 
     console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}`);
 
-    // Convert file to base64
+    // Convert file to base64 (using chunks to avoid stack overflow)
     const arrayBuffer = await file.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binaryString = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(i, i + chunkSize);
+      binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    const base64 = btoa(binaryString);
     const mimeType = file.type || 'application/pdf';
 
     // Prepare prompt for AI to extract invoice data
