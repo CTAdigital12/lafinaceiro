@@ -181,7 +181,7 @@ export function InvoiceReviewModal({
           </div>
         )}
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
+        <ScrollArea className="flex-1 max-h-[50vh] -mx-6 px-6">
           <div className="space-y-2">
             {reviewItems.map((item, index) => {
               const categoryChanged = item.category_id !== item.original_category_id;
