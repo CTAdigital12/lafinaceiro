@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, CreditCard, Calendar, Wallet, MoreVertical } from "lucide-react";
+import { Plus, CreditCard, Calendar, Wallet, MoreVertical, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -12,6 +12,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditCards";
 import { CreditCardModal } from "@/components/modals/CreditCardModal";
+import { InvoiceImportModal, ImportedItem } from "@/components/modals/InvoiceImportModal";
+import { InvoiceReviewModal } from "@/components/modals/InvoiceReviewModal";
 
 const statusConfig = {
   open: { label: "Fatura Aberta", variant: "default" as const, className: "bg-balance text-balance-foreground" },
@@ -23,9 +25,10 @@ interface CreditCardComponentProps {
   card: CreditCardType;
   onEdit: (card: CreditCardType) => void;
   onDelete: () => void;
+  onImportInvoice: (card: CreditCardType) => void;
 }
 
-function CreditCardComponent({ card, onEdit, onDelete }: CreditCardComponentProps) {
+function CreditCardComponent({ card, onEdit, onDelete, onImportInvoice }: CreditCardComponentProps) {
   const availableLimit = Number(card.credit_limit) - Number(card.current_invoice);
   const usagePercent = (Number(card.current_invoice) / Number(card.credit_limit)) * 100;
   const status = statusConfig[card.status as keyof typeof statusConfig] || statusConfig.open;
@@ -61,7 +64,10 @@ function CreditCardComponent({ card, onEdit, onDelete }: CreditCardComponentProp
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Ver fatura</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onImportInvoice(card)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar Fatura
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onEdit(card)}>Editar</DropdownMenuItem>
                 <DropdownMenuItem className="text-expense" onClick={onDelete}>Excluir</DropdownMenuItem>
               </DropdownMenuContent>
@@ -144,6 +150,9 @@ function CreditCardComponent({ card, onEdit, onDelete }: CreditCardComponentProp
 export default function CreditCards() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
+  const [importingCard, setImportingCard] = useState<CreditCardType | null>(null);
+  const [importedItems, setImportedItems] = useState<ImportedItem[]>([]);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const { creditCards, isLoading, totalInvoice, totalLimit, totalAvailable, deleteCreditCard } = useCreditCards();
 
   const handleEdit = (card: CreditCardType) => {
@@ -153,9 +162,16 @@ export default function CreditCards() {
 
   const handleModalClose = (open: boolean) => {
     setIsModalOpen(open);
-    if (!open) {
-      setEditingCard(null);
-    }
+    if (!open) setEditingCard(null);
+  };
+
+  const handleImportInvoice = (card: CreditCardType) => {
+    setImportingCard(card);
+  };
+
+  const handleImportComplete = (items: ImportedItem[]) => {
+    setImportedItems(items);
+    setIsReviewOpen(true);
   };
 
   return (
@@ -236,6 +252,7 @@ export default function CreditCards() {
               card={card}
               onEdit={handleEdit}
               onDelete={() => deleteCreditCard.mutate(card.id)}
+              onImportInvoice={handleImportInvoice}
             />
           ))}
         </div>
@@ -245,6 +262,22 @@ export default function CreditCards() {
         open={isModalOpen} 
         onOpenChange={handleModalClose} 
         creditCard={editingCard}
+      />
+
+      <InvoiceImportModal
+        open={!!importingCard}
+        onOpenChange={(open) => !open && setImportingCard(null)}
+        creditCardId={importingCard?.id || ""}
+        creditCardName={importingCard?.name || ""}
+        onImportComplete={handleImportComplete}
+      />
+
+      <InvoiceReviewModal
+        open={isReviewOpen}
+        onOpenChange={setIsReviewOpen}
+        items={importedItems}
+        creditCardId={importingCard?.id || ""}
+        creditCardName={importingCard?.name || ""}
       />
     </div>
   );
