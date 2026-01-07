@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ export function TransactionModal({ open, onOpenChange, transaction }: Transactio
   const [date, setDate] = useState<Date>(new Date());
   const [status, setStatus] = useState<"completed" | "pending">("completed");
   const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_card">("account");
+  const [isCorporateExpense, setIsCorporateExpense] = useState(false);
   
   const { incomeCategories, expenseCategories } = useCategories();
   const { accounts } = useAccounts();
@@ -66,6 +68,7 @@ export function TransactionModal({ open, onOpenChange, transaction }: Transactio
       setDate(parseISO(transaction.date));
       setStatus(transaction.status as "completed" | "pending");
       setPaymentMethod(transaction.credit_card_id ? "credit_card" : "account");
+      setIsCorporateExpense(transaction.is_corporate_expense || false);
     } else {
       setType("expense");
       setDescription("");
@@ -76,6 +79,7 @@ export function TransactionModal({ open, onOpenChange, transaction }: Transactio
       setDate(new Date());
       setStatus("completed");
       setPaymentMethod("account");
+      setIsCorporateExpense(false);
     }
   }, [transaction, open]);
 
@@ -91,6 +95,7 @@ export function TransactionModal({ open, onOpenChange, transaction }: Transactio
       credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
       date: format(date, "yyyy-MM-dd"),
       status,
+      is_corporate_expense: isCorporateExpense,
     };
 
     if (isEditing && transaction) {
@@ -290,6 +295,28 @@ export function TransactionModal({ open, onOpenChange, transaction }: Transactio
               </SelectContent>
             </Select>
           </div>
+
+          {/* Corporate Expense - Only show for expenses */}
+          {type === "expense" && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+                  <Briefcase className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <Label htmlFor="corporate-expense" className="text-sm font-medium cursor-pointer">
+                    Despesa da Empresa
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Não contabilizar no orçamento pessoal</p>
+                </div>
+              </div>
+              <Switch
+                id="corporate-expense"
+                checked={isCorporateExpense}
+                onCheckedChange={setIsCorporateExpense}
+              />
+            </div>
+          )}
 
           {/* Submit */}
           <Button type="submit" className="w-full" disabled={isPending}>

@@ -15,10 +15,10 @@ export default function Dashboard() {
 
   const isLoading = accountsLoading || transactionsLoading || cardsLoading || categoriesLoading;
 
-  // Calculate expenses by category
+  // Calculate expenses by category (excluding corporate expenses)
   const expensesByCategory = expenseCategories.map((cat) => {
     const total = transactions
-      .filter((t) => t.type === "expense" && t.category_id === cat.id)
+      .filter((t) => t.type === "expense" && t.category_id === cat.id && !t.is_corporate_expense)
       .reduce((sum, t) => sum + Number(t.amount), 0);
     return {
       name: cat.name,
