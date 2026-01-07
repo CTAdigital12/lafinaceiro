@@ -161,8 +161,8 @@ export function InvoiceReviewModal({
 
   return (
     <Dialog open={open} onOpenChange={isImporting ? () => {} : onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             Revisar Importação
@@ -173,7 +173,7 @@ export function InvoiceReviewModal({
         </DialogHeader>
 
         {uncategorizedCount > 0 && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-chart-4 text-sm">
+          <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-chart-4 text-sm">
             <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>
               {uncategorizedCount} {uncategorizedCount === 1 ? "item precisa" : "itens precisam"} de categorização
@@ -181,7 +181,8 @@ export function InvoiceReviewModal({
           </div>
         )}
 
-        <ScrollArea className="flex-1 max-h-[50vh] -mx-6 px-6">
+        <div className="flex-1 min-h-0 overflow-hidden -mx-6">
+          <ScrollArea className="h-full max-h-[calc(90vh-280px)] px-6">
           <div className="space-y-2">
             {reviewItems.map((item, index) => {
               const categoryChanged = item.category_id !== item.original_category_id;
@@ -259,7 +260,8 @@ export function InvoiceReviewModal({
               );
             })}
           </div>
-        </ScrollArea>
+          </ScrollArea>
+        </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2 border-t pt-4">
           <div className="flex-1 text-sm">
