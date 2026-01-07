@@ -1,7 +1,15 @@
-import { useState } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useBudgets, Budget } from "@/hooks/useBudgets";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -9,75 +17,11 @@ import { NewBudgetModal } from "@/components/modals/NewBudgetModal";
 
 const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-function BudgetCard({ budget, spent, onDelete }: { budget: Budget; spent: number; onDelete: () => void }) {
-  const planned = Number(budget.planned_amount);
-  const percentage = planned > 0 ? (spent / planned) * 100 : 0;
-  const isOverBudget = spent > planned;
-  const remaining = planned - spent;
-
-  return (
-    <div className="bg-card rounded-xl border border-border p-4 shadow-card hover:shadow-card-hover transition-all duration-300 animate-scale-in">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center text-xl">
-            {budget.categories?.icon || "📦"}
-          </div>
-          <div>
-            <h3 className="font-semibold text-foreground">{budget.categories?.name || "Categoria"}</h3>
-            <p className="text-xs text-muted-foreground">
-              {isOverBudget ? (
-                <span className="text-expense flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  Excedido em R$ {Math.abs(remaining).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </span>
-              ) : (
-                <span className="text-income flex items-center gap-1">
-                  <CheckCircle className="h-3 w-3" />
-                  Resta R$ {remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-expense" onClick={onDelete}>
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Gasto</span>
-          <span className={cn("font-semibold", isOverBudget ? "text-expense" : "text-foreground")}>
-            R$ {spent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        <Progress
-          value={Math.min(percentage, 100)}
-          className={cn(
-            "h-3",
-            isOverBudget ? "[&>div]:bg-expense" : percentage > 80 ? "[&>div]:bg-chart-4" : "[&>div]:bg-income"
-          )}
-        />
-
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Planejado</span>
-          <span className="font-medium text-foreground">
-            R$ {planned.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        <div className="pt-2 border-t border-border">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Progresso</span>
-            <span className={cn("text-sm font-bold", isOverBudget ? "text-expense" : percentage > 80 ? "text-chart-4" : "text-income")}>
-              {percentage.toFixed(0)}%
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+interface HierarchicalBudget extends Budget {
+  children: HierarchicalBudget[];
+  totalPlanned: number;
+  totalSpent: number;
+  isParent: boolean;
 }
 
 export default function Planning() {
@@ -89,14 +33,70 @@ export default function Planning() {
   const { budgets, isLoading, totalPlanned, deleteBudget, copyFromPreviousMonth } = useBudgets(month, year);
   const { transactions } = useTransactions(month, year);
 
-  // Calculate spent per category
-  const spentByCategory = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((acc, t) => {
-      const catId = t.category_id || "uncategorized";
-      acc[catId] = (acc[catId] || 0) + Number(t.amount);
-      return acc;
-    }, {} as Record<string, number>);
+  // Calculate spent per category (excluding corporate expenses)
+  const spentByCategory = useMemo(() => {
+    return transactions
+      .filter((t) => t.type === "expense" && !t.is_corporate_expense)
+      .reduce((acc, t) => {
+        const catId = t.category_id || "uncategorized";
+        acc[catId] = (acc[catId] || 0) + Number(t.amount);
+        return acc;
+      }, {} as Record<string, number>);
+  }, [transactions]);
+
+  // Build hierarchical structure
+  const hierarchicalBudgets = useMemo(() => {
+    // Group budgets by parent category
+    const parentBudgets: HierarchicalBudget[] = [];
+    const childBudgetsMap: Record<string, HierarchicalBudget[]> = {};
+
+    // First pass: separate parents and children
+    budgets.forEach((budget) => {
+      const parentId = budget.categories?.parent_id;
+      const spent = spentByCategory[budget.category_id || ""] || 0;
+      
+      const hierarchicalBudget: HierarchicalBudget = {
+        ...budget,
+        children: [],
+        totalPlanned: Number(budget.planned_amount),
+        totalSpent: spent,
+        isParent: false,
+      };
+
+      if (parentId) {
+        // This is a child budget
+        if (!childBudgetsMap[parentId]) {
+          childBudgetsMap[parentId] = [];
+        }
+        childBudgetsMap[parentId].push(hierarchicalBudget);
+      } else {
+        // This is a parent budget
+        hierarchicalBudget.isParent = true;
+        parentBudgets.push(hierarchicalBudget);
+      }
+    });
+
+    // Second pass: attach children to parents and calculate totals
+    parentBudgets.forEach((parent) => {
+      const categoryId = parent.categories?.id;
+      if (categoryId && childBudgetsMap[categoryId]) {
+        parent.children = childBudgetsMap[categoryId].sort((a, b) => 
+          (a.categories?.name || "").localeCompare(b.categories?.name || "")
+        );
+        
+        // Sum up children's planned and spent
+        parent.children.forEach((child) => {
+          parent.totalPlanned += child.totalPlanned;
+          parent.totalSpent += child.totalSpent;
+        });
+      }
+    });
+
+    // Sort parents by name
+    return parentBudgets.sort((a, b) => 
+      (a.categories?.name || "").localeCompare(b.categories?.name || "")
+    );
+  }, [budgets, spentByCategory]);
 
   const totalSpent = Object.values(spentByCategory).reduce((sum, val) => sum + val, 0);
   const totalRemaining = totalPlanned - totalSpent;
@@ -111,6 +111,93 @@ export default function Planning() {
   const goToNextMonth = () => {
     if (month === 12) { setMonth(1); setYear(year + 1); }
     else { setMonth(month + 1); }
+  };
+
+  const renderBudgetRow = (budget: HierarchicalBudget, isChild: boolean = false) => {
+    const planned = budget.isParent ? budget.totalPlanned : Number(budget.planned_amount);
+    const spent = budget.isParent ? budget.totalSpent : (spentByCategory[budget.category_id || ""] || 0);
+    const remaining = planned - spent;
+    const percentage = planned > 0 ? (spent / planned) * 100 : 0;
+    const isOverBudget = spent > planned;
+
+    return (
+      <TableRow key={budget.id} className={cn(isChild && "bg-muted/30")}>
+        <TableCell>
+          <div className={cn("flex items-center gap-3", isChild && "pl-6")}>
+            {isChild ? (
+              <CornerDownRight className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <div 
+                className="h-9 w-9 rounded-lg flex items-center justify-center text-lg"
+                style={{ backgroundColor: `${budget.categories?.color}20` }}
+              >
+                {budget.categories?.icon || "📦"}
+              </div>
+            )}
+            <span className={cn("font-medium", isChild && "text-sm")}>
+              {budget.categories?.name || "Categoria"}
+            </span>
+          </div>
+        </TableCell>
+        <TableCell className="text-right font-medium">
+          R$ {planned.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        </TableCell>
+        <TableCell className="text-right text-muted-foreground">
+          R$ 0,00
+        </TableCell>
+        <TableCell className="text-right text-muted-foreground">
+          R$ {spent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        </TableCell>
+        <TableCell className="text-right font-medium">
+          R$ {spent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        </TableCell>
+        <TableCell>
+          <div className="space-y-1 min-w-[180px]">
+            <div className="flex items-center justify-between">
+              {isOverBudget ? (
+                <span className="text-expense text-sm font-medium">
+                  Excederam R$ {Math.abs(remaining).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </span>
+              ) : (
+                <span className="text-income text-sm font-medium">
+                  Restam R$ {remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Progress
+                value={Math.min(percentage, 100)}
+                className={cn(
+                  "h-2 flex-1",
+                  isOverBudget ? "[&>div]:bg-expense" : percentage > 80 ? "[&>div]:bg-chart-4" : "[&>div]:bg-income"
+                )}
+              />
+              <span className={cn(
+                "text-xs font-medium min-w-[50px] text-right",
+                isOverBudget ? "text-expense" : percentage > 80 ? "text-chart-4" : "text-income"
+              )}>
+                {percentage.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-muted-foreground hover:text-expense"
+              onClick={() => deleteBudget.mutate(budget.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
   };
 
   return (
@@ -179,7 +266,7 @@ export default function Planning() {
         </div>
       )}
 
-      {/* Budget Categories Grid */}
+      {/* Budget Table */}
       {isLoading ? (
         <div className="flex items-center justify-center h-32"><Loader2 className="h-8 w-8 animate-spin text-balance" /></div>
       ) : budgets.length === 0 ? (
@@ -193,10 +280,30 @@ export default function Planning() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {budgets.map((budget) => (
-            <BudgetCard key={budget.id} budget={budget} spent={spentByCategory[budget.category_id || ""] || 0} onDelete={() => deleteBudget.mutate(budget.id)} />
-          ))}
+        <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[200px]">Categoria</TableHead>
+                <TableHead className="text-right">Meta planejada</TableHead>
+                <TableHead className="text-right">Despesas pagas</TableHead>
+                <TableHead className="text-right">Despesas previstas</TableHead>
+                <TableHead className="text-right">Total gasto</TableHead>
+                <TableHead className="min-w-[200px]">Progresso</TableHead>
+                <TableHead className="w-[100px]">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {hierarchicalBudgets.map((parentBudget) => (
+                <>
+                  {renderBudgetRow(parentBudget, false)}
+                  {parentBudget.children.map((childBudget) => 
+                    renderBudgetRow(childBudget, true)
+                  )}
+                </>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
 

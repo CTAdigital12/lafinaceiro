@@ -11,7 +11,7 @@ export interface Budget {
   year: number;
   planned_amount: number;
   created_at: string;
-  categories?: { name: string; icon: string; color: string } | null;
+  categories?: { id: string; name: string; icon: string; color: string; parent_id: string | null } | null;
 }
 
 export function useBudgets(month: number, year: number) {
@@ -26,7 +26,7 @@ export function useBudgets(month: number, year: number) {
         .from("budgets")
         .select(`
           *,
-          categories (name, icon, color)
+          categories (id, name, icon, color, parent_id)
         `)
         .eq("month", month)
         .eq("year", year)
@@ -45,7 +45,7 @@ export function useBudgets(month: number, year: number) {
         .insert([{ ...budget, user_id: user?.id }])
         .select(`
           *,
-          categories (name, icon, color)
+          categories (id, name, icon, color, parent_id)
         `)
         .single();
 
@@ -69,7 +69,7 @@ export function useBudgets(month: number, year: number) {
         .eq("id", id)
         .select(`
           *,
-          categories (name, icon, color)
+          categories (id, name, icon, color, parent_id)
         `)
         .single();
 
