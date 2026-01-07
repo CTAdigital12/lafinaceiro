@@ -8,6 +8,7 @@ import {
   BarChart3,
   Settings,
   Menu,
+  Tags,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -18,6 +19,7 @@ const navItems = [
   { icon: Wallet, label: "Contas", path: "/accounts" },
   { icon: ArrowLeftRight, label: "Transações", path: "/transactions" },
   { icon: CreditCard, label: "Cartões de Crédito", path: "/credit-cards" },
+  { icon: Tags, label: "Categorias", path: "/categories" },
   { icon: Target, label: "Planejamento", path: "/planning" },
   { icon: BarChart3, label: "Relatórios", path: "/reports" },
   { icon: Settings, label: "Configurações", path: "/settings" },
