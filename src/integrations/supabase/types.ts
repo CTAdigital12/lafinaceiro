@@ -304,6 +304,7 @@ export type Database = {
           description: string
           id: string
           is_corporate_expense: boolean
+          reimbursement_status: string | null
           status: string
           type: string
           updated_at: string
@@ -319,6 +320,7 @@ export type Database = {
           description: string
           id?: string
           is_corporate_expense?: boolean
+          reimbursement_status?: string | null
           status?: string
           type: string
           updated_at?: string
@@ -334,6 +336,7 @@ export type Database = {
           description?: string
           id?: string
           is_corporate_expense?: boolean
+          reimbursement_status?: string | null
           status?: string
           type?: string
           updated_at?: string
