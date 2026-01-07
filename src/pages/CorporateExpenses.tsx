@@ -11,7 +11,10 @@ import {
   FileText,
   Loader2,
   Check,
-  X
+  X,
+  Clock,
+  Send,
+  CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,12 +34,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useToast } from "@/hooks/use-toast";
+
+type ReimbursementStatus = "pending" | "requested" | "reimbursed";
+
+const reimbursementStatusConfig: Record<ReimbursementStatus, { label: string; icon: React.ElementType; className: string }> = {
+  pending: { label: "Pendente", icon: Clock, className: "bg-chart-4/10 text-chart-4 border-chart-4/20" },
+  requested: { label: "Solicitado", icon: Send, className: "bg-primary/10 text-primary border-primary/20" },
+  reimbursed: { label: "Reembolsado", icon: CheckCircle2, className: "bg-income/10 text-income border-income/20" },
+};
 
 interface CorporateTransaction {
   id: string;
@@ -46,6 +63,7 @@ interface CorporateTransaction {
   credit_card_id: string | null;
   category_id: string | null;
   status: string;
+  reimbursement_status: ReimbursementStatus;
   categories?: { name: string; icon: string; color: string } | null;
   credit_cards?: { name: string; last_digits: string } | null;
 }
@@ -63,6 +81,8 @@ export default function CorporateExpenses() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  const [reimbursementFilter, setReimbursementFilter] = useState<string>("all");
+
   const startDate = format(startOfMonth(new Date(selectedYear, selectedMonth - 1)), "yyyy-MM-dd");
   const endDate = format(endOfMonth(new Date(selectedYear, selectedMonth - 1)), "yyyy-MM-dd");
 
@@ -79,6 +99,7 @@ export default function CorporateExpenses() {
           credit_card_id,
           category_id,
           status,
+          reimbursement_status,
           categories (name, icon, color),
           credit_cards (name, last_digits)
         `)
@@ -93,29 +114,32 @@ export default function CorporateExpenses() {
     enabled: !!user,
   });
 
-  // Filter by card and status
+  // Filter by card and reimbursement status
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
       const cardMatch = selectedCardId === "all" || t.credit_card_id === selectedCardId;
-      const statusMatch = statusFilter === "all" || t.status === statusFilter;
-      return cardMatch && statusMatch;
+      const reimbursementMatch = reimbursementFilter === "all" || t.reimbursement_status === reimbursementFilter;
+      return cardMatch && reimbursementMatch;
     });
-  }, [transactions, selectedCardId, statusFilter]);
+  }, [transactions, selectedCardId, reimbursementFilter]);
 
   // Calculate totals
   const totals = useMemo(() => {
     const total = filteredTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
     const pending = filteredTransactions
-      .filter((t) => t.status === "pending")
+      .filter((t) => t.reimbursement_status === "pending")
       .reduce((sum, t) => sum + Number(t.amount), 0);
-    const completed = filteredTransactions
-      .filter((t) => t.status === "completed")
+    const requested = filteredTransactions
+      .filter((t) => t.reimbursement_status === "requested")
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const reimbursed = filteredTransactions
+      .filter((t) => t.reimbursement_status === "reimbursed")
       .reduce((sum, t) => sum + Number(t.amount), 0);
     const selectedTotal = filteredTransactions
       .filter((t) => selectedIds.has(t.id))
       .reduce((sum, t) => sum + Number(t.amount), 0);
     
-    return { total, pending, completed, selectedTotal, selectedCount: selectedIds.size };
+    return { total, pending, requested, reimbursed, selectedTotal, selectedCount: selectedIds.size };
   }, [filteredTransactions, selectedIds]);
 
   // Group by credit card for summary
@@ -173,6 +197,33 @@ export default function CorporateExpenses() {
     setSelectedIds(newSet);
   };
 
+  // Mutation to update reimbursement status
+  const updateReimbursementStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: ReimbursementStatus }) => {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ reimbursement_status: status })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["corporate_expenses"] });
+      toast({ title: "Status atualizado!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar status", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk update reimbursement status
+  const updateSelectedStatus = async (status: ReimbursementStatus) => {
+    const selectedItems = filteredTransactions.filter((t) => selectedIds.has(t.id));
+    for (const item of selectedItems) {
+      await updateReimbursementStatus.mutateAsync({ id: item.id, status });
+    }
+    setSelectedIds(new Set());
+  };
+
   const exportToCSV = () => {
     const itemsToExport = selectedIds.size > 0 
       ? filteredTransactions.filter((t) => selectedIds.has(t.id))
@@ -183,18 +234,24 @@ export default function CorporateExpenses() {
       return;
     }
 
-    const headers = ["Data", "Descrição", "Categoria", "Cartão", "Valor"];
+    const headers = ["Data", "Descrição", "Categoria", "Cartão", "Status Reembolso", "Valor"];
+    const statusLabels: Record<ReimbursementStatus, string> = {
+      pending: "Pendente",
+      requested: "Solicitado",
+      reimbursed: "Reembolsado",
+    };
     const rows = itemsToExport.map((t) => [
       format(parseISO(t.date), "dd/MM/yyyy"),
       t.description,
       t.categories?.name || "Sem categoria",
       t.credit_cards ? `${t.credit_cards.name} (*${t.credit_cards.last_digits})` : "N/A",
+      statusLabels[t.reimbursement_status] || "Pendente",
       t.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
     ]);
 
     // Add total row
     const total = itemsToExport.reduce((sum, t) => sum + Number(t.amount), 0);
-    rows.push(["", "", "", "TOTAL", total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })]);
+    rows.push(["", "", "", "", "TOTAL", total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })]);
 
     const csvContent = [
       headers.join(";"),
@@ -265,14 +322,15 @@ export default function CorporateExpenses() {
             </SelectContent>
           </Select>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
+          <Select value={reimbursementFilter} onValueChange={setReimbursementFilter}>
+            <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="completed">Concluídos</SelectItem>
+              <SelectItem value="all">Todos os status</SelectItem>
               <SelectItem value="pending">Pendentes</SelectItem>
+              <SelectItem value="requested">Solicitados</SelectItem>
+              <SelectItem value="reimbursed">Reembolsados</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -281,42 +339,78 @@ export default function CorporateExpenses() {
       {/* Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-          <p className="text-xs text-muted-foreground">Total a Reembolsar</p>
+          <p className="text-xs text-muted-foreground">Total Despesas</p>
           <p className="text-2xl font-bold text-foreground">
             R$ {totals.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-muted-foreground">{filteredTransactions.length} transações</p>
         </div>
         
-        {byCard.slice(0, 3).map(([cardId, data]) => (
-          <div key={cardId} className="bg-card rounded-xl border border-border p-4 shadow-card">
-            <div className="flex items-center gap-2 mb-1">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground truncate">
-                {data.name} {data.lastDigits && `(*${data.lastDigits})`}
-              </p>
-            </div>
-            <p className="text-lg font-bold text-foreground">
-              R$ {data.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-xs text-muted-foreground">{data.count} itens</p>
+        <div className="bg-card rounded-xl border border-border p-4 shadow-card border-l-4 border-l-chart-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-4 w-4 text-chart-4" />
+            <p className="text-xs text-muted-foreground">Pendentes</p>
           </div>
-        ))}
+          <p className="text-lg font-bold text-chart-4">
+            R$ {totals.pending.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border p-4 shadow-card border-l-4 border-l-primary">
+          <div className="flex items-center gap-2 mb-1">
+            <Send className="h-4 w-4 text-primary" />
+            <p className="text-xs text-muted-foreground">Solicitados</p>
+          </div>
+          <p className="text-lg font-bold text-primary">
+            R$ {totals.requested.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border p-4 shadow-card border-l-4 border-l-income">
+          <div className="flex items-center gap-2 mb-1">
+            <CheckCircle2 className="h-4 w-4 text-income" />
+            <p className="text-xs text-muted-foreground">Reembolsados</p>
+          </div>
+          <p className="text-lg font-bold text-income">
+            R$ {totals.reimbursed.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          </p>
+        </div>
       </div>
 
-      {/* Selection Summary */}
+      {/* Selection Summary with bulk actions */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
           <div className="flex items-center gap-3">
             <Badge variant="secondary">{selectedIds.size} selecionados</Badge>
             <span className="text-sm font-medium">
               R$ {totals.selectedTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </span>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-            <X className="h-4 w-4 mr-1" />
-            Limpar seleção
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => updateSelectedStatus("requested")}
+              disabled={updateReimbursementStatus.isPending}
+            >
+              <Send className="h-4 w-4 mr-1" />
+              Marcar como Solicitado
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => updateSelectedStatus("reimbursed")}
+              disabled={updateReimbursementStatus.isPending}
+              className="text-income hover:text-income"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1" />
+              Marcar como Reembolsado
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              <X className="h-4 w-4 mr-1" />
+              Limpar
+            </Button>
+          </div>
         </div>
       )}
 
@@ -346,6 +440,7 @@ export default function CorporateExpenses() {
                 <TableHead>Descrição</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Cartão</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
               </TableRow>
             </TableHeader>
@@ -390,6 +485,52 @@ export default function CorporateExpenses() {
                     ) : (
                       <span className="text-muted-foreground text-sm">-</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const status = reimbursementStatusConfig[transaction.reimbursement_status] || reimbursementStatusConfig.pending;
+                      const StatusIcon = status.icon;
+                      return (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className={cn(
+                                "h-7 px-2 gap-1.5 border",
+                                status.className
+                              )}
+                            >
+                              <StatusIcon className="h-3.5 w-3.5" />
+                              <span className="text-xs">{status.label}</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "pending" })}
+                              disabled={transaction.reimbursement_status === "pending"}
+                            >
+                              <Clock className="h-4 w-4 mr-2 text-chart-4" />
+                              Pendente
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "requested" })}
+                              disabled={transaction.reimbursement_status === "requested"}
+                            >
+                              <Send className="h-4 w-4 mr-2 text-primary" />
+                              Solicitado
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "reimbursed" })}
+                              disabled={transaction.reimbursement_status === "reimbursed"}
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-2 text-income" />
+                              Reembolsado
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
                     R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
