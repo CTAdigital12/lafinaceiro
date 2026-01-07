@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InvestmentSummaryCards } from "@/components/investments/InvestmentSummaryCards";
 import { AllocationChart } from "@/components/investments/AllocationChart";
@@ -7,11 +7,16 @@ import { AssetTable } from "@/components/investments/AssetTable";
 import { TransactionHistory } from "@/components/investments/TransactionHistory";
 import { OperationModal } from "@/components/investments/OperationModal";
 import { UpdatePricesModal } from "@/components/investments/UpdatePricesModal";
+import { AssetModal } from "@/components/investments/AssetModal";
+import { InstitutionsList } from "@/components/investments/InstitutionsList";
 import { useInvestments } from "@/hooks/useInvestments";
+import { useInstitutions } from "@/hooks/useInstitutions";
 
 export default function Investments() {
   const [operationModalOpen, setOperationModalOpen] = useState(false);
   const [pricesModalOpen, setPricesModalOpen] = useState(false);
+  const [assetModalOpen, setAssetModalOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<any>(null);
 
   const {
     assets,
@@ -24,10 +29,41 @@ export default function Investments() {
     assetsByType,
     allocationData,
     createAsset,
+    updateAsset,
     deleteAsset,
     createTransaction,
     updatePrices,
   } = useInvestments();
+
+  const {
+    institutions,
+    createInstitution,
+    updateInstitution,
+    deleteInstitution,
+  } = useInstitutions();
+
+  const handleEditAsset = (asset: any) => {
+    setEditingAsset(asset);
+    setAssetModalOpen(true);
+  };
+
+  const handleAssetModalClose = (open: boolean) => {
+    setAssetModalOpen(open);
+    if (!open) setEditingAsset(null);
+  };
+
+  const handleAssetSubmit = (data: any) => {
+    if (editingAsset) {
+      updateAsset.mutate({ id: editingAsset.id, ...data });
+    } else {
+      createAsset.mutate({
+        ...data,
+        quantity: 0,
+        average_price: 0,
+      });
+    }
+    setEditingAsset(null);
+  };
 
   if (isLoading) {
     return (
@@ -47,7 +83,14 @@ export default function Investments() {
             Acompanhe seu patrimônio acumulado
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => setAssetModalOpen(true)}
+          >
+            <Package className="h-4 w-4 mr-2" />
+            Novo Ativo
+          </Button>
           <Button
             variant="outline"
             onClick={() => setPricesModalOpen(true)}
@@ -72,13 +115,21 @@ export default function Investments() {
       />
 
       {/* Charts and Table */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
+      <div className="grid gap-6 lg:grid-cols-4">
+        <div className="lg:col-span-1 space-y-6">
           <AllocationChart data={allocationData} />
+          <InstitutionsList
+            institutions={institutions}
+            onCreateInstitution={(data) => createInstitution.mutate(data)}
+            onUpdateInstitution={(data) => updateInstitution.mutate(data)}
+            onDeleteInstitution={(id) => deleteInstitution.mutate(id)}
+          />
         </div>
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-3">
           <AssetTable
             assetsByType={assetsByType}
+            institutions={institutions}
+            onEditAsset={handleEditAsset}
             onDeleteAsset={(id) => deleteAsset.mutate(id)}
           />
         </div>
@@ -104,6 +155,14 @@ export default function Investments() {
         onOpenChange={setPricesModalOpen}
         assets={assets}
         onSubmit={(updates) => updatePrices.mutate(updates)}
+      />
+
+      <AssetModal
+        open={assetModalOpen}
+        onOpenChange={handleAssetModalClose}
+        asset={editingAsset}
+        institutions={institutions}
+        onSubmit={handleAssetSubmit}
       />
     </div>
   );

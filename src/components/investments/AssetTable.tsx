@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Trash2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,14 +27,17 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { InvestmentAsset, ASSET_TYPE_LABELS } from "@/hooks/useInvestments";
+import { InvestmentInstitution } from "@/hooks/useInstitutions";
 import { cn } from "@/lib/utils";
 
 interface AssetTableProps {
   assetsByType: Record<string, InvestmentAsset[]>;
+  institutions: InvestmentInstitution[];
+  onEditAsset: (asset: InvestmentAsset) => void;
   onDeleteAsset: (id: string) => void;
 }
 
-export function AssetTable({ assetsByType, onDeleteAsset }: AssetTableProps) {
+export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAsset }: AssetTableProps) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     renda_fixa: true,
     renda_variavel: true,
@@ -93,12 +96,13 @@ export function AssetTable({ assetsByType, onDeleteAsset }: AssetTableProps) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Ativo</TableHead>
+                      <TableHead>Instituição</TableHead>
                       <TableHead className="text-right">Qtd</TableHead>
                       <TableHead className="text-right">PM</TableHead>
                       <TableHead className="text-right">Cotação</TableHead>
                       <TableHead className="text-right">Saldo</TableHead>
                       <TableHead className="text-right">Rent.</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
+                      <TableHead className="w-[80px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -107,6 +111,7 @@ export function AssetTable({ assetsByType, onDeleteAsset }: AssetTableProps) {
                       const custo = asset.quantity * asset.average_price;
                       const rentabilidade = custo > 0 ? ((saldo - custo) / custo) * 100 : 0;
                       const isProfit = rentabilidade >= 0;
+                      const institution = institutions.find((i) => i.id === asset.institution_id);
 
                       return (
                         <TableRow key={asset.id}>
@@ -115,6 +120,15 @@ export function AssetTable({ assetsByType, onDeleteAsset }: AssetTableProps) {
                               <p className="font-medium">{asset.ticker}</p>
                               <p className="text-xs text-muted-foreground">{asset.name}</p>
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {institution ? (
+                              <span className="text-sm">
+                                {institution.icon} {institution.name}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">-</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             {formatNumber(asset.quantity, type === "crypto" ? 8 : 0)}
@@ -126,27 +140,37 @@ export function AssetTable({ assetsByType, onDeleteAsset }: AssetTableProps) {
                             {isProfit ? "+" : ""}{rentabilidade.toFixed(2)}%
                           </TableCell>
                           <TableCell>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Excluir Ativo</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Tem certeza que deseja excluir {asset.ticker}? Esta ação não pode ser desfeita e também excluirá o histórico de operações.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => onDeleteAsset(asset.id)}>
-                                    Excluir
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                onClick={() => onEditAsset(asset)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir Ativo</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja excluir {asset.ticker}? Esta ação não pode ser desfeita e também excluirá o histórico de operações.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => onDeleteAsset(asset.id)}>
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
