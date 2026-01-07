@@ -181,9 +181,8 @@ export function InvoiceReviewModal({
           </div>
         )}
 
-        <div className="flex-1 min-h-0 overflow-hidden -mx-6">
-          <ScrollArea className="h-full max-h-[calc(90vh-280px)] px-6">
-          <div className="space-y-2">
+        <ScrollArea className="h-[400px] -mx-6 px-6 pr-3">
+          <div className="space-y-2 pr-3">
             {reviewItems.map((item, index) => {
               const categoryChanged = item.category_id !== item.original_category_id;
               const category = expenseCategories.find((c) => c.id === item.category_id);
@@ -260,8 +259,7 @@ export function InvoiceReviewModal({
               );
             })}
           </div>
-          </ScrollArea>
-        </div>
+        </ScrollArea>
 
         <DialogFooter className="flex-col sm:flex-row gap-2 border-t pt-4">
           <div className="flex-1 text-sm">
