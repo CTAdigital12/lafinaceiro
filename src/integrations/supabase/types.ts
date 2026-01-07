@@ -222,6 +222,7 @@ export type Database = {
           created_at: string
           current_price: number
           id: string
+          institution_id: string | null
           name: string
           quantity: number
           ticker: string
@@ -234,6 +235,7 @@ export type Database = {
           created_at?: string
           current_price?: number
           id?: string
+          institution_id?: string | null
           name: string
           quantity?: number
           ticker: string
@@ -246,9 +248,48 @@ export type Database = {
           created_at?: string
           current_price?: number
           id?: string
+          institution_id?: string | null
           name?: string
           quantity?: number
           ticker?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_assets_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "investment_institutions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      investment_institutions: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name?: string
           updated_at?: string
           user_id?: string
         }
