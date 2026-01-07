@@ -9,6 +9,7 @@ import {
   Settings,
   Menu,
   Tags,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -22,6 +23,7 @@ const navItems = [
   { icon: Tags, label: "Categorias", path: "/categories" },
   { icon: Target, label: "Planejamento", path: "/planning" },
   { icon: BarChart3, label: "Relatórios", path: "/reports" },
+  { icon: Briefcase, label: "Despesas Empresa", path: "/corporate-expenses" },
   { icon: Settings, label: "Configurações", path: "/settings" },
 ];
 
