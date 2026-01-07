@@ -215,6 +215,108 @@ export type Database = {
         }
         Relationships: []
       }
+      investment_assets: {
+        Row: {
+          asset_type: string
+          average_price: number
+          created_at: string
+          current_price: number
+          id: string
+          name: string
+          quantity: number
+          ticker: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asset_type: string
+          average_price?: number
+          created_at?: string
+          current_price?: number
+          id?: string
+          name: string
+          quantity?: number
+          ticker: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asset_type?: string
+          average_price?: number
+          created_at?: string
+          current_price?: number
+          id?: string
+          name?: string
+          quantity?: number
+          ticker?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      investment_transactions: {
+        Row: {
+          asset_id: string | null
+          created_at: string
+          date: string
+          fees: number
+          id: string
+          linked_transaction_id: string | null
+          notes: string | null
+          quantity: number
+          realized_profit: number | null
+          total_value: number
+          type: string
+          unit_price: number
+          user_id: string
+        }
+        Insert: {
+          asset_id?: string | null
+          created_at?: string
+          date?: string
+          fees?: number
+          id?: string
+          linked_transaction_id?: string | null
+          notes?: string | null
+          quantity?: number
+          realized_profit?: number | null
+          total_value?: number
+          type: string
+          unit_price?: number
+          user_id: string
+        }
+        Update: {
+          asset_id?: string | null
+          created_at?: string
+          date?: string
+          fees?: number
+          id?: string
+          linked_transaction_id?: string | null
+          notes?: string | null
+          quantity?: number
+          realized_profit?: number | null
+          total_value?: number
+          type?: string
+          unit_price?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_transactions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "investment_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_transactions_linked_transaction_id_fkey"
+            columns: ["linked_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invitations: {
         Row: {
           accepted_at: string | null

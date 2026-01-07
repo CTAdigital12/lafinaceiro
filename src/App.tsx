@@ -13,6 +13,7 @@ import Categories from "./pages/Categories";
 import Planning from "./pages/Planning";
 import Reports from "./pages/Reports";
 import CorporateExpenses from "./pages/CorporateExpenses";
+import Investments from "./pages/Investments";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -44,6 +45,7 @@ const App = () => (
                     <Route path="/planning" element={<Planning />} />
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/corporate-expenses" element={<CorporateExpenses />} />
+                    <Route path="/investments" element={<Investments />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
