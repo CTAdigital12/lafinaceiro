@@ -85,10 +85,12 @@ export default function Planning() {
           (a.categories?.name || "").localeCompare(b.categories?.name || "")
         );
         
-        parent.children.forEach((child) => {
-          parent.totalPlanned += child.totalPlanned;
-          parent.totalSpent += child.totalSpent;
-        });
+        // Parent category shows ONLY the sum of children, not its own budget + children
+        const childrenPlanned = parent.children.reduce((sum, child) => sum + child.totalPlanned, 0);
+        const childrenSpent = parent.children.reduce((sum, child) => sum + child.totalSpent, 0);
+        
+        parent.totalPlanned = childrenPlanned;
+        parent.totalSpent = childrenSpent;
       }
     });
 

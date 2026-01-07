@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -147,7 +148,19 @@ export function useBudgets(month: number, year: number) {
     },
   });
 
-  const totalPlanned = budgets.reduce((sum, b) => sum + Number(b.planned_amount), 0);
+  // Calculate total only from "leaf" budgets (subcategories or categories without children)
+  const totalPlanned = useMemo(() => {
+    const parentCategoryIds = new Set(
+      budgets
+        .filter(b => b.categories?.parent_id)
+        .map(b => b.categories?.parent_id)
+    );
+    
+    // Sum only budgets that are NOT parent categories (i.e., don't have children in the budget list)
+    return budgets
+      .filter(b => !parentCategoryIds.has(b.categories?.id))
+      .reduce((sum, b) => sum + Number(b.planned_amount), 0);
+  }, [budgets]);
 
   return {
     budgets,
