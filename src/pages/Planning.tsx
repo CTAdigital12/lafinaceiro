@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -295,12 +295,12 @@ export default function Planning() {
             </TableHeader>
             <TableBody>
               {hierarchicalBudgets.map((parentBudget) => (
-                <>
+                <React.Fragment key={parentBudget.id}>
                   {renderBudgetRow(parentBudget, false)}
                   {parentBudget.children.map((childBudget) => 
                     renderBudgetRow(childBudget, true)
                   )}
-                </>
+                </React.Fragment>
               ))}
             </TableBody>
           </Table>
