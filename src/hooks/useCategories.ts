@@ -7,9 +7,10 @@ export interface Category {
   id: string;
   user_id: string;
   name: string;
-  icon: string;
-  color: string;
+  icon: string | null;
+  color: string | null;
   type: "income" | "expense";
+  parent_id: string | null;
   created_at: string;
 }
 
@@ -33,7 +34,7 @@ export function useCategories() {
   });
 
   const createCategory = useMutation({
-    mutationFn: async (category: Omit<Category, "id" | "user_id" | "created_at">) => {
+    mutationFn: async (category: { name: string; icon: string; color: string; type: "income" | "expense"; parent_id?: string | null }) => {
       const { data, error } = await supabase
         .from("categories")
         .insert([{ ...category, user_id: user?.id }])
@@ -52,6 +53,45 @@ export function useCategories() {
     },
   });
 
+  const updateCategory = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Category> & { id: string }) => {
+      const { data, error } = await supabase
+        .from("categories")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Categoria atualizada!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar categoria", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Categoria excluída!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir categoria", description: error.message, variant: "destructive" });
+    },
+  });
+
   const incomeCategories = categories.filter((c) => c.type === "income");
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
@@ -61,5 +101,7 @@ export function useCategories() {
     expenseCategories,
     isLoading,
     createCategory,
+    updateCategory,
+    deleteCategory,
   };
 }
