@@ -1,0 +1,83 @@
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useBudgets, Budget } from "@/hooks/useBudgets";
+import { Loader2 } from "lucide-react";
+
+interface EditBudgetModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  budget: Budget | null;
+  month: number;
+  year: number;
+}
+
+export function EditBudgetModal({ open, onOpenChange, budget, month, year }: EditBudgetModalProps) {
+  const { updateBudget } = useBudgets(month, year);
+  const [plannedAmount, setPlannedAmount] = useState("");
+
+  useEffect(() => {
+    if (budget) {
+      setPlannedAmount(String(budget.planned_amount));
+    }
+  }, [budget]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!budget) return;
+    
+    updateBudget.mutate({
+      id: budget.id,
+      planned_amount: parseFloat(plannedAmount) || 0,
+    }, {
+      onSuccess: () => {
+        onOpenChange(false);
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar Meta de Orçamento</DialogTitle>
+          <DialogDescription>
+            {budget?.categories?.icon} {budget?.categories?.name}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="amount">Valor Planejado (R$)</Label>
+            <Input
+              id="amount"
+              type="number"
+              step="0.01"
+              placeholder="0,00"
+              value={plannedAmount}
+              onChange={(e) => setPlannedAmount(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" className="flex-1" disabled={updateBudget.isPending}>
+              {updateBudget.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                "Salvar"
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

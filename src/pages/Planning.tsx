@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight } from "lucide-react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 import { useBudgets, Budget } from "@/hooks/useBudgets";
 import { useTransactions } from "@/hooks/useTransactions";
 import { NewBudgetModal } from "@/components/modals/NewBudgetModal";
+import { EditBudgetModal } from "@/components/modals/EditBudgetModal";
+import { BudgetEvolutionChart } from "@/components/dashboard/BudgetEvolutionChart";
 
 const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -29,6 +31,10 @@ export default function Planning() {
   const [month, setMonth] = useState(currentDate.getMonth() + 1);
   const [year, setYear] = useState(currentDate.getFullYear());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [showChart, setShowChart] = useState(false);
 
   const { budgets, isLoading, totalPlanned, deleteBudget, copyFromPreviousMonth } = useBudgets(month, year);
   const { transactions } = useTransactions(month, year);
@@ -46,11 +52,9 @@ export default function Planning() {
 
   // Build hierarchical structure
   const hierarchicalBudgets = useMemo(() => {
-    // Group budgets by parent category
     const parentBudgets: HierarchicalBudget[] = [];
     const childBudgetsMap: Record<string, HierarchicalBudget[]> = {};
 
-    // First pass: separate parents and children
     budgets.forEach((budget) => {
       const parentId = budget.categories?.parent_id;
       const spent = spentByCategory[budget.category_id || ""] || 0;
@@ -64,19 +68,16 @@ export default function Planning() {
       };
 
       if (parentId) {
-        // This is a child budget
         if (!childBudgetsMap[parentId]) {
           childBudgetsMap[parentId] = [];
         }
         childBudgetsMap[parentId].push(hierarchicalBudget);
       } else {
-        // This is a parent budget
         hierarchicalBudget.isParent = true;
         parentBudgets.push(hierarchicalBudget);
       }
     });
 
-    // Second pass: attach children to parents and calculate totals
     parentBudgets.forEach((parent) => {
       const categoryId = parent.categories?.id;
       if (categoryId && childBudgetsMap[categoryId]) {
@@ -84,7 +85,6 @@ export default function Planning() {
           (a.categories?.name || "").localeCompare(b.categories?.name || "")
         );
         
-        // Sum up children's planned and spent
         parent.children.forEach((child) => {
           parent.totalPlanned += child.totalPlanned;
           parent.totalSpent += child.totalSpent;
@@ -92,7 +92,6 @@ export default function Planning() {
       }
     });
 
-    // Sort parents by name
     return parentBudgets.sort((a, b) => 
       (a.categories?.name || "").localeCompare(b.categories?.name || "")
     );
@@ -113,12 +112,32 @@ export default function Planning() {
     else { setMonth(month + 1); }
   };
 
+  const toggleCategory = (categoryId: string) => {
+    setCollapsedCategories((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleEditBudget = (budget: Budget) => {
+    setEditingBudget(budget);
+    setEditModalOpen(true);
+  };
+
   const renderBudgetRow = (budget: HierarchicalBudget, isChild: boolean = false) => {
     const planned = budget.isParent ? budget.totalPlanned : Number(budget.planned_amount);
     const spent = budget.isParent ? budget.totalSpent : (spentByCategory[budget.category_id || ""] || 0);
     const remaining = planned - spent;
     const percentage = planned > 0 ? (spent / planned) * 100 : 0;
     const isOverBudget = spent > planned;
+    const categoryId = budget.categories?.id || "";
+    const isCollapsed = collapsedCategories.has(categoryId);
+    const hasChildren = budget.children.length > 0;
 
     return (
       <TableRow key={budget.id} className={cn(isChild && "bg-muted/30")}>
@@ -127,12 +146,28 @@ export default function Planning() {
             {isChild ? (
               <CornerDownRight className="h-4 w-4 text-muted-foreground" />
             ) : (
-              <div 
-                className="h-9 w-9 rounded-lg flex items-center justify-center text-lg"
-                style={{ backgroundColor: `${budget.categories?.color}20` }}
-              >
-                {budget.categories?.icon || "📦"}
-              </div>
+              <>
+                {hasChildren && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 p-0"
+                    onClick={() => toggleCategory(categoryId)}
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+                <div 
+                  className={cn("h-9 w-9 rounded-lg flex items-center justify-center text-lg", !hasChildren && "ml-6")}
+                  style={{ backgroundColor: `${budget.categories?.color}20` }}
+                >
+                  {budget.categories?.icon || "📦"}
+                </div>
+              </>
             )}
             <span className={cn("font-medium", isChild && "text-sm")}>
               {budget.categories?.name || "Categoria"}
@@ -183,7 +218,12 @@ export default function Planning() {
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => handleEditBudget(budget)}
+            >
               <Pencil className="h-4 w-4" />
             </Button>
             <Button 
@@ -209,6 +249,14 @@ export default function Planning() {
           <p className="text-muted-foreground">Defina e acompanhe seus orçamentos</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            className="gap-2" 
+            onClick={() => setShowChart(!showChart)}
+          >
+            <LineChart className="h-4 w-4" />
+            {showChart ? "Ocultar Gráfico" : "Ver Evolução"}
+          </Button>
           <Button variant="outline" className="gap-2" onClick={() => copyFromPreviousMonth.mutate()} disabled={copyFromPreviousMonth.isPending}>
             {copyFromPreviousMonth.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
             Copiar do Mês Anterior
@@ -219,6 +267,14 @@ export default function Planning() {
           </Button>
         </div>
       </div>
+
+      {/* Evolution Chart */}
+      {showChart && (
+        <div className="bg-card rounded-xl border border-border p-5 shadow-card">
+          <h3 className="text-lg font-semibold text-foreground mb-4">Evolução do Orçamento - {year}</h3>
+          <BudgetEvolutionChart currentYear={year} />
+        </div>
+      )}
 
       {/* Month Selector */}
       <div className="flex items-center justify-center gap-4 bg-card rounded-xl border border-border p-4 shadow-card">
@@ -294,20 +350,26 @@ export default function Planning() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {hierarchicalBudgets.map((parentBudget) => (
-                <React.Fragment key={parentBudget.id}>
-                  {renderBudgetRow(parentBudget, false)}
-                  {parentBudget.children.map((childBudget) => 
-                    renderBudgetRow(childBudget, true)
-                  )}
-                </React.Fragment>
-              ))}
+              {hierarchicalBudgets.map((parentBudget) => {
+                const categoryId = parentBudget.categories?.id || "";
+                const isCollapsed = collapsedCategories.has(categoryId);
+                
+                return (
+                  <React.Fragment key={parentBudget.id}>
+                    {renderBudgetRow(parentBudget, false)}
+                    {!isCollapsed && parentBudget.children.map((childBudget) => 
+                      renderBudgetRow(childBudget, true)
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
       )}
 
       <NewBudgetModal open={isModalOpen} onOpenChange={setIsModalOpen} month={month} year={year} />
+      <EditBudgetModal open={editModalOpen} onOpenChange={setEditModalOpen} budget={editingBudget} month={month} year={year} />
     </div>
   );
 }
