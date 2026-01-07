@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, CreditCard, Calendar, Wallet, MoreVertical, Upload } from "lucide-react";
+import { Plus, CreditCard, Calendar, Wallet, MoreVertical, Upload, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -189,14 +189,14 @@ export default function CreditCards() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg gradient-expense flex items-center justify-center">
               <CreditCard className="h-5 w-5 text-expense-foreground" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total em Faturas</p>
+              <p className="text-xs text-muted-foreground">Total Fatura (Banco)</p>
               <p className="text-lg font-bold text-foreground">
                 R$ {totalInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
@@ -205,14 +205,29 @@ export default function CreditCards() {
         </div>
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg gradient-balance flex items-center justify-center">
-              <Wallet className="h-5 w-5 text-balance-foreground" />
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Wallet className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Limite Total</p>
-              <p className="text-lg font-bold text-foreground">
-                R$ {totalLimit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              <p className="text-xs text-muted-foreground">Meu Custo</p>
+              <p className="text-lg font-bold text-expense">
+                R$ {totalInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
+              <p className="text-xs text-muted-foreground">Valor a pagar</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4 shadow-card">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+              <Briefcase className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">A Reembolsar</p>
+              <p className="text-lg font-bold text-muted-foreground">
+                R$ 0,00
+              </p>
+              <p className="text-xs text-muted-foreground">Empresa paga</p>
             </div>
           </div>
         </div>

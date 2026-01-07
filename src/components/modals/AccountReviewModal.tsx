@@ -241,6 +241,7 @@ export function AccountReviewModal({
           account_id: accountId,
           credit_card_id: null,
           status: "completed",
+          is_corporate_expense: false,
         });
 
         // Update balance calculation

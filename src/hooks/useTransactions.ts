@@ -14,6 +14,7 @@ export interface Transaction {
   type: "income" | "expense";
   date: string;
   status: "completed" | "pending";
+  is_corporate_expense: boolean;
   created_at: string;
   updated_at: string;
   categories?: { name: string; icon: string; color: string } | null;
@@ -114,8 +115,9 @@ export function useTransactions(month?: number, year?: number) {
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
+  // Exclude corporate expenses from personal expense total
   const totalExpense = transactions
-    .filter((t) => t.type === "expense")
+    .filter((t) => t.type === "expense" && !t.is_corporate_expense)
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   return {

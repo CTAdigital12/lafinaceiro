@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,11 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useCategories } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -36,6 +41,8 @@ interface ReviewItem extends ImportedItem {
   category_id: string | null;
   original_category_id: string | null;
   remember_category: boolean;
+  is_corporate: boolean;
+  remember_corporate: boolean;
 }
 
 interface InvoiceReviewModalProps {
@@ -54,7 +61,7 @@ export function InvoiceReviewModal({
   creditCardName,
 }: InvoiceReviewModalProps) {
   const { expenseCategories, createCategory } = useCategories();
-  const { findCategoryForDescription, createRule } = useCategorizationRules();
+  const { findCategoryForDescription, findCorporateForDescription, createRule } = useCategorizationRules();
   const { createTransaction } = useTransactions();
   const { toast } = useToast();
 
@@ -71,21 +78,24 @@ export function InvoiceReviewModal({
     "#3B82F6", "#8B5CF6", "#EC4899", "#6B7280"
   ];
 
-  // Initialize review items with suggested categories
+  // Initialize review items with suggested categories and corporate status
   useEffect(() => {
     if (items.length > 0 && open) {
       const itemsWithCategories = items.map((item) => {
         const suggestedCategoryId = findCategoryForDescription(item.description);
+        const suggestedCorporate = findCorporateForDescription(item.description);
         return {
           ...item,
           category_id: suggestedCategoryId,
           original_category_id: suggestedCategoryId,
           remember_category: false,
+          is_corporate: suggestedCorporate,
+          remember_corporate: false,
         };
       });
       setReviewItems(itemsWithCategories);
     }
-  }, [items, open, findCategoryForDescription]);
+  }, [items, open, findCategoryForDescription, findCorporateForDescription]);
 
   const handleCategoryChange = (index: number, categoryId: string) => {
     setReviewItems((prev) =>
@@ -106,6 +116,22 @@ export function InvoiceReviewModal({
     setReviewItems((prev) =>
       prev.map((item, i) =>
         i === index ? { ...item, remember_category: remember } : item
+      )
+    );
+  };
+
+  const handleCorporateChange = (index: number, isCorporate: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, is_corporate: isCorporate, remember_corporate: isCorporate ? item.remember_corporate : false } : item
+      )
+    );
+  };
+
+  const handleRememberCorporateChange = (index: number, remember: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, remember_corporate: remember } : item
       )
     );
   };
@@ -153,15 +179,20 @@ export function InvoiceReviewModal({
     try {
       // First, create categorization rules for items marked to remember
       const rulesToCreate = reviewItems
-        .filter((item) => item.remember_category && item.category_id && item.category_id !== item.original_category_id)
+        .filter((item) => (item.remember_category && item.category_id && item.category_id !== item.original_category_id) || item.remember_corporate)
         .map((item) => ({
           keyword: extractKeyword(item.description),
           category_id: item.category_id!,
+          is_corporate: item.is_corporate,
         }));
 
-      // Create rules
+      // Create rules (dedupe by keyword)
+      const seenKeywords = new Set<string>();
       for (const rule of rulesToCreate) {
-        await createRule.mutateAsync(rule);
+        if (!seenKeywords.has(rule.keyword)) {
+          seenKeywords.add(rule.keyword);
+          await createRule.mutateAsync(rule);
+        }
       }
 
       // Create transactions
@@ -175,12 +206,15 @@ export function InvoiceReviewModal({
           credit_card_id: creditCardId,
           account_id: null,
           status: "completed",
+          is_corporate_expense: item.is_corporate,
         });
       }
 
+      const corporateCount = reviewItems.filter((item) => item.is_corporate).length;
+
       toast({
         title: "Fatura importada com sucesso!",
-        description: `${reviewItems.length} transações adicionadas${rulesToCreate.length > 0 ? ` e ${rulesToCreate.length} regras de categorização criadas` : ""}`,
+        description: `${reviewItems.length} transações adicionadas${corporateCount > 0 ? ` (${corporateCount} da empresa)` : ""}${rulesToCreate.length > 0 ? ` e ${rulesToCreate.length} regras criadas` : ""}`,
       });
 
       onOpenChange(false);
@@ -197,6 +231,8 @@ export function InvoiceReviewModal({
   };
 
   const totalAmount = reviewItems.reduce((sum, item) => sum + item.amount, 0);
+  const personalTotal = reviewItems.filter((item) => !item.is_corporate).reduce((sum, item) => sum + item.amount, 0);
+  const corporateTotal = reviewItems.filter((item) => item.is_corporate).reduce((sum, item) => sum + item.amount, 0);
   const uncategorizedCount = reviewItems.filter((item) => !item.category_id).length;
 
   return (
@@ -230,11 +266,24 @@ export function InvoiceReviewModal({
               return (
                 <div
                   key={index}
-                  className="border rounded-lg p-3 space-y-2"
+                  className={cn(
+                    "border rounded-lg p-3 space-y-2",
+                    item.is_corporate && "bg-muted/30"
+                  )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.description}</p>
+                      <div className="flex items-center gap-2">
+                        {item.is_corporate && (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Briefcase className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            </TooltipTrigger>
+                            <TooltipContent>Despesa da Empresa</TooltipContent>
+                          </Tooltip>
+                        )}
+                        <p className="text-sm font-medium truncate">{item.description}</p>
+                      </div>
                       <p className="text-xs text-muted-foreground">{item.date}</p>
                     </div>
                     <p className="text-sm font-semibold text-expense whitespace-nowrap">
@@ -323,6 +372,26 @@ export function InvoiceReviewModal({
                       </PopoverContent>
                     </Popover>
 
+                    {/* Corporate expense toggle */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={item.is_corporate ? "default" : "outline"}
+                          size="icon"
+                          className={cn(
+                            "h-8 w-8 flex-shrink-0",
+                            item.is_corporate && "bg-muted text-muted-foreground hover:bg-muted/80"
+                          )}
+                          onClick={() => handleCorporateChange(index, !item.is_corporate)}
+                        >
+                          <Briefcase className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {item.is_corporate ? "Remover da empresa" : "Marcar como empresa"}
+                      </TooltipContent>
+                    </Tooltip>
+
                     {item.original_category_id && (
                       <Badge variant="secondary" className="text-xs">
                         <Sparkles className="h-3 w-3 mr-1" />
@@ -331,6 +400,7 @@ export function InvoiceReviewModal({
                     )}
                   </div>
 
+                  {/* Remember category */}
                   {categoryChanged && item.category_id && (
                     <div className="flex items-center gap-2 pt-1">
                       <Checkbox
@@ -348,6 +418,25 @@ export function InvoiceReviewModal({
                       </label>
                     </div>
                   )}
+
+                  {/* Remember corporate status */}
+                  {item.is_corporate && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Checkbox
+                        id={`remember-corp-${index}`}
+                        checked={item.remember_corporate}
+                        onCheckedChange={(checked) =>
+                          handleRememberCorporateChange(index, checked === true)
+                        }
+                      />
+                      <label
+                        htmlFor={`remember-corp-${index}`}
+                        className="text-xs text-muted-foreground cursor-pointer"
+                      >
+                        Lembrar "{extractKeyword(item.description)}" como despesa da empresa
+                      </label>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -355,11 +444,31 @@ export function InvoiceReviewModal({
         </ScrollArea>
 
         <DialogFooter className="flex-col sm:flex-row gap-2 border-t pt-4">
-          <div className="flex-1 text-sm">
-            <span className="text-muted-foreground">Total: </span>
-            <span className="font-semibold text-expense">
-              R$ {totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </span>
+          <div className="flex-1 space-y-1 text-sm">
+            <div className="flex gap-4">
+              <span>
+                <span className="text-muted-foreground">Total: </span>
+                <span className="font-semibold text-expense">
+                  R$ {totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </span>
+              </span>
+            </div>
+            {corporateTotal > 0 && (
+              <div className="flex gap-4 text-xs">
+                <span>
+                  <span className="text-muted-foreground">Meu custo: </span>
+                  <span className="font-medium">
+                    R$ {personalTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </span>
+                </span>
+                <span>
+                  <span className="text-muted-foreground">Empresa: </span>
+                  <span className="font-medium">
+                    R$ {corporateTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <Button
