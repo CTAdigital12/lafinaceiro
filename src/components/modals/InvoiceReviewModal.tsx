@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, AlertCircle, Sparkles, Loader2 } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { useCategories } from "@/hooks/useCategories";
@@ -47,13 +53,17 @@ export function InvoiceReviewModal({
   creditCardId,
   creditCardName,
 }: InvoiceReviewModalProps) {
-  const { expenseCategories } = useCategories();
+  const { expenseCategories, createCategory } = useCategories();
   const { findCategoryForDescription, createRule } = useCategorizationRules();
   const { createTransaction } = useTransactions();
   const { toast } = useToast();
 
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("📦");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
 
   // Initialize review items with suggested categories
   useEffect(() => {
@@ -92,6 +102,29 @@ export function InvoiceReviewModal({
         i === index ? { ...item, remember_category: remember } : item
       )
     );
+  };
+
+  const handleCreateCategory = async (index: number) => {
+    if (!newCategoryName.trim()) return;
+    
+    setIsCreatingCategory(true);
+    try {
+      const newCategory = await createCategory.mutateAsync({
+        name: newCategoryName.trim(),
+        icon: newCategoryIcon,
+        color: "#6B7280",
+        type: "expense",
+      });
+      
+      handleCategoryChange(index, newCategory.id);
+      setNewCategoryName("");
+      setNewCategoryIcon("📦");
+      setOpenPopoverIndex(null);
+    } catch (error) {
+      console.error("Error creating category:", error);
+    } finally {
+      setIsCreatingCategory(false);
+    }
   };
 
   const extractKeyword = (description: string): string => {
@@ -210,7 +243,7 @@ export function InvoiceReviewModal({
                       }
                     >
                       <SelectTrigger className={cn(
-                        "h-8 text-xs",
+                        "h-8 text-xs flex-1",
                         !item.category_id && "border-chart-4/50"
                       )}>
                         <SelectValue placeholder="Selecione uma categoria" />
@@ -229,6 +262,45 @@ export function InvoiceReviewModal({
                         ))}
                       </SelectContent>
                     </Select>
+
+                    <Popover open={openPopoverIndex === index} onOpenChange={(open) => setOpenPopoverIndex(open ? index : null)}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8 flex-shrink-0">
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-3" align="end">
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium">Nova categoria</p>
+                          <div className="flex gap-2">
+                            <Input
+                              value={newCategoryIcon}
+                              onChange={(e) => setNewCategoryIcon(e.target.value)}
+                              className="w-12 text-center"
+                              maxLength={2}
+                            />
+                            <Input
+                              value={newCategoryName}
+                              onChange={(e) => setNewCategoryName(e.target.value)}
+                              placeholder="Nome da categoria"
+                              className="flex-1"
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleCreateCategory(index)}
+                            disabled={!newCategoryName.trim() || isCreatingCategory}
+                          >
+                            {isCreatingCategory ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Criar e aplicar"
+                            )}
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
 
                     {item.original_category_id && (
                       <Badge variant="secondary" className="text-xs">
