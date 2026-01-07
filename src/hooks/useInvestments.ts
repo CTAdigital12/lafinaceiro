@@ -13,6 +13,7 @@ export interface InvestmentAsset {
   average_price: number;
   current_price: number;
   institution_id: string | null;
+  maturity_date: string | null;
   created_at: string;
   updated_at: string;
 }

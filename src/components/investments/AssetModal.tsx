@@ -34,6 +34,7 @@ const formSchema = z.object({
   asset_type: z.string().min(1, "Tipo é obrigatório"),
   institution_id: z.string().optional(),
   current_price: z.number().min(0).default(0),
+  maturity_date: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -61,8 +62,11 @@ export function AssetModal({
       asset_type: "",
       institution_id: "",
       current_price: 0,
+      maturity_date: "",
     },
   });
+
+  const assetType = form.watch("asset_type");
 
   useEffect(() => {
     if (asset) {
@@ -72,6 +76,7 @@ export function AssetModal({
         asset_type: asset.asset_type,
         institution_id: asset.institution_id || "",
         current_price: asset.current_price,
+        maturity_date: asset.maturity_date || "",
       });
     } else {
       form.reset({
@@ -80,6 +85,7 @@ export function AssetModal({
         asset_type: "",
         institution_id: "",
         current_price: 0,
+        maturity_date: "",
       });
     }
   }, [asset, open, form]);
@@ -89,6 +95,7 @@ export function AssetModal({
       ...values,
       ticker: values.ticker.toUpperCase(),
       institution_id: values.institution_id || undefined,
+      maturity_date: values.maturity_date || undefined,
     });
     onOpenChange(false);
   };
@@ -203,6 +210,22 @@ export function AssetModal({
                 </FormItem>
               )}
             />
+
+            {assetType === "renda_fixa" && (
+              <FormField
+                control={form.control}
+                name="maturity_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data de Vencimento</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

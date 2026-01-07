@@ -223,6 +223,7 @@ export type Database = {
           current_price: number
           id: string
           institution_id: string | null
+          maturity_date: string | null
           name: string
           quantity: number
           ticker: string
@@ -236,6 +237,7 @@ export type Database = {
           current_price?: number
           id?: string
           institution_id?: string | null
+          maturity_date?: string | null
           name: string
           quantity?: number
           ticker: string
@@ -249,6 +251,7 @@ export type Database = {
           current_price?: number
           id?: string
           institution_id?: string | null
+          maturity_date?: string | null
           name?: string
           quantity?: number
           ticker?: string
