@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Trash2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { Trash2, ChevronDown, ChevronRight, Pencil, AlertTriangle, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -26,15 +27,36 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { InvestmentAsset, ASSET_TYPE_LABELS } from "@/hooks/useInvestments";
 import { InvestmentInstitution } from "@/hooks/useInstitutions";
 import { cn } from "@/lib/utils";
+import { differenceInDays, format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface AssetTableProps {
   assetsByType: Record<string, InvestmentAsset[]>;
   institutions: InvestmentInstitution[];
   onEditAsset: (asset: InvestmentAsset) => void;
   onDeleteAsset: (id: string) => void;
+}
+
+function getMaturityStatus(maturityDate: string | null): { status: "expired" | "critical" | "warning" | "ok" | null; daysLeft: number } {
+  if (!maturityDate) return { status: null, daysLeft: 0 };
+  
+  const today = new Date();
+  const maturity = parseISO(maturityDate);
+  const daysLeft = differenceInDays(maturity, today);
+  
+  if (daysLeft < 0) return { status: "expired", daysLeft };
+  if (daysLeft <= 7) return { status: "critical", daysLeft };
+  if (daysLeft <= 30) return { status: "warning", daysLeft };
+  return { status: "ok", daysLeft };
 }
 
 export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAsset }: AssetTableProps) {
@@ -97,6 +119,7 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                     <TableRow>
                       <TableHead>Ativo</TableHead>
                       <TableHead>Instituição</TableHead>
+                      {type === "renda_fixa" && <TableHead>Vencimento</TableHead>}
                       <TableHead className="text-right">Qtd</TableHead>
                       <TableHead className="text-right">PM</TableHead>
                       <TableHead className="text-right">Cotação</TableHead>
@@ -112,6 +135,7 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                       const rentabilidade = custo > 0 ? ((saldo - custo) / custo) * 100 : 0;
                       const isProfit = rentabilidade >= 0;
                       const institution = institutions.find((i) => i.id === asset.institution_id);
+                      const maturity = getMaturityStatus(asset.maturity_date);
 
                       return (
                         <TableRow key={asset.id}>
@@ -130,6 +154,49 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                               <span className="text-sm text-muted-foreground">-</span>
                             )}
                           </TableCell>
+                          {type === "renda_fixa" && (
+                            <TableCell>
+                              {asset.maturity_date ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm">
+                                          {format(parseISO(asset.maturity_date), "dd/MM/yyyy", { locale: ptBR })}
+                                        </span>
+                                        {maturity.status === "expired" && (
+                                          <Badge variant="destructive" className="text-xs">
+                                            <AlertTriangle className="h-3 w-3 mr-1" />
+                                            Vencido
+                                          </Badge>
+                                        )}
+                                        {maturity.status === "critical" && (
+                                          <Badge variant="destructive" className="text-xs">
+                                            <Clock className="h-3 w-3 mr-1" />
+                                            {maturity.daysLeft}d
+                                          </Badge>
+                                        )}
+                                        {maturity.status === "warning" && (
+                                          <Badge variant="secondary" className="text-xs bg-amber-500/20 text-amber-500">
+                                            <Clock className="h-3 w-3 mr-1" />
+                                            {maturity.daysLeft}d
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {maturity.status === "expired" 
+                                        ? `Vencido há ${Math.abs(maturity.daysLeft)} dias`
+                                        : `Vence em ${maturity.daysLeft} dias`
+                                      }
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                          )}
                           <TableCell className="text-right">
                             {formatNumber(asset.quantity, type === "crypto" ? 8 : 0)}
                           </TableCell>
