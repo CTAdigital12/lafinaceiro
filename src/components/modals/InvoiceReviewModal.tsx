@@ -62,8 +62,14 @@ export function InvoiceReviewModal({
   const [isImporting, setIsImporting] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryIcon, setNewCategoryIcon] = useState("📦");
+  const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
+
+  const colorOptions = [
+    "#EF4444", "#F97316", "#F59E0B", "#22C55E", 
+    "#3B82F6", "#8B5CF6", "#EC4899", "#6B7280"
+  ];
 
   // Initialize review items with suggested categories
   useEffect(() => {
@@ -112,13 +118,14 @@ export function InvoiceReviewModal({
       const newCategory = await createCategory.mutateAsync({
         name: newCategoryName.trim(),
         icon: newCategoryIcon,
-        color: "#6B7280",
+        color: newCategoryColor,
         type: "expense",
       });
       
       handleCategoryChange(index, newCategory.id);
       setNewCategoryName("");
       setNewCategoryIcon("📦");
+      setNewCategoryColor("#3B82F6");
       setOpenPopoverIndex(null);
     } catch (error) {
       console.error("Error creating category:", error);
@@ -285,6 +292,20 @@ export function InvoiceReviewModal({
                               placeholder="Nome da categoria"
                               className="flex-1"
                             />
+                          </div>
+                          <div className="flex gap-1.5 flex-wrap">
+                            {colorOptions.map((color) => (
+                              <button
+                                key={color}
+                                type="button"
+                                onClick={() => setNewCategoryColor(color)}
+                                className={cn(
+                                  "w-6 h-6 rounded-full transition-all",
+                                  newCategoryColor === color && "ring-2 ring-offset-2 ring-primary"
+                                )}
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
                           </div>
                           <Button
                             size="sm"
