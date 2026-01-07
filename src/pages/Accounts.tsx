@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Building2, Wallet, PiggyBank, TrendingUp, MoreVertical, Loader2 } from "lucide-react";
+import { Plus, Building2, Wallet, PiggyBank, TrendingUp, MoreVertical, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,6 +10,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAccounts, Account } from "@/hooks/useAccounts";
 import { AccountModal } from "@/components/modals/AccountModal";
+import { AccountImportModal, AccountImportedItem } from "@/components/modals/AccountImportModal";
+import { AccountReviewModal } from "@/components/modals/AccountReviewModal";
 
 const iconComponents = {
   bank: Building2,
@@ -29,9 +31,10 @@ interface AccountCardProps {
   account: Account;
   onEdit: (account: Account) => void;
   onDelete: (id: string) => void;
+  onImport: (account: Account) => void;
 }
 
-function AccountCard({ account, onEdit, onDelete }: AccountCardProps) {
+function AccountCard({ account, onEdit, onDelete, onImport }: AccountCardProps) {
   const Icon = iconComponents[account.type] || Building2;
 
   return (
@@ -55,6 +58,10 @@ function AccountCard({ account, onEdit, onDelete }: AccountCardProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onImport(account)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Importar Extrato
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(account)}>Editar</DropdownMenuItem>
               <DropdownMenuItem onClick={() => onDelete(account.id)} className="text-expense">
                 Excluir
@@ -72,6 +79,15 @@ function AccountCard({ account, onEdit, onDelete }: AccountCardProps) {
             R$ {Number(account.current_balance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full gap-2"
+          onClick={() => onImport(account)}
+        >
+          <Upload className="h-4 w-4" />
+          Importar Extrato
+        </Button>
       </div>
     </div>
   );
@@ -80,6 +96,10 @@ function AccountCard({ account, onEdit, onDelete }: AccountCardProps) {
 export default function Accounts() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [importingAccount, setImportingAccount] = useState<Account | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [importedItems, setImportedItems] = useState<AccountImportedItem[]>([]);
   const { accounts, isLoading, totalBalance, deleteAccount } = useAccounts();
 
   const handleEdit = (account: Account) => {
@@ -91,6 +111,25 @@ export default function Accounts() {
     setIsModalOpen(open);
     if (!open) {
       setEditingAccount(null);
+    }
+  };
+
+  const handleImport = (account: Account) => {
+    setImportingAccount(account);
+    setIsImportModalOpen(true);
+  };
+
+  const handleImportComplete = (items: AccountImportedItem[]) => {
+    setImportedItems(items);
+    setIsImportModalOpen(false);
+    setIsReviewModalOpen(true);
+  };
+
+  const handleReviewClose = (open: boolean) => {
+    setIsReviewModalOpen(open);
+    if (!open) {
+      setImportedItems([]);
+      setImportingAccount(null);
     }
   };
 
@@ -150,6 +189,7 @@ export default function Accounts() {
               account={account} 
               onEdit={handleEdit}
               onDelete={(id) => deleteAccount.mutate(id)}
+              onImport={handleImport}
             />
           ))}
         </div>
@@ -160,6 +200,26 @@ export default function Accounts() {
         onOpenChange={handleModalClose} 
         account={editingAccount}
       />
+
+      {importingAccount && (
+        <>
+          <AccountImportModal
+            open={isImportModalOpen}
+            onOpenChange={setIsImportModalOpen}
+            accountId={importingAccount.id}
+            accountName={importingAccount.name}
+            onImportComplete={handleImportComplete}
+          />
+
+          <AccountReviewModal
+            open={isReviewModalOpen}
+            onOpenChange={handleReviewClose}
+            items={importedItems}
+            accountId={importingAccount.id}
+            accountName={importingAccount.name}
+          />
+        </>
+      )}
     </div>
   );
 }

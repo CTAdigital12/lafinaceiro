@@ -1,0 +1,559 @@
+import { useState, useEffect } from "react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { useCategories } from "@/hooks/useCategories";
+import { useCategorizationRules } from "@/hooks/useCategorizationRules";
+import { useTransactions } from "@/hooks/useTransactions";
+import { useAccounts } from "@/hooks/useAccounts";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import type { AccountImportedItem } from "./AccountImportModal";
+
+interface ReviewItem extends AccountImportedItem {
+  category_id: string | null;
+  original_category_id: string | null;
+  remember_category: boolean;
+  isDuplicate: boolean;
+  forceImport: boolean;
+}
+
+interface AccountReviewModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  items: AccountImportedItem[];
+  accountId: string;
+  accountName: string;
+}
+
+export function AccountReviewModal({
+  open,
+  onOpenChange,
+  items,
+  accountId,
+  accountName,
+}: AccountReviewModalProps) {
+  const { user } = useAuth();
+  const { categories, createCategory } = useCategories();
+  const { findCategoryForDescription, createRule } = useCategorizationRules();
+  const { createTransaction } = useTransactions();
+  const { updateAccount } = useAccounts();
+  const { toast } = useToast();
+
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("📦");
+  const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
+
+  const colorOptions = [
+    "#EF4444", "#F97316", "#F59E0B", "#22C55E", 
+    "#3B82F6", "#8B5CF6", "#EC4899", "#6B7280"
+  ];
+
+  // Initialize review items with suggested categories and check duplicates
+  useEffect(() => {
+    const initializeItems = async () => {
+      if (items.length === 0 || !open || !user) return;
+      
+      setIsCheckingDuplicates(true);
+      
+      try {
+        // Fetch existing transactions for this account
+        const { data: existingTransactions } = await supabase
+          .from("transactions")
+          .select("date, amount, description")
+          .eq("account_id", accountId);
+
+        const existing = existingTransactions || [];
+
+        const itemsWithCategories = items.map((item) => {
+          const suggestedCategoryId = findCategoryForDescription(item.description);
+          
+          // Check for duplicates: same date, amount, and similar description
+          const isDuplicate = existing.some(
+            (tx) =>
+              tx.date === item.date &&
+              Math.abs(Number(tx.amount) - item.amount) < 0.01 &&
+              (tx.description.toUpperCase().includes(item.description.toUpperCase().substring(0, 10)) ||
+               item.description.toUpperCase().includes(tx.description.toUpperCase().substring(0, 10)))
+          );
+
+          return {
+            ...item,
+            category_id: suggestedCategoryId,
+            original_category_id: suggestedCategoryId,
+            remember_category: false,
+            isDuplicate,
+            forceImport: false,
+          };
+        });
+        
+        setReviewItems(itemsWithCategories);
+      } catch (error) {
+        console.error("Error checking duplicates:", error);
+        // Initialize without duplicate checking if it fails
+        const itemsWithCategories = items.map((item) => {
+          const suggestedCategoryId = findCategoryForDescription(item.description);
+          return {
+            ...item,
+            category_id: suggestedCategoryId,
+            original_category_id: suggestedCategoryId,
+            remember_category: false,
+            isDuplicate: false,
+            forceImport: false,
+          };
+        });
+        setReviewItems(itemsWithCategories);
+      } finally {
+        setIsCheckingDuplicates(false);
+      }
+    };
+
+    initializeItems();
+  }, [items, open, findCategoryForDescription, accountId, user]);
+
+  const handleCategoryChange = (index: number, categoryId: string) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              category_id: categoryId,
+              remember_category: item.original_category_id !== categoryId ? item.remember_category : false,
+            }
+          : item
+      )
+    );
+  };
+
+  const handleRememberChange = (index: number, remember: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, remember_category: remember } : item
+      )
+    );
+  };
+
+  const handleForceImportChange = (index: number, force: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, forceImport: force } : item
+      )
+    );
+  };
+
+  const handleCreateCategory = async (index: number, type: "income" | "expense") => {
+    if (!newCategoryName.trim()) return;
+    
+    setIsCreatingCategory(true);
+    try {
+      const newCategory = await createCategory.mutateAsync({
+        name: newCategoryName.trim(),
+        icon: newCategoryIcon,
+        color: newCategoryColor,
+        type,
+      });
+      
+      handleCategoryChange(index, newCategory.id);
+      setNewCategoryName("");
+      setNewCategoryIcon("📦");
+      setNewCategoryColor("#3B82F6");
+      setOpenPopoverIndex(null);
+    } catch (error) {
+      console.error("Error creating category:", error);
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const extractKeyword = (description: string): string => {
+    const cleaned = description
+      .toUpperCase()
+      .replace(/^(PAG\*|PIX|COMPRA\s+|TED\s+|DOC\s+)/i, "")
+      .trim();
+    
+    const match = cleaned.match(/^[\w]+/);
+    return match ? match[0] : cleaned.substring(0, 20);
+  };
+
+  const handleImport = async () => {
+    setIsImporting(true);
+
+    try {
+      // Filter out duplicates that user doesn't want to force import
+      const itemsToImport = reviewItems.filter(
+        (item) => !item.isDuplicate || item.forceImport
+      );
+
+      // First, create categorization rules for items marked to remember
+      const rulesToCreate = itemsToImport
+        .filter((item) => item.remember_category && item.category_id && item.category_id !== item.original_category_id)
+        .map((item) => ({
+          keyword: extractKeyword(item.description),
+          category_id: item.category_id!,
+        }));
+
+      // Create rules
+      for (const rule of rulesToCreate) {
+        await createRule.mutateAsync(rule);
+      }
+
+      // Calculate balance change
+      let balanceChange = 0;
+
+      // Create transactions
+      for (const item of itemsToImport) {
+        await createTransaction.mutateAsync({
+          description: item.description,
+          amount: item.amount,
+          date: item.date,
+          type: item.type,
+          category_id: item.category_id || null,
+          account_id: accountId,
+          credit_card_id: null,
+          status: "completed",
+        });
+
+        // Update balance calculation
+        if (item.type === "income") {
+          balanceChange += item.amount;
+        } else {
+          balanceChange -= item.amount;
+        }
+      }
+
+      // Update account balance
+      const { data: currentAccount } = await supabase
+        .from("accounts")
+        .select("current_balance")
+        .eq("id", accountId)
+        .single();
+
+      if (currentAccount) {
+        const newBalance = Number(currentAccount.current_balance) + balanceChange;
+        await updateAccount.mutateAsync({
+          id: accountId,
+          current_balance: newBalance,
+        });
+      }
+
+      const skippedCount = reviewItems.length - itemsToImport.length;
+
+      toast({
+        title: "Extrato importado com sucesso!",
+        description: `${itemsToImport.length} transações adicionadas${skippedCount > 0 ? `, ${skippedCount} duplicatas ignoradas` : ""}${rulesToCreate.length > 0 ? ` e ${rulesToCreate.length} regras de categorização criadas` : ""}`,
+      });
+
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Error importing statement:", error);
+      toast({
+        title: "Erro ao importar extrato",
+        description: error instanceof Error ? error.message : "Tente novamente",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const incomeCategories = categories.filter(c => c.type === "income");
+  const expenseCategories = categories.filter(c => c.type === "expense");
+
+  const totalIncome = reviewItems
+    .filter((item) => item.type === "income" && (!item.isDuplicate || item.forceImport))
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  const totalExpense = reviewItems
+    .filter((item) => item.type === "expense" && (!item.isDuplicate || item.forceImport))
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  const uncategorizedCount = reviewItems.filter(
+    (item) => !item.category_id && (!item.isDuplicate || item.forceImport)
+  ).length;
+
+  const duplicateCount = reviewItems.filter((item) => item.isDuplicate && !item.forceImport).length;
+
+  return (
+    <Dialog open={open} onOpenChange={isImporting ? () => {} : onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            Revisar Importação
+          </DialogTitle>
+          <DialogDescription>
+            {accountName} - {reviewItems.length} transações encontradas
+          </DialogDescription>
+        </DialogHeader>
+
+        {isCheckingDuplicates && (
+          <div className="flex-shrink-0 flex items-center gap-2 p-3 rounded-lg bg-primary/10 text-primary text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Verificando duplicatas...</span>
+          </div>
+        )}
+
+        {!isCheckingDuplicates && duplicateCount > 0 && (
+          <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-muted text-muted-foreground text-sm">
+            <Ban className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>
+              {duplicateCount} {duplicateCount === 1 ? "transação já importada será ignorada" : "transações já importadas serão ignoradas"}
+            </span>
+          </div>
+        )}
+
+        {uncategorizedCount > 0 && (
+          <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-chart-4 text-sm">
+            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>
+              {uncategorizedCount} {uncategorizedCount === 1 ? "item precisa" : "itens precisam"} de categorização
+            </span>
+          </div>
+        )}
+
+        <ScrollArea className="h-[400px] -mx-6 px-6 pr-3">
+          <div className="space-y-2 pr-3">
+            {reviewItems.map((item, index) => {
+              const categoryChanged = item.category_id !== item.original_category_id;
+              const relevantCategories = item.type === "income" ? incomeCategories : expenseCategories;
+              const category = categories.find((c) => c.id === item.category_id);
+
+              return (
+                <div
+                  key={index}
+                  className={cn(
+                    "border rounded-lg p-3 space-y-2 transition-all",
+                    item.isDuplicate && !item.forceImport && "opacity-50 bg-muted/50",
+                    !item.category_id && !item.isDuplicate && "border-chart-4/30",
+                    item.type === "income" && !item.isDuplicate && "border-l-4 border-l-income",
+                    item.type === "expense" && !item.isDuplicate && "border-l-4 border-l-expense"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{item.description}</p>
+                        {item.isDuplicate && (
+                          <Badge variant="secondary" className="text-xs flex-shrink-0">
+                            Já importada
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{item.date}</p>
+                    </div>
+                    <p className={cn(
+                      "text-sm font-semibold whitespace-nowrap",
+                      item.type === "income" ? "text-income" : "text-expense"
+                    )}>
+                      {item.type === "income" ? "+" : "-"} R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+
+                  {item.isDuplicate && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Checkbox
+                        id={`force-${index}`}
+                        checked={item.forceImport}
+                        onCheckedChange={(checked) =>
+                          handleForceImportChange(index, checked === true)
+                        }
+                      />
+                      <label
+                        htmlFor={`force-${index}`}
+                        className="text-xs text-muted-foreground cursor-pointer"
+                      >
+                        Importar mesmo assim
+                      </label>
+                    </div>
+                  )}
+
+                  {(!item.isDuplicate || item.forceImport) && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={item.category_id || "none"}
+                          onValueChange={(value) =>
+                            handleCategoryChange(index, value === "none" ? "" : value)
+                          }
+                        >
+                          <SelectTrigger className={cn(
+                            "h-8 text-xs flex-1",
+                            !item.category_id && "border-chart-4/50"
+                          )}>
+                            <SelectValue placeholder="Selecione uma categoria" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">
+                              <span className="text-muted-foreground">Sem categoria</span>
+                            </SelectItem>
+                            {relevantCategories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
+                                <span className="flex items-center gap-2">
+                                  <span>{cat.icon}</span>
+                                  <span>{cat.name}</span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Popover open={openPopoverIndex === index} onOpenChange={(open) => setOpenPopoverIndex(open ? index : null)}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8 flex-shrink-0">
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-3" align="end">
+                            <div className="space-y-3">
+                              <p className="text-sm font-medium">
+                                Nova categoria de {item.type === "income" ? "receita" : "despesa"}
+                              </p>
+                              <div className="flex gap-2">
+                                <Input
+                                  value={newCategoryIcon}
+                                  onChange={(e) => setNewCategoryIcon(e.target.value)}
+                                  className="w-12 text-center"
+                                  maxLength={2}
+                                />
+                                <Input
+                                  value={newCategoryName}
+                                  onChange={(e) => setNewCategoryName(e.target.value)}
+                                  placeholder="Nome da categoria"
+                                  className="flex-1"
+                                />
+                              </div>
+                              <div className="flex gap-1.5 flex-wrap">
+                                {colorOptions.map((color) => (
+                                  <button
+                                    key={color}
+                                    type="button"
+                                    onClick={() => setNewCategoryColor(color)}
+                                    className={cn(
+                                      "w-6 h-6 rounded-full transition-all",
+                                      newCategoryColor === color && "ring-2 ring-offset-2 ring-primary"
+                                    )}
+                                    style={{ backgroundColor: color }}
+                                  />
+                                ))}
+                              </div>
+                              <Button
+                                size="sm"
+                                className="w-full"
+                                onClick={() => handleCreateCategory(index, item.type)}
+                                disabled={!newCategoryName.trim() || isCreatingCategory}
+                              >
+                                {isCreatingCategory ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Criar e aplicar"
+                                )}
+                              </Button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+
+                        {item.original_category_id && (
+                          <Badge variant="secondary" className="text-xs">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            Auto
+                          </Badge>
+                        )}
+                      </div>
+
+                      {categoryChanged && item.category_id && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Checkbox
+                            id={`remember-${index}`}
+                            checked={item.remember_category}
+                            onCheckedChange={(checked) =>
+                              handleRememberChange(index, checked === true)
+                            }
+                          />
+                          <label
+                            htmlFor={`remember-${index}`}
+                            className="text-xs text-muted-foreground cursor-pointer"
+                          >
+                            Lembrar "{extractKeyword(item.description)}" como "{category?.name}"
+                          </label>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+
+        <DialogFooter className="flex-col sm:flex-row gap-2 border-t pt-4">
+          <div className="flex-1 text-sm space-y-1">
+            <div>
+              <span className="text-muted-foreground">Entradas: </span>
+              <span className="font-semibold text-income">
+                +R$ {totalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Saídas: </span>
+              <span className="font-semibold text-expense">
+                -R$ {totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isImporting}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleImport} disabled={isImporting || isCheckingDuplicates}>
+              {isImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Confirmar Importação
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -1,6 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,12 +27,14 @@ serve(async (req) => {
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const creditCardId = formData.get('credit_card_id') as string;
+    const accountId = formData.get('account_id') as string;
+    const mode = formData.get('mode') as string; // 'account' or 'credit_card' (default)
 
     if (!file) {
       throw new Error("No file provided");
     }
 
-    console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}`);
+    console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}, mode: ${mode || 'credit_card'}`);
 
     // Convert file to base64 (using chunks to avoid stack overflow)
     const arrayBuffer = await file.arrayBuffer();
@@ -47,8 +48,32 @@ serve(async (req) => {
     const base64 = btoa(binaryString);
     const mimeType = file.type || 'application/pdf';
 
-    // Prepare prompt for AI to extract invoice data
-    const systemPrompt = `Você é um assistente especializado em extrair dados de faturas de cartão de crédito.
+    // Prepare prompt based on mode
+    const isAccountMode = mode === 'account';
+    
+    const systemPrompt = isAccountMode
+      ? `Você é um assistente especializado em extrair dados de extratos bancários.
+    
+Analise o documento fornecido e extraia TODAS as transações/movimentações encontradas.
+
+Para cada transação, extraia:
+- date: Data da transação no formato YYYY-MM-DD
+- description: Descrição da transação
+- amount: Valor em reais (número, positivo para entradas/depósitos, negativo para saídas/pagamentos)
+
+IMPORTANTE:
+- Valores positivos = Entradas (depósitos, salários, transferências recebidas, etc.)
+- Valores negativos = Saídas (pagamentos, saques, transferências enviadas, etc.)
+- Retorne APENAS um JSON válido, sem texto adicional
+
+Formato de resposta esperado:
+{
+  "items": [
+    {"date": "2024-01-15", "description": "TED RECEBIDO - SALARIO", "amount": 5000.00},
+    {"date": "2024-01-16", "description": "PAGTO BOLETO - LUZ", "amount": -150.50}
+  ]
+}`
+      : `Você é um assistente especializado em extrair dados de faturas de cartão de crédito.
     
 Analise o documento fornecido e extraia TODAS as transações/compras encontradas.
 
@@ -70,6 +95,10 @@ Formato de resposta esperado:
     {"date": "2024-01-16", "description": "NETFLIX.COM", "amount": 55.90}
   ]
 }`;
+
+    const userPrompt = isAccountMode
+      ? "Extraia todas as movimentações deste extrato bancário. Retorne apenas o JSON."
+      : "Extraia todas as transações/compras desta fatura de cartão de crédito. Retorne apenas o JSON.";
 
     console.log("Sending to Lovable AI for processing...");
 
@@ -95,7 +124,7 @@ Formato de resposta esperado:
               },
               {
                 type: "text",
-                text: "Extraia todas as transações/compras desta fatura de cartão de crédito. Retorne apenas o JSON."
+                text: userPrompt
               }
             ]
           }
@@ -141,23 +170,24 @@ Formato de resposta esperado:
       }
     } catch (parseError) {
       console.error("Failed to parse AI response:", parseError);
-      throw new Error("Não foi possível processar a fatura. Tente novamente ou use outro formato.");
+      throw new Error("Não foi possível processar o documento. Tente novamente ou use outro formato.");
     }
 
-    console.log(`Extracted ${items.length} items from invoice`);
+    console.log(`Extracted ${items.length} items from document`);
 
     return new Response(JSON.stringify({ 
       success: true, 
       items,
-      creditCardId 
+      creditCardId,
+      accountId
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error) {
-    console.error("Error processing invoice:", error);
+    console.error("Error processing document:", error);
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : "Erro ao processar fatura" 
+      error: error instanceof Error ? error.message : "Erro ao processar documento" 
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
