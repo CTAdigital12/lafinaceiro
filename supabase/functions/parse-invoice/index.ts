@@ -10,6 +10,8 @@ interface InvoiceItem {
   date: string;
   description: string;
   amount: number;
+  installment_current?: number;  // Current installment number (e.g., 2 in "2/12")
+  installment_total?: number;    // Total installments (e.g., 12 in "2/12")
 }
 
 serve(async (req) => {
@@ -81,18 +83,22 @@ Para cada transação, extraia:
 - date: Data da compra no formato YYYY-MM-DD
 - description: Descrição/estabelecimento da compra
 - amount: Valor em reais (número positivo, sem R$)
+- installment_current: Se for uma compra parcelada, o número da parcela atual (ex: se aparecer "2/12", retorne 2). Se não for parcelada, não inclua este campo.
+- installment_total: Se for uma compra parcelada, o número total de parcelas (ex: se aparecer "2/12", retorne 12). Se não for parcelada, não inclua este campo.
 
 IMPORTANTE:
 - Ignore taxas, juros, pagamentos e créditos
 - Foque apenas nas compras/gastos
 - Se não conseguir identificar a data exata, use a data do lançamento
+- IDENTIFIQUE PARCELAS: Procure por padrões como "2/12", "PARC 3/6", "03 DE 10", "(5/12)", etc. e extraia os números
 - Retorne APENAS um JSON válido, sem texto adicional
 
 Formato de resposta esperado:
 {
   "items": [
     {"date": "2024-01-15", "description": "UBER *TRIP", "amount": 25.50},
-    {"date": "2024-01-16", "description": "NETFLIX.COM", "amount": 55.90}
+    {"date": "2024-01-16", "description": "MAGAZINELUIZA 3/10", "amount": 299.90, "installment_current": 3, "installment_total": 10},
+    {"date": "2024-01-17", "description": "NETFLIX.COM", "amount": 55.90}
   ]
 }`;
 
