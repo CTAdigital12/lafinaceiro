@@ -14,6 +14,7 @@ import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditC
 import { CreditCardModal } from "@/components/modals/CreditCardModal";
 import { InvoiceImportModal, ImportedItem } from "@/components/modals/InvoiceImportModal";
 import { InvoiceReviewModal } from "@/components/modals/InvoiceReviewModal";
+import { InstallmentsDashboard } from "@/components/credit-cards/InstallmentsDashboard";
 
 const statusConfig = {
   open: { label: "Fatura Aberta", variant: "default" as const, className: "bg-balance text-balance-foreground" },
@@ -272,6 +273,9 @@ export default function CreditCards() {
           ))}
         </div>
       )}
+
+      {/* Installments Dashboard */}
+      <InstallmentsDashboard />
 
       <CreditCardModal 
         open={isModalOpen} 
