@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -30,12 +31,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useCategories } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ImportedItem } from "./InvoiceImportModal";
+import { format, addMonths, parse } from "date-fns";
 
 interface ReviewItem extends ImportedItem {
   category_id: string | null;
@@ -43,6 +50,8 @@ interface ReviewItem extends ImportedItem {
   remember_category: boolean;
   is_corporate: boolean;
   remember_corporate: boolean;
+  notes: string;
+  add_future_installments: boolean;
 }
 
 interface InvoiceReviewModalProps {
@@ -72,6 +81,7 @@ export function InvoiceReviewModal({
   const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
+  const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
 
   const colorOptions = [
     "#EF4444", "#F97316", "#F59E0B", "#22C55E", 
@@ -84,6 +94,7 @@ export function InvoiceReviewModal({
       const itemsWithCategories = items.map((item) => {
         const suggestedCategoryId = findCategoryForDescription(item.description);
         const suggestedCorporate = findCorporateForDescription(item.description);
+        const isInstallment = !!(item.installment_current && item.installment_total && item.installment_current < item.installment_total);
         return {
           ...item,
           category_id: suggestedCategoryId,
@@ -91,9 +102,12 @@ export function InvoiceReviewModal({
           remember_category: false,
           is_corporate: suggestedCorporate,
           remember_corporate: false,
+          notes: "",
+          add_future_installments: isInstallment, // Auto-check for installments that have more to come
         };
       });
       setReviewItems(itemsWithCategories);
+      setExpandedNotes(new Set());
     }
   }, [items, open, findCategoryForDescription, findCorporateForDescription]);
 
@@ -136,6 +150,34 @@ export function InvoiceReviewModal({
     );
   };
 
+  const handleNotesChange = (index: number, notes: string) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, notes } : item
+      )
+    );
+  };
+
+  const handleFutureInstallmentsChange = (index: number, add: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, add_future_installments: add } : item
+      )
+    );
+  };
+
+  const toggleNotes = (index: number) => {
+    setExpandedNotes((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
   const handleCreateCategory = async (index: number) => {
     if (!newCategoryName.trim()) return;
     
@@ -168,9 +210,58 @@ export function InvoiceReviewModal({
       .replace(/^(PAG\*|PIX|COMPRA\s+)/i, "")
       .trim();
     
+    // Remove installment info like "2/12" or "PARC 3/6"
+    const withoutInstallment = cleaned.replace(/\s*\d+\/\d+\s*/g, " ").trim();
+    
     // Take first word or first part before special chars
-    const match = cleaned.match(/^[\w]+/);
-    return match ? match[0] : cleaned.substring(0, 20);
+    const match = withoutInstallment.match(/^[\w]+/);
+    return match ? match[0] : withoutInstallment.substring(0, 20);
+  };
+
+  const generateFutureInstallments = (item: ReviewItem): Array<{
+    description: string;
+    amount: number;
+    date: string;
+    notes: string;
+    category_id: string | null;
+    is_corporate: boolean;
+  }> => {
+    if (!item.installment_current || !item.installment_total) return [];
+    
+    const futureInstallments: Array<{
+      description: string;
+      amount: number;
+      date: string;
+      notes: string;
+      category_id: string | null;
+      is_corporate: boolean;
+    }> = [];
+    
+    const baseDate = parse(item.date, "yyyy-MM-dd", new Date());
+    const remaining = item.installment_total - item.installment_current;
+    
+    // Clean description by removing current installment info
+    const baseDescription = item.description
+      .replace(/\s*\d+\/\d+\s*/g, " ")
+      .replace(/\s*PARC\s*\d+\s*\/\s*\d+\s*/gi, " ")
+      .replace(/\s*\(\d+\/\d+\)\s*/g, " ")
+      .trim();
+    
+    for (let i = 1; i <= remaining; i++) {
+      const installmentNumber = item.installment_current + i;
+      const futureDate = addMonths(baseDate, i);
+      
+      futureInstallments.push({
+        description: `${baseDescription} ${installmentNumber}/${item.installment_total}`,
+        amount: item.amount,
+        date: format(futureDate, "yyyy-MM-dd"),
+        notes: item.notes ? `${item.notes} (Parcela ${installmentNumber}/${item.installment_total})` : `Parcela ${installmentNumber}/${item.installment_total}`,
+        category_id: item.category_id,
+        is_corporate: item.is_corporate,
+      });
+    }
+    
+    return futureInstallments;
   };
 
   const handleImport = async () => {
@@ -195,10 +286,25 @@ export function InvoiceReviewModal({
         }
       }
 
-      // Create transactions
+      // Collect all transactions to create (including future installments)
+      const allTransactions: Array<{
+        description: string;
+        amount: number;
+        date: string;
+        type: "expense" | "income";
+        category_id: string | null;
+        credit_card_id: string;
+        account_id: string | null;
+        status: "completed" | "pending";
+        is_corporate_expense: boolean;
+      }> = [];
+
+      let futureInstallmentsCount = 0;
+
       for (const item of reviewItems) {
-        await createTransaction.mutateAsync({
-          description: item.description,
+        // Add the main transaction
+        allTransactions.push({
+          description: item.notes ? `${item.description} - ${item.notes}` : item.description,
           amount: item.amount,
           date: item.date,
           type: "expense",
@@ -208,13 +314,49 @@ export function InvoiceReviewModal({
           status: "completed",
           is_corporate_expense: item.is_corporate,
         });
+
+        // Add future installments if requested
+        if (item.add_future_installments && item.installment_current && item.installment_total) {
+          const futureItems = generateFutureInstallments(item);
+          futureInstallmentsCount += futureItems.length;
+          
+          for (const future of futureItems) {
+            allTransactions.push({
+              description: future.notes ? `${future.description} - ${future.notes}` : future.description,
+              amount: future.amount,
+              date: future.date,
+              type: "expense",
+              category_id: future.category_id || null,
+              credit_card_id: creditCardId,
+              account_id: null,
+              status: "pending",
+              is_corporate_expense: future.is_corporate,
+            });
+          }
+        }
+      }
+
+      // Create all transactions
+      for (const transaction of allTransactions) {
+        await createTransaction.mutateAsync(transaction);
       }
 
       const corporateCount = reviewItems.filter((item) => item.is_corporate).length;
 
+      let description = `${reviewItems.length} transações adicionadas`;
+      if (futureInstallmentsCount > 0) {
+        description += ` + ${futureInstallmentsCount} parcelas futuras`;
+      }
+      if (corporateCount > 0) {
+        description += ` (${corporateCount} da empresa)`;
+      }
+      if (rulesToCreate.length > 0) {
+        description += ` e ${rulesToCreate.length} regras criadas`;
+      }
+
       toast({
         title: "Fatura importada com sucesso!",
-        description: `${reviewItems.length} transações adicionadas${corporateCount > 0 ? ` (${corporateCount} da empresa)` : ""}${rulesToCreate.length > 0 ? ` e ${rulesToCreate.length} regras criadas` : ""}`,
+        description,
       });
 
       onOpenChange(false);
@@ -234,6 +376,10 @@ export function InvoiceReviewModal({
   const personalTotal = reviewItems.filter((item) => !item.is_corporate).reduce((sum, item) => sum + item.amount, 0);
   const corporateTotal = reviewItems.filter((item) => item.is_corporate).reduce((sum, item) => sum + item.amount, 0);
   const uncategorizedCount = reviewItems.filter((item) => !item.category_id).length;
+  const installmentsCount = reviewItems.filter((item) => item.installment_current && item.installment_total).length;
+  const futureInstallmentsToAdd = reviewItems
+    .filter((item) => item.add_future_installments && item.installment_current && item.installment_total)
+    .reduce((sum, item) => sum + (item.installment_total! - item.installment_current!), 0);
 
   return (
     <Dialog open={open} onOpenChange={isImporting ? () => {} : onOpenChange}>
@@ -245,6 +391,14 @@ export function InvoiceReviewModal({
           </DialogTitle>
           <DialogDescription>
             {creditCardName} - {reviewItems.length} transações encontradas
+            {installmentsCount > 0 && (
+              <span className="ml-2">
+                <Badge variant="secondary" className="text-xs">
+                  <Copy className="h-3 w-3 mr-1" />
+                  {installmentsCount} parceladas
+                </Badge>
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -262,6 +416,9 @@ export function InvoiceReviewModal({
             {reviewItems.map((item, index) => {
               const categoryChanged = item.category_id !== item.original_category_id;
               const category = expenseCategories.find((c) => c.id === item.category_id);
+              const hasInstallments = !!(item.installment_current && item.installment_total);
+              const isNotesExpanded = expandedNotes.has(index);
+              const remainingInstallments = hasInstallments ? item.installment_total! - item.installment_current! : 0;
 
               return (
                 <div
@@ -273,7 +430,7 @@ export function InvoiceReviewModal({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {item.is_corporate && (
                           <Tooltip>
                             <TooltipTrigger>
@@ -283,6 +440,12 @@ export function InvoiceReviewModal({
                           </Tooltip>
                         )}
                         <p className="text-sm font-medium truncate">{item.description}</p>
+                        {hasInstallments && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0">
+                            <Copy className="h-3 w-3 mr-1" />
+                            {item.installment_current}/{item.installment_total}
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground">{item.date}</p>
                     </div>
@@ -392,6 +555,26 @@ export function InvoiceReviewModal({
                       </TooltipContent>
                     </Tooltip>
 
+                    {/* Notes toggle */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={item.notes ? "default" : "outline"}
+                          size="icon"
+                          className={cn(
+                            "h-8 w-8 flex-shrink-0",
+                            item.notes && "bg-primary/10 text-primary hover:bg-primary/20"
+                          )}
+                          onClick={() => toggleNotes(index)}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {item.notes ? "Editar descrição" : "Adicionar descrição"}
+                      </TooltipContent>
+                    </Tooltip>
+
                     {item.original_category_id && (
                       <Badge variant="secondary" className="text-xs">
                         <Sparkles className="h-3 w-3 mr-1" />
@@ -399,6 +582,44 @@ export function InvoiceReviewModal({
                       </Badge>
                     )}
                   </div>
+
+                  {/* Notes field */}
+                  <Collapsible open={isNotesExpanded}>
+                    <CollapsibleContent>
+                      <div className="pt-2">
+                        <Textarea
+                          placeholder="Adicione uma descrição ou observação sobre esta transação..."
+                          value={item.notes}
+                          onChange={(e) => handleNotesChange(index, e.target.value)}
+                          className="text-xs min-h-[60px] resize-none"
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  {/* Future installments option */}
+                  {hasInstallments && remainingInstallments > 0 && (
+                    <div className="flex items-center gap-2 pt-1 p-2 rounded-md bg-primary/5 border border-primary/20">
+                      <Checkbox
+                        id={`future-${index}`}
+                        checked={item.add_future_installments}
+                        onCheckedChange={(checked) =>
+                          handleFutureInstallmentsChange(index, checked === true)
+                        }
+                      />
+                      <label
+                        htmlFor={`future-${index}`}
+                        className="text-xs cursor-pointer flex-1"
+                      >
+                        <span className="font-medium text-primary">
+                          Adicionar {remainingInstallments} parcelas futuras
+                        </span>
+                        <span className="text-muted-foreground ml-1">
+                          ({item.installment_current! + 1} a {item.installment_total} de R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})
+                        </span>
+                      </label>
+                    </div>
+                  )}
 
                   {/* Remember category */}
                   {categoryChanged && item.category_id && (
@@ -445,13 +666,21 @@ export function InvoiceReviewModal({
 
         <DialogFooter className="flex-col sm:flex-row gap-2 border-t pt-4">
           <div className="flex-1 space-y-1 text-sm">
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap">
               <span>
                 <span className="text-muted-foreground">Total: </span>
                 <span className="font-semibold text-expense">
                   R$ {totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </span>
               </span>
+              {futureInstallmentsToAdd > 0 && (
+                <span>
+                  <span className="text-muted-foreground">+ </span>
+                  <span className="font-medium text-primary">
+                    {futureInstallmentsToAdd} parcelas futuras
+                  </span>
+                </span>
+              )}
             </div>
             {corporateTotal > 0 && (
               <div className="flex gap-4 text-xs">

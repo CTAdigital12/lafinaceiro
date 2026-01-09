@@ -22,6 +22,8 @@ export interface ImportedItem {
   date: string;
   description: string;
   amount: number;
+  installment_current?: number;
+  installment_total?: number;
 }
 
 export function InvoiceImportModal({
