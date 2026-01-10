@@ -24,6 +24,7 @@ interface InvoiceImportModalProps {
   onOpenChange: (open: boolean) => void;
   creditCardId: string;
   creditCardName: string;
+  closingDate: number;
   onImportComplete: (items: ImportedItem[]) => void;
 }
 
@@ -55,6 +56,7 @@ export function InvoiceImportModal({
   onOpenChange,
   creditCardId,
   creditCardName,
+  closingDate,
   onImportComplete,
 }: InvoiceImportModalProps) {
   const { currentDate } = useDate();
@@ -128,6 +130,7 @@ export function InvoiceImportModal({
       formData.append('credit_card_id', creditCardId);
       formData.append('invoice_month', invoiceMonth);
       formData.append('invoice_year', invoiceYear);
+      formData.append('closing_date', String(closingDate));
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-invoice`,

@@ -299,6 +299,7 @@ export default function CreditCards() {
         onOpenChange={(open) => !open && setImportingCard(null)}
         creditCardId={importingCard?.id || ""}
         creditCardName={importingCard?.name || ""}
+        closingDate={importingCard?.closing_date || 10}
         onImportComplete={handleImportComplete}
       />
 
