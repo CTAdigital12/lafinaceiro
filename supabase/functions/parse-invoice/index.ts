@@ -33,6 +33,7 @@ serve(async (req) => {
     const mode = formData.get('mode') as string; // 'account' or 'credit_card' (default)
     const invoiceMonth = formData.get('invoice_month') as string;
     const invoiceYear = formData.get('invoice_year') as string;
+    const closingDateStr = formData.get('closing_date') as string;
 
     if (!file) {
       throw new Error("No file provided");
@@ -42,9 +43,15 @@ serve(async (req) => {
     const now = new Date();
     const targetYear = invoiceYear ? parseInt(invoiceYear) : now.getFullYear();
     const targetMonth = invoiceMonth ? parseInt(invoiceMonth) : now.getMonth() + 1;
+    const closingDate = closingDateStr ? parseInt(closingDateStr) : 10; // default to day 10
     const targetMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(targetYear, targetMonth - 1, 1));
+    
+    // Calculate previous month and year for billing cycle logic
+    const prevMonth = targetMonth === 1 ? 12 : targetMonth - 1;
+    const prevYear = targetMonth === 1 ? targetYear - 1 : targetYear;
+    const prevMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(prevYear, prevMonth - 1, 1));
 
-    console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}, mode: ${mode || 'credit_card'}, period: ${targetMonth}/${targetYear}`);
+    console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}, mode: ${mode || 'credit_card'}, period: ${targetMonth}/${targetYear}, closingDate: ${closingDate}`);
 
     // Convert file to base64 (using chunks to avoid stack overflow)
     const arrayBuffer = await file.arrayBuffer();
@@ -92,13 +99,28 @@ Formato de resposta esperado:
     
 Analise o documento fornecido e extraia TODAS as transações/compras encontradas.
 
-CONTEXTO TEMPORAL IMPORTANTE:
-- Esta é uma fatura de ${targetMonthName} de ${targetYear}
-- Use o ano ${targetYear} para TODAS as datas encontradas
-- Se uma data aparecer como "15/01" ou "15 JAN", interprete como ${targetYear}-01-15
+CONTEXTO TEMPORAL E CICLO DE FATURA - MUITO IMPORTANTE:
+- Esta é a fatura de ${targetMonthName} de ${targetYear}
+- O cartão fecha no dia ${closingDate} de cada mês
+- A fatura de ${targetMonthName}/${targetYear} contém compras feitas entre o dia ${closingDate + 1} de ${prevMonthName}/${prevYear} e o dia ${closingDate} de ${targetMonthName}/${targetYear}
+
+REGRA CRÍTICA PARA DETERMINAR O ANO/MÊS CORRETO DE CADA COMPRA:
+1. Se a data da compra mostra um dia MAIOR que ${closingDate}:
+   - A compra foi feita no mês ANTERIOR (${prevMonthName})
+   - Use o ano ${prevYear}
+   - Exemplo: "15/12" → ${prevYear}-12-15
+
+2. Se a data da compra mostra um dia MENOR OU IGUAL a ${closingDate}:
+   - A compra foi feita no mês ATUAL (${targetMonthName})
+   - Use o ano ${targetYear}
+   - Exemplo: "05/01" → ${targetYear}-01-05
+
+ATENÇÃO ESPECIAL PARA VIRADA DE ANO:
+- Se a fatura é de Janeiro/${targetYear}, as compras com dia > ${closingDate} são de Dezembro/${prevYear}
+- Se a fatura é de Janeiro/${targetYear}, as compras com dia <= ${closingDate} são de Janeiro/${targetYear}
 
 Para cada transação, extraia:
-- date: Data da compra no formato YYYY-MM-DD (use o ano ${targetYear})
+- date: Data da compra no formato YYYY-MM-DD (aplique a regra acima!)
 - description: Descrição/estabelecimento da compra
 - amount: Valor em reais (número positivo, sem R$)
 - installment_current: Se for uma compra parcelada, o número da parcela atual (ex: se aparecer "2/12", retorne 2). Se não for parcelada, não inclua este campo.
@@ -107,22 +129,23 @@ Para cada transação, extraia:
 IMPORTANTE:
 - Ignore taxas, juros, pagamentos e créditos
 - Foque apenas nas compras/gastos
-- Se não conseguir identificar a data exata, use a data do lançamento
 - IDENTIFIQUE PARCELAS: Procure por padrões como "2/12", "PARC 3/6", "03 DE 10", "(5/12)", etc. e extraia os números
 - Retorne APENAS um JSON válido, sem texto adicional
 
-Formato de resposta esperado:
+Formato de resposta esperado (note os anos corretos baseados na regra do ciclo):
 {
   "items": [
-    {"date": "${targetYear}-01-15", "description": "UBER *TRIP", "amount": 25.50},
-    {"date": "${targetYear}-01-16", "description": "MAGAZINELUIZA 3/10", "amount": 299.90, "installment_current": 3, "installment_total": 10},
-    {"date": "${targetYear}-01-17", "description": "NETFLIX.COM", "amount": 55.90}
+    {"date": "${prevYear}-${String(prevMonth).padStart(2, '0')}-15", "description": "UBER *TRIP", "amount": 25.50},
+    {"date": "${prevYear}-${String(prevMonth).padStart(2, '0')}-28", "description": "MAGAZINELUIZA 3/10", "amount": 299.90, "installment_current": 3, "installment_total": 10},
+    {"date": "${targetYear}-${String(targetMonth).padStart(2, '0')}-05", "description": "NETFLIX.COM", "amount": 55.90}
   ]
 }`;
 
     const userPrompt = isAccountMode
       ? `Extraia todas as movimentações deste extrato bancário de ${targetMonthName}/${targetYear}. Use o ano ${targetYear} para todas as datas. Retorne apenas o JSON.`
-      : `Extraia todas as transações/compras desta fatura de cartão de crédito de ${targetMonthName}/${targetYear}. Use o ano ${targetYear} para todas as datas. Retorne apenas o JSON.`;
+      : `Extraia todas as transações/compras desta fatura de cartão de crédito de ${targetMonthName}/${targetYear}. 
+LEMBRE-SE: O cartão fecha dia ${closingDate}. Compras com dia > ${closingDate} são de ${prevMonthName}/${prevYear}. Compras com dia <= ${closingDate} são de ${targetMonthName}/${targetYear}. 
+Retorne apenas o JSON.`;
 
     console.log("Sending to Lovable AI for processing...");
 
