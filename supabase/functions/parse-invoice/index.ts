@@ -140,10 +140,10 @@ Formato JSON:
 LEMBRE-SE: O cartão fecha dia ${closingDate}. Compras com dia > ${closingDate} são de ${prevMonthName}/${prevYear}. Compras com dia <= ${closingDate} são de ${targetMonthName}/${targetYear}. 
 Retorne apenas o JSON.`;
 
-    console.log("Sending to Google Gemini API for processing...");
+    console.log("Sending to Google Gemini 2.0 Flash API for processing...");
 
     // Call Google Gemini API directly
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
