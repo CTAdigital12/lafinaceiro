@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Upload, FileText, Loader2, X, Check, AlertCircle } from "lucide-react";
+import { Upload, FileText, Loader2, X, Check, AlertCircle, Calendar } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useDate } from "@/contexts/DateContext";
 
 interface InvoiceImportModalProps {
   open: boolean;
@@ -26,6 +35,21 @@ export interface ImportedItem {
   installment_total?: number;
 }
 
+const MONTHS = [
+  { value: "1", label: "Janeiro" },
+  { value: "2", label: "Fevereiro" },
+  { value: "3", label: "Março" },
+  { value: "4", label: "Abril" },
+  { value: "5", label: "Maio" },
+  { value: "6", label: "Junho" },
+  { value: "7", label: "Julho" },
+  { value: "8", label: "Agosto" },
+  { value: "9", label: "Setembro" },
+  { value: "10", label: "Outubro" },
+  { value: "11", label: "Novembro" },
+  { value: "12", label: "Dezembro" },
+];
+
 export function InvoiceImportModal({
   open,
   onOpenChange,
@@ -33,10 +57,13 @@ export function InvoiceImportModal({
   creditCardName,
   onImportComplete,
 }: InvoiceImportModalProps) {
+  const { currentDate } = useDate();
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [invoiceMonth, setInvoiceMonth] = useState<string>(() => String(currentDate.getMonth() + 1));
+  const [invoiceYear, setInvoiceYear] = useState<string>(() => String(currentDate.getFullYear()));
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -99,6 +126,8 @@ export function InvoiceImportModal({
       const formData = new FormData();
       formData.append('file', file);
       formData.append('credit_card_id', creditCardId);
+      formData.append('invoice_month', invoiceMonth);
+      formData.append('invoice_year', invoiceYear);
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-invoice`,
@@ -145,6 +174,10 @@ export function InvoiceImportModal({
     }
   };
 
+  // Generate year options (current year and 2 years before/after)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -156,6 +189,42 @@ export function InvoiceImportModal({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Month/Year selector */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 text-sm font-medium">
+              <Calendar className="h-4 w-4" />
+              Período da Fatura
+            </Label>
+            <div className="flex gap-2">
+              <Select value={invoiceMonth} onValueChange={setInvoiceMonth}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Mês" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map((month) => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={invoiceYear} onValueChange={setInvoiceYear}>
+                <SelectTrigger className="w-24">
+                  <SelectValue placeholder="Ano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Selecione o mês e ano da fatura para garantir que as datas sejam interpretadas corretamente
+            </p>
+          </div>
           {!file ? (
             <div
               onDragOver={handleDragOver}
