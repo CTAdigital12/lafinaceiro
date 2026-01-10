@@ -95,49 +95,42 @@ Formato de resposta esperado:
     {"date": "${targetYear}-01-16", "description": "PAGTO BOLETO - LUZ", "amount": -150.50}
   ]
 }`
-      : `Você é um assistente especializado em extrair dados de faturas de cartão de crédito.
-    
-Analise o documento fornecido e extraia TODAS as transações/compras encontradas.
+      : `Você é um assistente de OCR altamente preciso, especializado em extrair dados de faturas de cartão de crédito.
 
-CONTEXTO TEMPORAL E CICLO DE FATURA - MUITO IMPORTANTE:
+TAREFA: Extraia TODAS as transações/compras da fatura com PRECISÃO ABSOLUTA nos valores.
+
+REGRAS CRÍTICAS DE PRECISÃO:
+1. LEIA CADA VALOR EXATAMENTE COMO APARECE - não arredonde, não troque dígitos
+2. Cada linha da fatura contém: DATA | DESCRIÇÃO | VALOR
+3. O valor de cada transação está SEMPRE na mesma linha que sua descrição
+4. NÃO associe valores de uma linha com descrições de outra linha
+5. Confira duas vezes cada valor antes de incluir no resultado
+
+CONTEXTO TEMPORAL E CICLO DE FATURA:
 - Esta é a fatura de ${targetMonthName} de ${targetYear}
 - O cartão fecha no dia ${closingDate} de cada mês
-- A fatura de ${targetMonthName}/${targetYear} contém compras feitas entre o dia ${closingDate + 1} de ${prevMonthName}/${prevYear} e o dia ${closingDate} de ${targetMonthName}/${targetYear}
+- Período: ${closingDate + 1}/${prevMonthName}/${prevYear} até ${closingDate}/${targetMonthName}/${targetYear}
 
-REGRA CRÍTICA PARA DETERMINAR O ANO/MÊS CORRETO DE CADA COMPRA:
-1. Se a data da compra mostra um dia MAIOR que ${closingDate}:
-   - A compra foi feita no mês ANTERIOR (${prevMonthName})
-   - Use o ano ${prevYear}
-   - Exemplo: "15/12" → ${prevYear}-12-15
-
-2. Se a data da compra mostra um dia MENOR OU IGUAL a ${closingDate}:
-   - A compra foi feita no mês ATUAL (${targetMonthName})
-   - Use o ano ${targetYear}
-   - Exemplo: "05/01" → ${targetYear}-01-05
-
-ATENÇÃO ESPECIAL PARA VIRADA DE ANO:
-- Se a fatura é de Janeiro/${targetYear}, as compras com dia > ${closingDate} são de Dezembro/${prevYear}
-- Se a fatura é de Janeiro/${targetYear}, as compras com dia <= ${closingDate} são de Janeiro/${targetYear}
+REGRA PARA DETERMINAR O ANO/MÊS DE CADA COMPRA:
+1. Dia > ${closingDate}: mês anterior (${prevMonthName}/${prevYear})
+2. Dia <= ${closingDate}: mês atual (${targetMonthName}/${targetYear})
 
 Para cada transação, extraia:
-- date: Data da compra no formato YYYY-MM-DD (aplique a regra acima!)
-- description: Descrição/estabelecimento da compra
-- amount: Valor em reais (número positivo, sem R$)
-- installment_current: Se for uma compra parcelada, o número da parcela atual (ex: se aparecer "2/12", retorne 2). Se não for parcelada, não inclua este campo.
-- installment_total: Se for uma compra parcelada, o número total de parcelas (ex: se aparecer "2/12", retorne 12). Se não for parcelada, não inclua este campo.
+- date: Data da compra (YYYY-MM-DD)
+- description: Nome do estabelecimento (sem cidade, sem categoria)
+- amount: Valor EXATO em reais (número positivo, sem R$). LEIA COM CUIDADO!
+- installment_current: Número da parcela atual (se parcelada)
+- installment_total: Total de parcelas (se parcelada)
 
-IMPORTANTE:
-- Ignore taxas, juros, pagamentos e créditos
-- Foque apenas nas compras/gastos
-- IDENTIFIQUE PARCELAS: Procure por padrões como "2/12", "PARC 3/6", "03 DE 10", "(5/12)", etc. e extraia os números
-- Retorne APENAS um JSON válido, sem texto adicional
+IGNORE: taxas, juros, pagamentos, créditos, saldo anterior, total da fatura
 
-Formato de resposta esperado (note os anos corretos baseados na regra do ciclo):
+IDENTIFICAR PARCELAS: Padrões como "2/12", "PARC 3/6", "03 DE 10", "(5/12)"
+
+Formato JSON:
 {
   "items": [
     {"date": "${prevYear}-${String(prevMonth).padStart(2, '0')}-15", "description": "UBER *TRIP", "amount": 25.50},
-    {"date": "${prevYear}-${String(prevMonth).padStart(2, '0')}-28", "description": "MAGAZINELUIZA 3/10", "amount": 299.90, "installment_current": 3, "installment_total": 10},
-    {"date": "${targetYear}-${String(targetMonth).padStart(2, '0')}-05", "description": "NETFLIX.COM", "amount": 55.90}
+    {"date": "${prevYear}-${String(prevMonth).padStart(2, '0')}-28", "description": "MAGAZINELUIZA", "amount": 299.90, "installment_current": 3, "installment_total": 10}
   ]
 }`;
 
@@ -157,7 +150,7 @@ Retorne apenas o JSON.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         temperature: 0,
         messages: [
           { role: "system", content: systemPrompt },
