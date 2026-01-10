@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
 
 export interface Transaction {
@@ -21,20 +22,21 @@ export interface Transaction {
   accounts?: { name: string } | null;
 }
 
-export function useTransactions(month?: number, year?: number) {
+export function useTransactions(overrideMonth?: number, overrideYear?: number) {
   const { user } = useAuth();
+  const { month: contextMonth, year: contextYear } = useDate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const currentDate = new Date();
-  const selectedMonth = month ?? currentDate.getMonth() + 1;
-  const selectedYear = year ?? currentDate.getFullYear();
+  // Use override values if provided, otherwise use context
+  const month = overrideMonth ?? contextMonth;
+  const year = overrideYear ?? contextYear;
 
-  const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
-  const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split("T")[0];
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate = new Date(year, month, 0).toISOString().split("T")[0];
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["transactions", user?.id, selectedMonth, selectedYear],
+    queryKey: ["transactions", user?.id, month, year],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
