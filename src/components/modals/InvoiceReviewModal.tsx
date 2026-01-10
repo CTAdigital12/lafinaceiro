@@ -304,13 +304,15 @@ export function InvoiceReviewModal({
       let futureInstallmentsCount = 0;
 
       for (const item of reviewItems) {
-        // Add the main transaction
+        // Add the main transaction - ensure category_id is null if empty string
+        const categoryId = item.category_id && item.category_id.trim() !== "" ? item.category_id : null;
+        
         allTransactions.push({
           description: item.notes ? `${item.description} - ${item.notes}` : item.description,
           amount: item.amount,
           date: item.date,
           type: "expense",
-          category_id: item.category_id || null,
+          category_id: categoryId,
           credit_card_id: creditCardId,
           account_id: null,
           status: "completed",
@@ -323,12 +325,15 @@ export function InvoiceReviewModal({
           futureInstallmentsCount += futureItems.length;
           
           for (const future of futureItems) {
+            // Ensure category_id is null if empty string
+            const futureCategoryId = future.category_id && future.category_id.trim() !== "" ? future.category_id : null;
+            
             allTransactions.push({
               description: future.notes ? `${future.description} - ${future.notes}` : future.description,
               amount: future.amount,
               date: future.date,
               type: "expense",
-              category_id: future.category_id || null,
+              category_id: futureCategoryId,
               credit_card_id: creditCardId,
               account_id: null,
               status: "pending",
