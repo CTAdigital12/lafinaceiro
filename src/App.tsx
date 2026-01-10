@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DateProvider } from "@/contexts/DateContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Accounts from "./pages/Accounts";
@@ -28,31 +29,33 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route
-              path="/*"
-              element={
-                <MainLayout>
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/accounts" element={<Accounts />} />
-                    <Route path="/transactions" element={<Transactions />} />
-                    <Route path="/credit-cards" element={<CreditCards />} />
-                    <Route path="/categories" element={<Categories />} />
-                    <Route path="/planning" element={<Planning />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/corporate-expenses" element={<CorporateExpenses />} />
-                    <Route path="/investments" element={<Investments />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </MainLayout>
-              }
-            />
-          </Routes>
+          <DateProvider>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route
+                path="/*"
+                element={
+                  <MainLayout>
+                    <Routes>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/accounts" element={<Accounts />} />
+                      <Route path="/transactions" element={<Transactions />} />
+                      <Route path="/credit-cards" element={<CreditCards />} />
+                      <Route path="/categories" element={<Categories />} />
+                      <Route path="/planning" element={<Planning />} />
+                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/corporate-expenses" element={<CorporateExpenses />} />
+                      <Route path="/investments" element={<Investments />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </MainLayout>
+                }
+              />
+            </Routes>
+          </DateProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

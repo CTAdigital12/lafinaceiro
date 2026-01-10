@@ -1,8 +1,9 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDate } from "@/contexts/DateContext";
 import { Loader2 } from "lucide-react";
 
 interface MainLayoutProps {
@@ -10,7 +11,7 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const { currentDate, setCurrentDate } = useDate();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
