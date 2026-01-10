@@ -13,8 +13,8 @@ export interface CreditCard {
   current_invoice: number;
   due_date: number;
   closing_date: number;
-  color: string;
-  status: "open" | "closed" | "paid";
+  color: string | null;
+  status: string;
   created_at: string;
   updated_at: string;
 }
