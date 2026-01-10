@@ -55,9 +55,18 @@ export function useTransactions(month?: number, year?: number) {
 
   const createTransaction = useMutation({
     mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts">) => {
+      // Sanitize UUID fields - convert empty strings to null
+      const sanitizedTransaction = {
+        ...transaction,
+        user_id: user?.id,
+        category_id: transaction.category_id && transaction.category_id.trim() !== "" ? transaction.category_id : null,
+        account_id: transaction.account_id && transaction.account_id.trim() !== "" ? transaction.account_id : null,
+        credit_card_id: transaction.credit_card_id && transaction.credit_card_id.trim() !== "" ? transaction.credit_card_id : null,
+      };
+      
       const { data, error } = await supabase
         .from("transactions")
-        .insert([{ ...transaction, user_id: user?.id }])
+        .insert([sanitizedTransaction])
         .select()
         .single();
 
