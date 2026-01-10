@@ -345,9 +345,18 @@ export function InvoiceReviewModal({
         }
       }
 
-      // Create all transactions
+      // Create all transactions with silent mode and track results
+      let successCount = 0;
+      let errorCount = 0;
+      
       for (const transaction of allTransactions) {
-        await createTransaction.mutateAsync(transaction);
+        try {
+          await createTransaction.mutateAsync({ ...transaction, silent: true });
+          successCount++;
+        } catch (error) {
+          console.error("Error creating transaction:", error);
+          errorCount++;
+        }
       }
 
       // Calculate total of completed transactions (current invoice items)
@@ -365,20 +374,25 @@ export function InvoiceReviewModal({
 
       const corporateCount = reviewItems.filter((item) => item.is_corporate).length;
 
-      let description = `${reviewItems.length} transações adicionadas`;
-      if (futureInstallmentsCount > 0) {
-        description += ` + ${futureInstallmentsCount} parcelas futuras`;
+      let description = `${successCount} transações criadas`;
+      if (futureInstallmentsCount > 0 && successCount > reviewItems.length) {
+        const futureCreated = successCount - reviewItems.length;
+        description += ` (${futureCreated} parcelas futuras)`;
+      }
+      if (errorCount > 0) {
+        description += ` • ${errorCount} erros`;
       }
       if (corporateCount > 0) {
-        description += ` (${corporateCount} da empresa)`;
+        description += ` • ${corporateCount} da empresa`;
       }
       if (rulesToCreate.length > 0) {
-        description += ` e ${rulesToCreate.length} regras criadas`;
+        description += ` • ${rulesToCreate.length} regras criadas`;
       }
 
       toast({
-        title: "Fatura importada com sucesso!",
+        title: errorCount > 0 ? "Fatura importada com erros" : "Fatura importada com sucesso!",
         description,
+        variant: errorCount > 0 ? "destructive" : "default",
       });
 
       onOpenChange(false);
