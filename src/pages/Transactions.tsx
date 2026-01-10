@@ -13,12 +13,18 @@ import {
   Loader2,
   CreditCard,
   Building2,
+  CalendarDays,
+  List,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -40,9 +46,26 @@ export default function Transactions() {
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TransactionTab>("checking");
+  const [showAll, setShowAll] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
   
-  const { transactions, isLoading, totalIncome, totalExpense, deleteTransaction } = useTransactions();
+  const { 
+    transactions, 
+    isLoading, 
+    totalIncome, 
+    totalExpense, 
+    totalCount,
+    totalPages,
+    deleteTransaction 
+  } = useTransactions(undefined, undefined, { showAll, page: currentPage, pageSize });
   const { totalBalance } = useAccounts();
+
+  // Reset page when toggling showAll
+  const handleShowAllChange = (checked: boolean) => {
+    setShowAll(checked);
+    setCurrentPage(1);
+  };
 
   // Filter transactions by tab type
   const filteredByTab = transactions.filter((t) => {
@@ -122,7 +145,7 @@ export default function Transactions() {
 
           <TabsContent value={activeTab} className="mt-4 space-y-4">
             {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
@@ -132,11 +155,58 @@ export default function Transactions() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
+              
+              {/* Show All Toggle */}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card">
+                <CalendarDays className={cn("h-4 w-4", !showAll && "text-primary")} />
+                <Switch
+                  id="show-all"
+                  checked={showAll}
+                  onCheckedChange={handleShowAllChange}
+                />
+                <List className={cn("h-4 w-4", showAll && "text-primary")} />
+                <Label htmlFor="show-all" className="text-sm cursor-pointer">
+                  {showAll ? "Todas" : "Mês"}
+                </Label>
+              </div>
+
               <Button variant="outline" className="gap-2">
                 <Filter className="h-4 w-4" />
                 Filtros
               </Button>
             </div>
+
+            {/* Pagination Info */}
+            {showAll && totalCount > 0 && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>
+                  Mostrando {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, totalCount)} de {totalCount} transações
+                </span>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="px-2">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Transactions Table */}
             {filteredTransactions.length === 0 ? (
@@ -237,6 +307,33 @@ export default function Transactions() {
                     ))}
                   </TableBody>
                 </Table>
+
+                {/* Bottom Pagination */}
+                {showAll && totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 p-4 border-t border-border">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Anterior
+                    </Button>
+                    <span className="px-4 text-sm text-muted-foreground">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Próxima
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
@@ -269,7 +366,7 @@ export default function Transactions() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  {activeTab === "credit" ? "Receitas (Cartão)" : "Receitas (Conta)"}
+                  {showAll ? "Receitas (Página)" : activeTab === "credit" ? "Receitas (Cartão)" : "Receitas (Conta)"}
                 </p>
                 <p className="text-lg font-bold text-income">
                   R$ {tabTotalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -286,7 +383,7 @@ export default function Transactions() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  {activeTab === "credit" ? "Despesas (Cartão)" : "Despesas (Conta)"}
+                  {showAll ? "Despesas (Página)" : activeTab === "credit" ? "Despesas (Cartão)" : "Despesas (Conta)"}
                 </p>
                 <p className="text-lg font-bold text-expense">
                   R$ {tabTotalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -294,6 +391,21 @@ export default function Transactions() {
               </div>
             </div>
           </div>
+
+          {/* Total Count when showing all */}
+          {showAll && (
+            <div className="bg-card rounded-xl border border-border p-4 shadow-card">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                  <List className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total de Transações</p>
+                  <p className="text-lg font-bold text-foreground">{totalCount}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

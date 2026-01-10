@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 export interface Transaction {
   id: string;
@@ -22,11 +23,19 @@ export interface Transaction {
   accounts?: { name: string } | null;
 }
 
-export function useTransactions(overrideMonth?: number, overrideYear?: number) {
+interface UseTransactionsOptions {
+  showAll?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export function useTransactions(overrideMonth?: number, overrideYear?: number, options: UseTransactionsOptions = {}) {
   const { user } = useAuth();
   const { month: contextMonth, year: contextYear } = useDate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { showAll = false, page = 1, pageSize = 20 } = options;
 
   // Use override values if provided, otherwise use context
   const month = overrideMonth ?? contextMonth;
@@ -35,25 +44,40 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number) {
   const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
   const endDate = new Date(year, month, 0).toISOString().split("T")[0];
 
-  const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["transactions", user?.id, month, year],
+  // Query for paginated transactions (all or filtered by date)
+  const { data: paginatedData, isLoading } = useQuery({
+    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, page, pageSize],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("transactions")
         .select(`
           *,
           categories (name, icon, color),
           accounts (name)
-        `)
-        .gte("date", startDate)
-        .lte("date", endDate)
-        .order("date", { ascending: false });
+        `, { count: "exact" });
+
+      // Apply date filter only if not showing all
+      if (!showAll) {
+        query = query.gte("date", startDate).lte("date", endDate);
+      }
+
+      // Apply pagination
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await query
+        .order("date", { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
-      return data as Transaction[];
+      return { transactions: data as Transaction[], totalCount: count || 0 };
     },
     enabled: !!user,
   });
+
+  const transactions = paginatedData?.transactions || [];
+  const totalCount = paginatedData?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const createTransaction = useMutation({
     mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts"> & { silent?: boolean }) => {
@@ -141,6 +165,8 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number) {
     isLoading,
     totalIncome,
     totalExpense,
+    totalCount,
+    totalPages,
     createTransaction,
     updateTransaction,
     deleteTransaction,
