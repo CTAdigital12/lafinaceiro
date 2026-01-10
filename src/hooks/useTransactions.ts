@@ -54,14 +54,15 @@ export function useTransactions(month?: number, year?: number) {
   });
 
   const createTransaction = useMutation({
-    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts">) => {
+    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts"> & { silent?: boolean }) => {
       // Sanitize UUID fields - convert empty strings to null
+      const { silent, ...transactionData } = transaction;
       const sanitizedTransaction = {
-        ...transaction,
+        ...transactionData,
         user_id: user?.id,
-        category_id: transaction.category_id && transaction.category_id.trim() !== "" ? transaction.category_id : null,
-        account_id: transaction.account_id && transaction.account_id.trim() !== "" ? transaction.account_id : null,
-        credit_card_id: transaction.credit_card_id && transaction.credit_card_id.trim() !== "" ? transaction.credit_card_id : null,
+        category_id: transactionData.category_id && transactionData.category_id.trim() !== "" ? transactionData.category_id : null,
+        account_id: transactionData.account_id && transactionData.account_id.trim() !== "" ? transactionData.account_id : null,
+        credit_card_id: transactionData.credit_card_id && transactionData.credit_card_id.trim() !== "" ? transactionData.credit_card_id : null,
       };
       
       const { data, error } = await supabase
@@ -71,15 +72,19 @@ export function useTransactions(month?: number, year?: number) {
         .single();
 
       if (error) throw error;
-      return data;
+      return { data, silent };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      toast({ title: "Transação criada com sucesso!" });
+      if (!result.silent) {
+        toast({ title: "Transação criada com sucesso!" });
+      }
     },
-    onError: (error: Error) => {
-      toast({ title: "Erro ao criar transação", description: error.message, variant: "destructive" });
+    onError: (error: Error, variables) => {
+      if (!variables.silent) {
+        toast({ title: "Erro ao criar transação", description: error.message, variant: "destructive" });
+      }
     },
   });
 
