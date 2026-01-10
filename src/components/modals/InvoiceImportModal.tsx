@@ -132,6 +132,10 @@ export function InvoiceImportModal({
       formData.append('invoice_year', invoiceYear);
       formData.append('closing_date', String(closingDate));
 
+      // Extended timeout for AI processing (2 minutes)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-invoice`,
         {
@@ -140,8 +144,11 @@ export function InvoiceImportModal({
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: formData,
+          signal: controller.signal,
         }
       );
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
