@@ -31,12 +31,20 @@ serve(async (req) => {
     const creditCardId = formData.get('credit_card_id') as string;
     const accountId = formData.get('account_id') as string;
     const mode = formData.get('mode') as string; // 'account' or 'credit_card' (default)
+    const invoiceMonth = formData.get('invoice_month') as string;
+    const invoiceYear = formData.get('invoice_year') as string;
 
     if (!file) {
       throw new Error("No file provided");
     }
 
-    console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}, mode: ${mode || 'credit_card'}`);
+    // Determine the year and month to use for date interpretation
+    const now = new Date();
+    const targetYear = invoiceYear ? parseInt(invoiceYear) : now.getFullYear();
+    const targetMonth = invoiceMonth ? parseInt(invoiceMonth) : now.getMonth() + 1;
+    const targetMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(targetYear, targetMonth - 1, 1));
+
+    console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}, mode: ${mode || 'credit_card'}, period: ${targetMonth}/${targetYear}`);
 
     // Convert file to base64 (using chunks to avoid stack overflow)
     const arrayBuffer = await file.arrayBuffer();
@@ -50,7 +58,7 @@ serve(async (req) => {
     const base64 = btoa(binaryString);
     const mimeType = file.type || 'application/pdf';
 
-    // Prepare prompt based on mode
+    // Prepare prompt based on mode with correct year context
     const isAccountMode = mode === 'account';
     
     const systemPrompt = isAccountMode
@@ -58,8 +66,13 @@ serve(async (req) => {
     
 Analise o documento fornecido e extraia TODAS as transações/movimentações encontradas.
 
+CONTEXTO TEMPORAL IMPORTANTE:
+- Este é um extrato de ${targetMonthName} de ${targetYear}
+- Use o ano ${targetYear} para TODAS as datas encontradas
+- Se uma data aparecer como "15/01" ou "15 JAN", interprete como ${targetYear}-01-15
+
 Para cada transação, extraia:
-- date: Data da transação no formato YYYY-MM-DD
+- date: Data da transação no formato YYYY-MM-DD (use o ano ${targetYear})
 - description: Descrição da transação
 - amount: Valor em reais (número, positivo para entradas/depósitos, negativo para saídas/pagamentos)
 
@@ -71,16 +84,21 @@ IMPORTANTE:
 Formato de resposta esperado:
 {
   "items": [
-    {"date": "2024-01-15", "description": "TED RECEBIDO - SALARIO", "amount": 5000.00},
-    {"date": "2024-01-16", "description": "PAGTO BOLETO - LUZ", "amount": -150.50}
+    {"date": "${targetYear}-01-15", "description": "TED RECEBIDO - SALARIO", "amount": 5000.00},
+    {"date": "${targetYear}-01-16", "description": "PAGTO BOLETO - LUZ", "amount": -150.50}
   ]
 }`
       : `Você é um assistente especializado em extrair dados de faturas de cartão de crédito.
     
 Analise o documento fornecido e extraia TODAS as transações/compras encontradas.
 
+CONTEXTO TEMPORAL IMPORTANTE:
+- Esta é uma fatura de ${targetMonthName} de ${targetYear}
+- Use o ano ${targetYear} para TODAS as datas encontradas
+- Se uma data aparecer como "15/01" ou "15 JAN", interprete como ${targetYear}-01-15
+
 Para cada transação, extraia:
-- date: Data da compra no formato YYYY-MM-DD
+- date: Data da compra no formato YYYY-MM-DD (use o ano ${targetYear})
 - description: Descrição/estabelecimento da compra
 - amount: Valor em reais (número positivo, sem R$)
 - installment_current: Se for uma compra parcelada, o número da parcela atual (ex: se aparecer "2/12", retorne 2). Se não for parcelada, não inclua este campo.
@@ -96,15 +114,15 @@ IMPORTANTE:
 Formato de resposta esperado:
 {
   "items": [
-    {"date": "2024-01-15", "description": "UBER *TRIP", "amount": 25.50},
-    {"date": "2024-01-16", "description": "MAGAZINELUIZA 3/10", "amount": 299.90, "installment_current": 3, "installment_total": 10},
-    {"date": "2024-01-17", "description": "NETFLIX.COM", "amount": 55.90}
+    {"date": "${targetYear}-01-15", "description": "UBER *TRIP", "amount": 25.50},
+    {"date": "${targetYear}-01-16", "description": "MAGAZINELUIZA 3/10", "amount": 299.90, "installment_current": 3, "installment_total": 10},
+    {"date": "${targetYear}-01-17", "description": "NETFLIX.COM", "amount": 55.90}
   ]
 }`;
 
     const userPrompt = isAccountMode
-      ? "Extraia todas as movimentações deste extrato bancário. Retorne apenas o JSON."
-      : "Extraia todas as transações/compras desta fatura de cartão de crédito. Retorne apenas o JSON.";
+      ? `Extraia todas as movimentações deste extrato bancário de ${targetMonthName}/${targetYear}. Use o ano ${targetYear} para todas as datas. Retorne apenas o JSON.`
+      : `Extraia todas as transações/compras desta fatura de cartão de crédito de ${targetMonthName}/${targetYear}. Use o ano ${targetYear} para todas as datas. Retorne apenas o JSON.`;
 
     console.log("Sending to Lovable AI for processing...");
 
