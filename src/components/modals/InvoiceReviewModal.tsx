@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, ChevronDown, ChevronUp, MessageSquare, ChevronsUpDown, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,12 +13,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
@@ -83,6 +84,7 @@ export function InvoiceReviewModal({
   const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
+  const [openCategoryPopoverIndex, setOpenCategoryPopoverIndex] = useState<number | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
 
   const colorOptions = [
@@ -423,10 +425,10 @@ export function InvoiceReviewModal({
         </DialogHeader>
 
         {uncategorizedCount > 0 && (
-          <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-chart-4 text-sm">
-            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-muted text-muted-foreground text-sm">
+            <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>
-              {uncategorizedCount} {uncategorizedCount === 1 ? "item precisa" : "itens precisam"} de categorização
+              {uncategorizedCount} {uncategorizedCount === 1 ? "item" : "itens"} sem categoria — você pode categorizar depois se preferir
             </span>
           </div>
         )}
@@ -475,32 +477,72 @@ export function InvoiceReviewModal({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Select
-                      value={item.category_id || "none"}
-                      onValueChange={(value) =>
-                        handleCategoryChange(index, value === "none" ? "" : value)
-                      }
+                    <Popover 
+                      open={openCategoryPopoverIndex === index} 
+                      onOpenChange={(open) => setOpenCategoryPopoverIndex(open ? index : null)}
                     >
-                      <SelectTrigger className={cn(
-                        "h-8 text-xs flex-1",
-                        !item.category_id && "border-chart-4/50"
-                      )}>
-                        <SelectValue placeholder="Selecione uma categoria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">
-                          <span className="text-muted-foreground">Sem categoria</span>
-                        </SelectItem>
-                        {expenseCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            <span className="flex items-center gap-2">
-                              <span>{cat.icon}</span>
-                              <span>{cat.name}</span>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openCategoryPopoverIndex === index}
+                          className={cn(
+                            "h-8 text-xs flex-1 justify-between font-normal",
+                            !item.category_id && "text-muted-foreground"
+                          )}
+                        >
+                          {item.category_id ? (
+                            <span className="flex items-center gap-2 truncate">
+                              <span>{category?.icon}</span>
+                              <span>{category?.name}</span>
                             </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          ) : (
+                            "Sem categoria"
+                          )}
+                          <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[200px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar categoria..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>Nenhuma categoria encontrada</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="sem-categoria"
+                                onSelect={() => {
+                                  handleCategoryChange(index, "");
+                                  setOpenCategoryPopoverIndex(null);
+                                }}
+                              >
+                                <span className="text-muted-foreground">Sem categoria</span>
+                                {!item.category_id && (
+                                  <Check className="ml-auto h-4 w-4" />
+                                )}
+                              </CommandItem>
+                              {expenseCategories.map((cat) => (
+                                <CommandItem
+                                  key={cat.id}
+                                  value={`${cat.name} ${cat.icon}`}
+                                  onSelect={() => {
+                                    handleCategoryChange(index, cat.id);
+                                    setOpenCategoryPopoverIndex(null);
+                                  }}
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <span>{cat.icon}</span>
+                                    <span>{cat.name}</span>
+                                  </span>
+                                  {item.category_id === cat.id && (
+                                    <Check className="ml-auto h-4 w-4" />
+                                  )}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
 
                     <Popover open={openPopoverIndex === index} onOpenChange={(open) => setOpenPopoverIndex(open ? index : null)}>
                       <PopoverTrigger asChild>
