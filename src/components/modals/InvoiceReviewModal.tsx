@@ -39,6 +39,7 @@ import {
 import { useCategories } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useCreditCards } from "@/hooks/useCreditCards";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ImportedItem } from "./InvoiceImportModal";
@@ -72,6 +73,7 @@ export function InvoiceReviewModal({
   const { expenseCategories, createCategory } = useCategories();
   const { findCategoryForDescription, findCorporateForDescription, createRule } = useCategorizationRules();
   const { createTransaction } = useTransactions();
+  const { updateCreditCard } = useCreditCards();
   const { toast } = useToast();
 
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
@@ -339,6 +341,19 @@ export function InvoiceReviewModal({
       // Create all transactions
       for (const transaction of allTransactions) {
         await createTransaction.mutateAsync(transaction);
+      }
+
+      // Calculate total of completed transactions (current invoice items)
+      const completedTotal = allTransactions
+        .filter(t => t.status === "completed")
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      // Update credit card current_invoice with the total of completed transactions
+      if (creditCardId && completedTotal > 0) {
+        await updateCreditCard.mutateAsync({
+          id: creditCardId,
+          current_invoice: completedTotal,
+        });
       }
 
       const corporateCount = reviewItems.filter((item) => item.is_corporate).length;
