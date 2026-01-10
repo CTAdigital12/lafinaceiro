@@ -26,6 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -79,6 +80,7 @@ export function InvoiceReviewModal({
 
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryIcon, setNewCategoryIcon] = useState("📦");
   const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
@@ -348,8 +350,11 @@ export function InvoiceReviewModal({
       // Create all transactions with silent mode and track results
       let successCount = 0;
       let errorCount = 0;
+      const totalTransactions = allTransactions.length;
+      setImportProgress({ current: 0, total: totalTransactions });
       
-      for (const transaction of allTransactions) {
+      for (let i = 0; i < allTransactions.length; i++) {
+        const transaction = allTransactions[i];
         try {
           await createTransaction.mutateAsync({ ...transaction, silent: true });
           successCount++;
@@ -357,6 +362,7 @@ export function InvoiceReviewModal({
           console.error("Error creating transaction:", error);
           errorCount++;
         }
+        setImportProgress({ current: i + 1, total: totalTransactions });
       }
 
       // Calculate total of completed transactions (current invoice items)
@@ -447,7 +453,25 @@ export function InvoiceReviewModal({
           </div>
         )}
 
-        <ScrollArea className="h-[400px] -mx-6 px-6 pr-3">
+        {isImporting && (
+          <div className="flex-shrink-0 space-y-2 py-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Importando transações...
+              </span>
+              <span className="font-medium">
+                {importProgress.current} / {importProgress.total}
+              </span>
+            </div>
+            <Progress 
+              value={importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0} 
+              className="h-2"
+            />
+          </div>
+        )}
+
+        <ScrollArea className={cn("h-[400px] -mx-6 px-6 pr-3", isImporting && "opacity-50 pointer-events-none")}>
           <div className="space-y-2 pr-3">
             {reviewItems.map((item, index) => {
               const categoryChanged = item.category_id !== item.original_category_id;
