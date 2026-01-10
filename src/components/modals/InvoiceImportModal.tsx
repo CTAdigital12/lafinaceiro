@@ -224,9 +224,29 @@ export function InvoiceImportModal({
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Selecione o mês e ano da fatura para garantir que as datas sejam interpretadas corretamente
-            </p>
+            {/* Billing cycle period info */}
+            {(() => {
+              const month = parseInt(invoiceMonth);
+              const year = parseInt(invoiceYear);
+              const prevMonth = month === 1 ? 12 : month - 1;
+              const prevYear = month === 1 ? year - 1 : year;
+              const startDay = closingDate + 1;
+              const endDay = closingDate;
+              const prevMonthName = MONTHS.find(m => m.value === String(prevMonth))?.label || "";
+              const currentMonthName = MONTHS.find(m => m.value === String(month))?.label || "";
+              
+              return (
+                <div className="p-3 rounded-lg bg-muted/50 border text-sm">
+                  <p className="font-medium text-foreground mb-1">Ciclo desta fatura:</p>
+                  <p className="text-muted-foreground">
+                    {startDay.toString().padStart(2, '0')}/{prevMonthName.slice(0, 3)}/{prevYear} até {endDay.toString().padStart(2, '0')}/{currentMonthName.slice(0, 3)}/{year}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Cartão fecha dia {closingDate}
+                  </p>
+                </div>
+              );
+            })()}
           </div>
           {!file ? (
             <div
