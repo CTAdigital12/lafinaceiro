@@ -274,10 +274,10 @@ export function InvoiceReviewModal({
     try {
       // First, create categorization rules for items marked to remember
       const rulesToCreate = reviewItems
-        .filter((item) => (item.remember_category && item.category_id && item.category_id !== item.original_category_id) || item.remember_corporate)
+        .filter((item) => (item.remember_category && item.category_id && item.category_id.trim() !== "" && item.category_id !== item.original_category_id) || item.remember_corporate)
         .map((item) => ({
           keyword: extractKeyword(item.description),
-          category_id: item.category_id!,
+          category_id: item.category_id && item.category_id.trim() !== "" ? item.category_id : null,
           is_corporate: item.is_corporate,
         }));
 
