@@ -243,19 +243,35 @@ Retorne apenas o JSON.`;
       throw new Error("Não foi possível processar o documento. Tente novamente ou use outro formato.");
     }
 
-    // Sanity check: correct any dates that are in the future
+    // For credit card invoices, we should NOT correct future dates since they represent 
+    // future installments that are legitimate. Only correct if date is way off (more than 1 year in future).
+    // For account statements, we can be stricter since they are historical.
     const today = new Date();
-    today.setHours(23, 59, 59, 999); // End of today
+    today.setHours(23, 59, 59, 999);
+    const oneYearFromNow = new Date(today);
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
     
     items = items.map(item => {
       const itemDate = new Date(item.date + 'T12:00:00Z');
-      if (itemDate > today) {
-        // If date is in the future, move it back one month
-        const correctedDate = new Date(itemDate);
-        correctedDate.setMonth(correctedDate.getMonth() - 1);
-        const correctedDateStr = correctedDate.toISOString().split('T')[0];
-        console.log(`Corrected future date: ${item.date} -> ${correctedDateStr} for "${item.description}"`);
-        return { ...item, date: correctedDateStr };
+      
+      if (isAccountMode) {
+        // For account mode, dates should not be in the future at all
+        if (itemDate > today) {
+          const correctedDate = new Date(itemDate);
+          correctedDate.setFullYear(correctedDate.getFullYear() - 1);
+          const correctedDateStr = correctedDate.toISOString().split('T')[0];
+          console.log(`Corrected future date (account mode): ${item.date} -> ${correctedDateStr} for "${item.description}"`);
+          return { ...item, date: correctedDateStr };
+        }
+      } else {
+        // For credit card mode, only correct if date is more than 1 year in the future (clearly wrong)
+        if (itemDate > oneYearFromNow) {
+          const correctedDate = new Date(itemDate);
+          correctedDate.setFullYear(correctedDate.getFullYear() - 1);
+          const correctedDateStr = correctedDate.toISOString().split('T')[0];
+          console.log(`Corrected far future date (credit card mode): ${item.date} -> ${correctedDateStr} for "${item.description}"`);
+          return { ...item, date: correctedDateStr };
+        }
       }
       return item;
     });
