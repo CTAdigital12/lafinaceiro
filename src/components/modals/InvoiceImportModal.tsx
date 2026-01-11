@@ -35,9 +35,11 @@ interface InvoiceImportModalProps {
 }
 
 export interface ImportedItem {
-  date: string;
+  purchase_date: string;       // Data da compra (YYYY-MM-DD) - do PDF
+  posting_date: string;        // Data do upload (YYYY-MM-DD) - hoje
+  due_date: string;            // Data de vencimento (YYYY-MM-DD) - do cabeçalho
+  transaction_value: number;   // Valor da linha/parcela
   description: string;
-  amount: number;
   installment_current?: number;
   installment_total?: number;
   is_post_closing?: boolean;
@@ -50,6 +52,10 @@ export interface ImportCompleteData {
   invoice_month: number;
   invoice_year: number;
   closing_day: number;
+  due_date: string;
+  invoice_total: number | null;
+  calculated_total: number;
+  validation_warning: string | null;
 }
 
 const MONTHS = [
@@ -184,6 +190,10 @@ export function InvoiceImportModal({
           invoice_month: parseInt(invoiceMonth),
           invoice_year: parseInt(invoiceYear),
           closing_day: closingDay,
+          due_date: data.due_date || '',
+          invoice_total: data.invoice_total || null,
+          calculated_total: data.calculated_total || 0,
+          validation_warning: data.validation_warning || null,
         });
         onOpenChange(false);
         resetState();

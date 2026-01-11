@@ -7,36 +7,39 @@ const corsHeaders = {
 };
 
 interface RawInvoiceItem {
-  date: string;           // Can be "DD/MM", "DD-MM-YYYY", or "YYYY-MM-DD"
+  date: string;           // "DD/MM" from AI
   description: string;
   amount: number;
-  installment_current?: number;
-  installment_total?: number;
 }
 
 interface ProcessedInvoiceItem {
-  date: string;           // Always "YYYY-MM-DD"
+  purchase_date: string;       // Data da compra (YYYY-MM-DD) - imutável, do PDF
+  posting_date: string;        // Data do upload (YYYY-MM-DD) - hoje
+  due_date: string;            // Data de vencimento (YYYY-MM-DD) - do cabeçalho
+  transaction_value: number;   // Valor da linha/parcela
   description: string;
-  amount: number;
   installment_current?: number;
   installment_total?: number;
-  is_post_closing?: boolean;  // Flag for items that fall into next billing cycle
+  is_post_closing?: boolean;
+}
+
+interface InvoiceMetadata {
+  due_date: string | null;     // "YYYY-MM-DD" extracted from header
+  invoice_total: number | null; // Total desta fatura
 }
 
 // Detect installment pattern in description using regex
 function detectInstallmentPattern(description: string): { current: number; total: number } | null {
   // Patterns to match:
-  // "3/10", "03/10", "3 de 10", "03 de 10"
+  // "3/10", "03/10" at the end of description
   // "PARC 3/6", "PARC 03/06"
   // "(3/10)", "(03/10)"
-  // "Parcela 3/10", "Parcela 03 de 10"
   
   const patterns = [
-    /(\d{1,2})\s*\/\s*(\d{1,2})(?:\s*-?\s*Parcela)?/i,         // "3/10" or "03/10"
-    /(\d{1,2})\s+de\s+(\d{1,2})/i,                              // "3 de 10"
-    /PARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})/i,              // "PARC 3/6" or "PARCELA 3/6"
-    /\((\d{1,2})\s*\/\s*(\d{1,2})\)/i,                          // "(3/10)"
-    /Parcela\s+(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/i,            // "Parcela 3/10" or "Parcela 3 de 10"
+    /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/i,                           // "3/10" at end
+    /(\d{1,2})\s+de\s+(\d{1,2})\s*$/i,                           // "3 de 10" at end
+    /PARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})/i,               // "PARC 3/6" or "PARCELA 3/6"
+    /\((\d{1,2})\s*\/\s*(\d{1,2})\)\s*$/i,                       // "(3/10)" at end
   ];
 
   for (const pattern of patterns) {
@@ -55,66 +58,41 @@ function detectInstallmentPattern(description: string): { current: number; total
   return null;
 }
 
-// Parse date from various formats and infer year based on invoice context
-function inferFullDate(
-  rawDate: string, 
-  invoiceMonth: number, 
+// Infer the year of the purchase date based on invoice month/year
+function inferPurchaseYear(
+  purchaseDay: number,
+  purchaseMonth: number,
+  invoiceMonth: number,
   invoiceYear: number,
   closingDay: number
-): { date: string; isPostClosing: boolean } {
-  let day: number;
-  let month: number;
+): { year: number; isPostClosing: boolean } {
   let year: number;
   let isPostClosing = false;
 
-  // Try to parse different date formats
-  if (rawDate.includes('-') && rawDate.split('-')[0].length === 4) {
-    // Already in YYYY-MM-DD format
-    const parts = rawDate.split('-');
-    year = parseInt(parts[0], 10);
-    month = parseInt(parts[1], 10);
-    day = parseInt(parts[2], 10);
-  } else if (rawDate.includes('/')) {
-    // DD/MM or DD/MM/YYYY format
-    const parts = rawDate.split('/');
-    day = parseInt(parts[0], 10);
-    month = parseInt(parts[1], 10);
-    year = parts[2] ? parseInt(parts[2], 10) : 0; // Will be inferred if not present
-  } else {
-    // Try DD-MM or DD-MM-YYYY
-    const parts = rawDate.split('-');
-    day = parseInt(parts[0], 10);
-    month = parseInt(parts[1], 10);
-    year = parts[2] ? parseInt(parts[2], 10) : 0;
-  }
-
-  // If year is missing or seems wrong (2-digit or clearly wrong), infer it
-  if (!year || year < 100 || year < 2020 || year > 2030) {
-    // Apply year inference algorithm:
-    // If transaction month > invoice month, the transaction happened in the previous year
-    // Example: Invoice is January 2026, transaction month is December -> transaction is December 2025
-    if (month > invoiceMonth) {
-      year = invoiceYear - 1;
-    } else {
-      year = invoiceYear;
+  // REGRA: Se o mês da transação for maior que o mês da fatura, 
+  // a transação aconteceu no ano anterior
+  // Exemplo: Fatura Jan/2026, transação em Dez -> transação é Dez/2025
+  if (purchaseMonth > invoiceMonth) {
+    year = invoiceYear - 1;
+  } else if (purchaseMonth === invoiceMonth) {
+    // Mesmo mês - verificar se é pós-fechamento
+    year = invoiceYear;
+    if (purchaseDay > closingDay) {
+      isPostClosing = true;
     }
+  } else {
+    // Mês menor que o mês da fatura - mesmo ano
+    year = invoiceYear;
+    // Verificar se transação em meses anteriores mas após fechamento
+    // Isso não deveria acontecer em fatura normal, mas manter lógica
   }
 
-  // Check if transaction is after closing date (belongs to next billing cycle)
-  // This only applies to transactions in the current invoice month
-  if (month === invoiceMonth && day > closingDay) {
-    isPostClosing = true;
-  }
-
-  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  
-  return { date: dateStr, isPostClosing };
+  return { year, isPostClosing };
 }
 
 // Generate future installment transactions
 function generateFutureInstallments(
-  item: ProcessedInvoiceItem,
-  closingDay: number
+  item: ProcessedInvoiceItem
 ): ProcessedInvoiceItem[] {
   if (!item.installment_current || !item.installment_total) {
     return [];
@@ -126,30 +104,33 @@ function generateFutureInstallments(
   }
 
   const futureItems: ProcessedInvoiceItem[] = [];
-  const baseDate = new Date(item.date + 'T12:00:00Z');
+  const baseDate = new Date(item.purchase_date + 'T12:00:00Z');
+  const baseDueDate = new Date(item.due_date + 'T12:00:00Z');
   
   // Clean description - remove current installment info
   const cleanDescription = item.description
-    .replace(/\s*\d{1,2}\s*\/\s*\d{1,2}\s*/g, ' ')
-    .replace(/\s*\d{1,2}\s+de\s+\d{1,2}\s*/gi, ' ')
-    .replace(/\s*PARC(?:ELA)?\s*\d{1,2}\s*\/\s*\d{1,2}\s*/gi, ' ')
-    .replace(/\s*\(\d{1,2}\s*\/\s*\d{1,2}\)\s*/g, ' ')
+    .replace(/\s*\d{1,2}\s*\/\s*\d{1,2}\s*$/g, '')
+    .replace(/\s*\d{1,2}\s+de\s+\d{1,2}\s*$/gi, '')
+    .replace(/\s*PARC(?:ELA)?\s*\d{1,2}\s*\/\s*\d{1,2}\s*/gi, '')
+    .replace(/\s*\(\d{1,2}\s*\/\s*\d{1,2}\)\s*$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
   for (let i = 1; i <= remaining; i++) {
-    const futureDate = new Date(baseDate);
-    futureDate.setMonth(futureDate.getMonth() + i);
+    const futureDueDate = new Date(baseDueDate);
+    futureDueDate.setMonth(futureDueDate.getMonth() + i);
     
     const installmentNumber = item.installment_current + i;
     
     futureItems.push({
-      date: futureDate.toISOString().split('T')[0],
+      purchase_date: item.purchase_date, // Mantém a data original da compra
+      posting_date: item.posting_date,
+      due_date: futureDueDate.toISOString().split('T')[0],
+      transaction_value: item.transaction_value,
       description: `${cleanDescription} ${installmentNumber}/${item.installment_total}`,
-      amount: item.amount,
       installment_current: installmentNumber,
       installment_total: item.installment_total,
-      is_post_closing: false, // Future installments are planned, not post-closing
+      is_post_closing: false,
     });
   }
 
@@ -181,6 +162,7 @@ serve(async (req) => {
     }
 
     const now = new Date();
+    const postingDate = now.toISOString().split('T')[0]; // Data do upload
     const invoiceYear = invoiceYearStr ? parseInt(invoiceYearStr) : now.getFullYear();
     const invoiceMonth = invoiceMonthStr ? parseInt(invoiceMonthStr) : now.getMonth() + 1;
     const closingDay = closingDateStr ? parseInt(closingDateStr) : 10;
@@ -188,20 +170,10 @@ serve(async (req) => {
     const invoiceMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(
       new Date(invoiceYear, invoiceMonth - 1, 1)
     );
-    
-    // Calculate billing cycle dates
-    const cycleStartMonth = invoiceMonth === 1 ? 12 : invoiceMonth - 1;
-    const cycleStartYear = invoiceMonth === 1 ? invoiceYear - 1 : invoiceYear;
-    const cycleStartDay = closingDay + 1;
-    const cycleEndDay = closingDay;
-    
-    const cycleStartMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(
-      new Date(cycleStartYear, cycleStartMonth - 1, 1)
-    );
 
     console.log(`Processing file: ${file.name}, mode: ${mode || 'credit_card'}`);
     console.log(`Invoice period: ${invoiceMonthName}/${invoiceYear}, closing day: ${closingDay}`);
-    console.log(`Billing cycle: ${cycleStartDay}/${cycleStartMonthName}/${cycleStartYear} to ${cycleEndDay}/${invoiceMonthName}/${invoiceYear}`);
+    console.log(`Posting date (today): ${postingDate}`);
 
     // Convert file to base64
     const arrayBuffer = await file.arrayBuffer();
@@ -217,7 +189,7 @@ serve(async (req) => {
 
     const isAccountMode = mode === 'account';
     
-    // Simplified prompt - ask AI to extract only day/month, we handle year logic
+    // Updated prompt for Itaú Personnalité invoices
     const systemPrompt = isAccountMode
       ? `Você é um assistente especializado em extrair dados de extratos bancários.
 
@@ -235,28 +207,52 @@ Retorne APENAS JSON válido no formato:
     {"date": "16/01", "description": "PAGTO BOLETO", "amount": -150.50}
   ]
 }`
-      : `Você é um assistente especializado em extrair dados de faturas de cartão de crédito.
+      : `Você é um assistente especializado em extrair dados de faturas de cartão de crédito Itaú.
 
-IMPORTANTE: Extraia APENAS o DIA e MÊS de cada transação. NÃO tente determinar o ano.
+INSTRUÇÕES CRÍTICAS:
 
-Para cada compra/transação:
-- date: Data no formato "DD/MM" (APENAS dia e mês, sem ano)
-- description: Nome do estabelecimento/compra (mantenha info de parcelas como "3/10")
-- amount: Valor EXATO em reais (positivo, sem R$)
+1. PRIMEIRO, extraia os metadados do cabeçalho:
+   - "Vencimento: DD/MM/AAAA" -> due_date
+   - "Total desta fatura R$ X.XXX,XX" -> invoice_total
 
-IGNORE: taxas, juros, pagamentos, créditos, saldo anterior, total da fatura
+2. PROCESSE APENAS a seção "Lançamentos: compras e saques":
+   - Inicie a leitura quando encontrar "Lançamentos: compras e saques"
+   - PARE a leitura quando encontrar "Total dos lançamentos atuais" ou "Compras parceladas - próximas faturas"
+
+3. IGNORE COMPLETAMENTE:
+   - A tabela "Compras parceladas - próximas faturas"
+   - "Total para próximas faturas"
+   - Qualquer coisa após "Total dos lançamentos atuais"
+   - Taxas, juros, IOF, multas, pagamentos anteriores, créditos
+
+4. Para cada linha de transação:
+   - date: Data da coluna "DATA" no formato "DD/MM" (apenas dia e mês)
+   - description: Nome do estabelecimento/compra (MANTENHA info de parcelas como "03/10")
+   - amount: Valor EXATO da coluna (já é o valor da parcela, NÃO divida)
+
+EXEMPLO: "ELECTROLUX electro03/10" com valor "56,99"
+-> Grave: description="ELECTROLUX electro03/10", amount=56.99
 
 Retorne APENAS JSON válido:
 {
+  "metadata": {
+    "due_date": "15/01/2026",
+    "invoice_total": 40733.78
+  },
   "items": [
-    {"date": "15/12", "description": "UBER *TRIP", "amount": 25.50},
-    {"date": "28/12", "description": "MAGAZINELUIZA 3/10", "amount": 299.90}
+    {"date": "06/10", "description": "Porta3Acessorios 04/10", "amount": 151.30},
+    {"date": "15/12", "description": "UBER *TRIP", "amount": 25.50}
   ]
 }`;
 
     const userPrompt = isAccountMode
       ? `Extraia todas as movimentações deste extrato bancário. Retorne apenas o JSON com date no formato "DD/MM".`
-      : `Extraia todas as compras desta fatura de cartão de crédito. Retorne apenas o JSON com date no formato "DD/MM" e mantenha informações de parcelas na descrição.`;
+      : `Extraia os dados desta fatura de cartão Itaú Personnalité seguindo as instruções. 
+IMPORTANTE: 
+- Extraia primeiro o vencimento e total da fatura do cabeçalho
+- Processe APENAS "Lançamentos: compras e saques"
+- IGNORE a tabela "Compras parceladas - próximas faturas"
+- O valor de cada linha JÁ É o valor da parcela`;
 
     console.log("Sending to Google Gemini API...");
 
@@ -318,11 +314,25 @@ Retorne APENAS JSON válido:
 
     // Parse JSON from AI response
     let rawItems: RawInvoiceItem[] = [];
+    let metadata: InvoiceMetadata = { due_date: null, invoice_total: null };
+    
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         rawItems = parsed.items || [];
+        
+        // Extract metadata if available
+        if (parsed.metadata) {
+          // Parse due_date from DD/MM/YYYY to YYYY-MM-DD
+          if (parsed.metadata.due_date) {
+            const dueDateParts = parsed.metadata.due_date.split('/');
+            if (dueDateParts.length === 3) {
+              metadata.due_date = `${dueDateParts[2]}-${dueDateParts[1].padStart(2, '0')}-${dueDateParts[0].padStart(2, '0')}`;
+            }
+          }
+          metadata.invoice_total = parsed.metadata.invoice_total || null;
+        }
       }
     } catch (parseError) {
       console.error("Failed to parse AI response:", parseError);
@@ -330,59 +340,96 @@ Retorne APENAS JSON válido:
     }
 
     console.log(`Extracted ${rawItems.length} raw items from AI`);
+    console.log(`Metadata: due_date=${metadata.due_date}, invoice_total=${metadata.invoice_total}`);
+
+    // Default due_date if not extracted (15th of invoice month)
+    const defaultDueDate = `${invoiceYear}-${String(invoiceMonth).padStart(2, '0')}-15`;
+    const dueDate = metadata.due_date || defaultDueDate;
 
     // Process items: infer year, detect installments, generate future installments
     const processedItems: ProcessedInvoiceItem[] = [];
     const futureInstallments: ProcessedInvoiceItem[] = [];
     let postClosingCount = 0;
+    let calculatedTotal = 0;
 
     for (const rawItem of rawItems) {
-      // Infer full date with year
-      const { date, isPostClosing } = inferFullDate(
-        rawItem.date,
+      // Parse DD/MM from raw date
+      const dateParts = rawItem.date.split('/');
+      if (dateParts.length < 2) {
+        console.warn(`Invalid date format: ${rawItem.date}, skipping`);
+        continue;
+      }
+      
+      const purchaseDay = parseInt(dateParts[0], 10);
+      const purchaseMonth = parseInt(dateParts[1], 10);
+      
+      if (isNaN(purchaseDay) || isNaN(purchaseMonth)) {
+        console.warn(`Invalid date values: ${rawItem.date}, skipping`);
+        continue;
+      }
+
+      // Infer year based on invoice context
+      const { year: purchaseYear, isPostClosing } = inferPurchaseYear(
+        purchaseDay,
+        purchaseMonth,
         invoiceMonth,
         invoiceYear,
         closingDay
       );
 
-      // Detect installment pattern in description if not already provided
-      let installmentCurrent = rawItem.installment_current;
-      let installmentTotal = rawItem.installment_total;
+      const purchaseDate = `${purchaseYear}-${String(purchaseMonth).padStart(2, '0')}-${String(purchaseDay).padStart(2, '0')}`;
+
+      // Detect installment pattern in description
+      const installmentInfo = detectInstallmentPattern(rawItem.description);
       
-      if (!installmentCurrent || !installmentTotal) {
-        const detected = detectInstallmentPattern(rawItem.description);
-        if (detected) {
-          installmentCurrent = detected.current;
-          installmentTotal = detected.total;
-          console.log(`Detected installment ${detected.current}/${detected.total} in: "${rawItem.description}"`);
-        }
+      if (installmentInfo) {
+        console.log(`Detected installment ${installmentInfo.current}/${installmentInfo.total} in: "${rawItem.description}"`);
       }
 
+      const transactionValue = Math.abs(rawItem.amount);
+      calculatedTotal += transactionValue;
+
       const processedItem: ProcessedInvoiceItem = {
-        date,
+        purchase_date: purchaseDate,
+        posting_date: postingDate,
+        due_date: dueDate,
+        transaction_value: transactionValue,
         description: rawItem.description,
-        amount: Math.abs(rawItem.amount), // Ensure positive for expenses
-        installment_current: installmentCurrent,
-        installment_total: installmentTotal,
+        installment_current: installmentInfo?.current,
+        installment_total: installmentInfo?.total,
         is_post_closing: !isAccountMode && isPostClosing,
       };
 
       if (isPostClosing && !isAccountMode) {
         postClosingCount++;
-        console.log(`Post-closing transaction detected: ${rawItem.description} on ${date}`);
+        console.log(`Post-closing transaction detected: ${rawItem.description} on ${purchaseDate}`);
       }
 
       processedItems.push(processedItem);
 
       // Generate future installments for items with remaining installments
-      if (!isAccountMode && installmentCurrent && installmentTotal && installmentCurrent < installmentTotal) {
-        const future = generateFutureInstallments(processedItem, closingDay);
+      if (!isAccountMode && installmentInfo && installmentInfo.current < installmentInfo.total) {
+        const future = generateFutureInstallments(processedItem);
         futureInstallments.push(...future);
         console.log(`Generated ${future.length} future installments for: "${rawItem.description}"`);
       }
     }
 
     console.log(`Processed ${processedItems.length} items, ${futureInstallments.length} future installments`);
+    console.log(`Calculated total: R$ ${calculatedTotal.toFixed(2)}`);
+    
+    // Validation: compare calculated total with invoice total
+    let validationWarning: string | null = null;
+    if (metadata.invoice_total) {
+      const difference = Math.abs(calculatedTotal - metadata.invoice_total);
+      console.log(`Invoice total from PDF: R$ ${metadata.invoice_total.toFixed(2)}, difference: R$ ${difference.toFixed(2)}`);
+      
+      if (difference > 1.00) {
+        validationWarning = `Atenção: A soma dos itens (R$ ${calculatedTotal.toFixed(2)}) difere do total da fatura (R$ ${metadata.invoice_total.toFixed(2)}). Diferença: R$ ${difference.toFixed(2)}. Verifique se há encargos, IOF ou multas não listados.`;
+        console.warn(validationWarning);
+      }
+    }
+
     if (postClosingCount > 0) {
       console.log(`${postClosingCount} transactions are after closing date (day ${closingDay})`);
     }
@@ -398,6 +445,10 @@ Retorne APENAS JSON válido:
         invoice_month: invoiceMonth,
         invoice_year: invoiceYear,
         closing_day: closingDay,
+        due_date: dueDate,
+        invoice_total: metadata.invoice_total,
+        calculated_total: calculatedTotal,
+        validation_warning: validationWarning,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -61,6 +61,9 @@ interface ReviewItem extends ImportedItem {
   notes: string;
   add_future_installments: boolean;
   include_in_import: boolean;
+  // Computed for display
+  amount: number;
+  date: string;
 }
 
 interface InvoiceReviewModalProps {
@@ -107,6 +110,9 @@ export function InvoiceReviewModal({
   const invoiceMonth = importData?.invoice_month;
   const invoiceYear = importData?.invoice_year;
   const closingDay = importData?.closing_day;
+  const validationWarning = importData?.validation_warning;
+  const invoiceTotal = importData?.invoice_total;
+  const calculatedTotal = importData?.calculated_total;
 
   // Initialize review items with suggested categories and corporate status
   useEffect(() => {
@@ -117,6 +123,9 @@ export function InvoiceReviewModal({
         const isInstallment = !!(item.installment_current && item.installment_total && item.installment_current < item.installment_total);
         return {
           ...item,
+          // Map new structure to legacy fields for display
+          amount: item.transaction_value,
+          date: item.purchase_date,
           category_id: suggestedCategoryId,
           original_category_id: suggestedCategoryId,
           remember_category: false,
@@ -491,6 +500,17 @@ export function InvoiceReviewModal({
               >
                 Entendi
               </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Validation warning - sum mismatch */}
+        {validationWarning && (
+          <Alert variant="destructive" className="flex-shrink-0">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Validação</AlertTitle>
+            <AlertDescription className="text-sm">
+              {validationWarning}
             </AlertDescription>
           </Alert>
         )}
