@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Upload, FileText, Loader2, X, Check, AlertCircle, Calendar, Settings } from "lucide-react";
 import {
   Dialog,
@@ -92,6 +92,11 @@ export function InvoiceImportModal({
   const [invoiceYear, setInvoiceYear] = useState<string>(() => String(currentDate.getFullYear()));
   const [closingDay, setClosingDay] = useState<number>(defaultClosingDate);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Update closingDay when prop changes (e.g., opening modal for different card)
+  useEffect(() => {
+    setClosingDay(defaultClosingDate);
+  }, [defaultClosingDate]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
