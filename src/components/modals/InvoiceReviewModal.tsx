@@ -493,8 +493,10 @@ export function InvoiceReviewModal({
                       <div className="flex items-center gap-2 flex-wrap">
                         {item.is_corporate && (
                           <Tooltip>
-                            <TooltipTrigger>
-                              <Briefcase className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <TooltipTrigger asChild>
+                              <span className="flex-shrink-0">
+                                <Briefcase className="h-4 w-4 text-muted-foreground" />
+                              </span>
                             </TooltipTrigger>
                             <TooltipContent>Despesa da Empresa</TooltipContent>
                           </Tooltip>
