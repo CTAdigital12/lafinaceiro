@@ -21,9 +21,9 @@ export interface Transaction {
   is_corporate_expense: boolean;
   created_at: string;
   updated_at: string;
-  categories?: { name: string; icon: string; color: string } | null;
+  categories?: { id: string; name: string; icon: string; color: string } | null;
   accounts?: { name: string } | null;
-  credit_cards?: { name: string; due_date: number } | null;
+  credit_cards?: { id: string; name: string; last_digits: string; color: string | null } | null;
 }
 
 interface UseTransactionsOptions {
@@ -55,9 +55,9 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         .from("transactions")
         .select(`
           *,
-          categories (name, icon, color),
+          categories (id, name, icon, color),
           accounts (name),
-          credit_cards (name, due_date)
+          credit_cards (id, name, last_digits, color)
         `, { count: "exact" });
 
       // Apply date filter only if not showing all

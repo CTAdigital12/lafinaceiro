@@ -17,10 +17,11 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -37,6 +38,15 @@ import { cn } from "@/lib/utils";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
 import { TransactionModal } from "@/components/modals/TransactionModal";
+import { CategorySelector } from "@/components/CategorySelector";
+import { useDate } from "@/contexts/DateContext";
+
+// Format date string (YYYY-MM-DD) to Brazilian format without timezone issues
+function formatDateBR(dateString: string | null): string {
+  if (!dateString) return "-";
+  const [year, month, day] = dateString.split("-");
+  return `${day}/${month}/${year}`;
+}
 
 type TransactionTab = "checking" | "credit";
 
@@ -48,7 +58,10 @@ export default function Transactions() {
   const [activeTab, setActiveTab] = useState<TransactionTab>("checking");
   const [showAll, setShowAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showCurrentInvoice, setShowCurrentInvoice] = useState(false);
   const pageSize = 20;
+  
+  const { month, year } = useDate();
   
   const { 
     transactions, 
@@ -57,7 +70,8 @@ export default function Transactions() {
     totalExpense, 
     totalCount,
     totalPages,
-    deleteTransaction 
+    deleteTransaction,
+    updateTransaction,
   } = useTransactions(undefined, undefined, { showAll, page: currentPage, pageSize });
   const { totalBalance } = useAccounts();
 
@@ -75,9 +89,23 @@ export default function Transactions() {
     return t.credit_card_id === null;
   });
 
-  const filteredTransactions = filteredByTab.filter((t) =>
+  // Filter by current invoice (for credit card tab)
+  const filteredByInvoice = showCurrentInvoice && activeTab === "credit"
+    ? filteredByTab.filter((t) => {
+        if (!t.due_date) return false;
+        const [dueYear, dueMonth] = t.due_date.split("-").map(Number);
+        return dueYear === year && dueMonth === month;
+      })
+    : filteredByTab;
+
+  const filteredTransactions = filteredByInvoice.filter((t) =>
     t.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Handle category update inline
+  const handleCategoryChange = (transactionId: string, categoryId: string) => {
+    updateTransaction.mutate({ id: transactionId, category_id: categoryId });
+  };
 
   // Calculate totals per tab
   const tabTotalIncome = filteredByTab
@@ -170,6 +198,23 @@ export default function Transactions() {
                 </Label>
               </div>
 
+              {/* Current Invoice Filter - only for credit card tab */}
+              {activeTab === "credit" && (
+                <Button
+                  variant={showCurrentInvoice ? "default" : "outline"}
+                  className="gap-2"
+                  onClick={() => setShowCurrentInvoice(!showCurrentInvoice)}
+                >
+                  <Receipt className="h-4 w-4" />
+                  Fatura Atual
+                  {showCurrentInvoice && (
+                    <Badge variant="secondary" className="ml-1 text-xs">
+                      {String(month).padStart(2, "0")}/{year}
+                    </Badge>
+                  )}
+                </Button>
+              )}
+
               <Button variant="outline" className="gap-2">
                 <Filter className="h-4 w-4" />
                 Filtros
@@ -260,28 +305,29 @@ export default function Transactions() {
                           )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                          {formatDateBR(transaction.date)}
                         </TableCell>
                         {activeTab === "credit" && (
                           <TableCell className="text-primary font-medium">
-                            {transaction.due_date 
-                              ? new Date(transaction.due_date).toLocaleDateString("pt-BR")
-                              : "-"
-                            }
+                            {formatDateBR(transaction.due_date)}
                           </TableCell>
                         )}
                         <TableCell className="font-medium">{transaction.description}</TableCell>
                         <TableCell>
-                          {transaction.categories ? (
-                            <Badge variant="secondary" className="font-normal">
-                              {transaction.categories.icon} {transaction.categories.name}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
+                          <CategorySelector
+                            value={transaction.category_id}
+                            type={transaction.type}
+                            currentCategory={transaction.categories}
+                            onSelect={(categoryId) => handleCategoryChange(transaction.id, categoryId)}
+                          />
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {transaction.accounts?.name || "-"}
+                          {activeTab === "credit" 
+                            ? (transaction.credit_cards 
+                                ? `${transaction.credit_cards.name} •${transaction.credit_cards.last_digits}` 
+                                : "-")
+                            : (transaction.accounts?.name || "-")
+                          }
                         </TableCell>
                         <TableCell className="text-right">
                           <span
@@ -295,7 +341,7 @@ export default function Transactions() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1">
                             <Button 
                               variant="ghost" 
                               size="icon" 
