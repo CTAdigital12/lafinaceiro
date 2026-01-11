@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, ChevronDown, ChevronUp, MessageSquare, ChevronsUpDown, Info } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, ChevronDown, ChevronUp, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -38,13 +38,18 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { useCategories } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { ImportedItem } from "./InvoiceImportModal";
+import type { ImportedItem, ImportCompleteData } from "./InvoiceImportModal";
 import { format, addMonths, parse } from "date-fns";
 
 interface ReviewItem extends ImportedItem {
@@ -55,12 +60,13 @@ interface ReviewItem extends ImportedItem {
   remember_corporate: boolean;
   notes: string;
   add_future_installments: boolean;
+  include_in_import: boolean;
 }
 
 interface InvoiceReviewModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  items: ImportedItem[];
+  importData: ImportCompleteData | null;
   creditCardId: string;
   creditCardName: string;
 }
@@ -68,7 +74,7 @@ interface InvoiceReviewModalProps {
 export function InvoiceReviewModal({
   open,
   onOpenChange,
-  items,
+  importData,
   creditCardId,
   creditCardName,
 }: InvoiceReviewModalProps) {
@@ -88,11 +94,19 @@ export function InvoiceReviewModal({
   const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
   const [openCategoryPopoverIndex, setOpenCategoryPopoverIndex] = useState<number | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
+  const [showPostClosingWarning, setShowPostClosingWarning] = useState(true);
 
   const colorOptions = [
     "#EF4444", "#F97316", "#F59E0B", "#22C55E", 
     "#3B82F6", "#8B5CF6", "#EC4899", "#6B7280"
   ];
+
+  const items = importData?.items || [];
+  const futureInstallmentsFromBackend = importData?.future_installments || [];
+  const postClosingCount = importData?.post_closing_count || 0;
+  const invoiceMonth = importData?.invoice_month;
+  const invoiceYear = importData?.invoice_year;
+  const closingDay = importData?.closing_day;
 
   // Initialize review items with suggested categories and corporate status
   useEffect(() => {
@@ -110,12 +124,14 @@ export function InvoiceReviewModal({
           remember_corporate: false,
           notes: "",
           add_future_installments: isInstallment, // Auto-check for installments that have more to come
+          include_in_import: !item.is_post_closing, // Exclude post-closing by default
         };
       });
       setReviewItems(itemsWithCategories);
       setExpandedNotes(new Set());
+      setShowPostClosingWarning(postClosingCount > 0);
     }
-  }, [items, open, findCategoryForDescription, findCorporateForDescription]);
+  }, [items, open, findCategoryForDescription, findCorporateForDescription, postClosingCount]);
 
   const handleCategoryChange = (index: number, categoryId: string) => {
     setReviewItems((prev) =>
@@ -124,7 +140,6 @@ export function InvoiceReviewModal({
           ? {
               ...item,
               category_id: categoryId,
-              // Show remember option if category was changed
               remember_category: item.original_category_id !== categoryId ? item.remember_category : false,
             }
           : item
@@ -172,6 +187,14 @@ export function InvoiceReviewModal({
     );
   };
 
+  const handleIncludeChange = (index: number, include: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, include_in_import: include } : item
+      )
+    );
+  };
+
   const toggleNotes = (index: number) => {
     setExpandedNotes((prev) => {
       const newSet = new Set(prev);
@@ -209,17 +232,13 @@ export function InvoiceReviewModal({
   };
 
   const extractKeyword = (description: string): string => {
-    // Extract main keyword from description
-    // Remove common prefixes and take first meaningful word
     const cleaned = description
       .toUpperCase()
       .replace(/^(PAG\*|PIX|COMPRA\s+)/i, "")
       .trim();
     
-    // Remove installment info like "2/12" or "PARC 3/6"
     const withoutInstallment = cleaned.replace(/\s*\d+\/\d+\s*/g, " ").trim();
     
-    // Take first word or first part before special chars
     const match = withoutInstallment.match(/^[\w]+/);
     return match ? match[0] : withoutInstallment.substring(0, 20);
   };
@@ -246,7 +265,6 @@ export function InvoiceReviewModal({
     const baseDate = parse(item.date, "yyyy-MM-dd", new Date());
     const remaining = item.installment_total - item.installment_current;
     
-    // Clean description by removing current installment info
     const baseDescription = item.description
       .replace(/\s*\d+\/\d+\s*/g, " ")
       .replace(/\s*PARC\s*\d+\s*\/\s*\d+\s*/gi, " ")
@@ -274,8 +292,11 @@ export function InvoiceReviewModal({
     setIsImporting(true);
 
     try {
+      // Only import items that are included
+      const itemsToImport = reviewItems.filter(item => item.include_in_import);
+
       // First, create categorization rules for items marked to remember
-      const rulesToCreate = reviewItems
+      const rulesToCreate = itemsToImport
         .filter((item) => (item.remember_category && item.category_id && item.category_id.trim() !== "" && item.category_id !== item.original_category_id) || item.remember_corporate)
         .map((item) => ({
           keyword: extractKeyword(item.description),
@@ -283,7 +304,6 @@ export function InvoiceReviewModal({
           is_corporate: item.is_corporate,
         }));
 
-      // Create rules (dedupe by keyword)
       const seenKeywords = new Set<string>();
       for (const rule of rulesToCreate) {
         if (!seenKeywords.has(rule.keyword)) {
@@ -307,8 +327,7 @@ export function InvoiceReviewModal({
 
       let futureInstallmentsCount = 0;
 
-      for (const item of reviewItems) {
-        // Add the main transaction - ensure category_id is null if empty string
+      for (const item of itemsToImport) {
         const categoryId = item.category_id && item.category_id.trim() !== "" ? item.category_id : null;
         
         allTransactions.push({
@@ -329,7 +348,6 @@ export function InvoiceReviewModal({
           futureInstallmentsCount += futureItems.length;
           
           for (const future of futureItems) {
-            // Ensure category_id is null if empty string
             const futureCategoryId = future.category_id && future.category_id.trim() !== "" ? future.category_id : null;
             
             allTransactions.push({
@@ -347,7 +365,7 @@ export function InvoiceReviewModal({
         }
       }
 
-      // Create all transactions with silent mode and track results
+      // Create all transactions
       let successCount = 0;
       let errorCount = 0;
       const totalTransactions = allTransactions.length;
@@ -370,7 +388,7 @@ export function InvoiceReviewModal({
         .filter(t => t.status === "completed")
         .reduce((sum, t) => sum + t.amount, 0);
 
-      // Update credit card current_invoice with the total of completed transactions
+      // Update credit card current_invoice
       if (creditCardId && completedTotal > 0) {
         await updateCreditCard.mutateAsync({
           id: creditCardId,
@@ -378,11 +396,12 @@ export function InvoiceReviewModal({
         });
       }
 
-      const corporateCount = reviewItems.filter((item) => item.is_corporate).length;
+      const corporateCount = itemsToImport.filter((item) => item.is_corporate).length;
+      const excludedCount = reviewItems.filter(item => !item.include_in_import).length;
 
       let description = `${successCount} transações criadas`;
-      if (futureInstallmentsCount > 0 && successCount > reviewItems.length) {
-        const futureCreated = successCount - reviewItems.length;
+      if (futureInstallmentsCount > 0 && successCount > itemsToImport.length) {
+        const futureCreated = successCount - itemsToImport.length;
         description += ` (${futureCreated} parcelas futuras)`;
       }
       if (errorCount > 0) {
@@ -390,6 +409,9 @@ export function InvoiceReviewModal({
       }
       if (corporateCount > 0) {
         description += ` • ${corporateCount} da empresa`;
+      }
+      if (excludedCount > 0) {
+        description += ` • ${excludedCount} ignoradas`;
       }
       if (rulesToCreate.length > 0) {
         description += ` • ${rulesToCreate.length} regras criadas`;
@@ -414,14 +436,23 @@ export function InvoiceReviewModal({
     }
   };
 
-  const totalAmount = reviewItems.reduce((sum, item) => sum + item.amount, 0);
-  const personalTotal = reviewItems.filter((item) => !item.is_corporate).reduce((sum, item) => sum + item.amount, 0);
-  const corporateTotal = reviewItems.filter((item) => item.is_corporate).reduce((sum, item) => sum + item.amount, 0);
-  const uncategorizedCount = reviewItems.filter((item) => !item.category_id).length;
-  const installmentsCount = reviewItems.filter((item) => item.installment_current && item.installment_total).length;
-  const futureInstallmentsToAdd = reviewItems
+  const includedItems = reviewItems.filter(item => item.include_in_import);
+  const totalAmount = includedItems.reduce((sum, item) => sum + item.amount, 0);
+  const personalTotal = includedItems.filter((item) => !item.is_corporate).reduce((sum, item) => sum + item.amount, 0);
+  const corporateTotal = includedItems.filter((item) => item.is_corporate).reduce((sum, item) => sum + item.amount, 0);
+  const uncategorizedCount = includedItems.filter((item) => !item.category_id).length;
+  const installmentsCount = includedItems.filter((item) => item.installment_current && item.installment_total).length;
+  const futureInstallmentsToAdd = includedItems
     .filter((item) => item.add_future_installments && item.installment_current && item.installment_total)
     .reduce((sum, item) => sum + (item.installment_total! - item.installment_current!), 0);
+  const postClosingItems = reviewItems.filter(item => item.is_post_closing);
+  const excludedCount = reviewItems.filter(item => !item.include_in_import).length;
+
+  // Format invoice period for display
+  const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const invoicePeriodStr = invoiceMonth && invoiceYear 
+    ? `${monthNames[invoiceMonth - 1]}/${invoiceYear}`
+    : "";
 
   return (
     <Dialog open={open} onOpenChange={isImporting ? () => {} : onOpenChange}>
@@ -432,7 +463,7 @@ export function InvoiceReviewModal({
             Revisar Importação
           </DialogTitle>
           <DialogDescription>
-            {creditCardName} - {reviewItems.length} transações encontradas
+            {creditCardName} - {invoicePeriodStr} - {reviewItems.length} transações encontradas
             {installmentsCount > 0 && (
               <span className="ml-2">
                 <Badge variant="secondary" className="text-xs">
@@ -443,6 +474,26 @@ export function InvoiceReviewModal({
             )}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Post-closing warning */}
+        {postClosingCount > 0 && showPostClosingWarning && (
+          <Alert variant="default" className="flex-shrink-0 border-chart-4 bg-chart-4/10">
+            <AlertTriangle className="h-4 w-4 text-chart-4" />
+            <AlertTitle className="text-chart-4">Atenção: Compras pós-fechamento</AlertTitle>
+            <AlertDescription className="text-sm">
+              {postClosingCount} {postClosingCount === 1 ? "transação foi realizada" : "transações foram realizadas"} após o dia {closingDay} (fechamento).{" "}
+              {postClosingCount === 1 ? "Esta compra cairá" : "Estas compras cairão"} na <strong>próxima fatura</strong> e {postClosingCount === 1 ? "foi desmarcada" : "foram desmarcadas"} por padrão.
+              <Button 
+                variant="link" 
+                size="sm" 
+                className="h-auto p-0 ml-2 text-chart-4"
+                onClick={() => setShowPostClosingWarning(false)}
+              >
+                Entendi
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {uncategorizedCount > 0 && (
           <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-muted text-muted-foreground text-sm">
@@ -484,281 +535,304 @@ export function InvoiceReviewModal({
                 <div
                   key={index}
                   className={cn(
-                    "border rounded-lg p-3 space-y-2",
-                    item.is_corporate && "bg-muted/30"
+                    "border rounded-lg p-3 space-y-2 transition-opacity",
+                    item.is_corporate && "bg-muted/30",
+                    item.is_post_closing && "border-chart-4/50",
+                    !item.include_in_import && "opacity-50"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {item.is_corporate && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="flex-shrink-0">
-                                <Briefcase className="h-4 w-4 text-muted-foreground" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>Despesa da Empresa</TooltipContent>
-                          </Tooltip>
-                        )}
-                        <p className="text-sm font-medium truncate">{item.description}</p>
-                        {hasInstallments && (
-                          <Badge variant="outline" className="text-xs flex-shrink-0">
-                            <Copy className="h-3 w-3 mr-1" />
-                            {item.installment_current}/{item.installment_total}
-                          </Badge>
-                        )}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={item.include_in_import}
+                        onCheckedChange={(checked) => handleIncludeChange(index, checked === true)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {item.is_corporate && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="flex-shrink-0">
+                                  <Briefcase className="h-4 w-4 text-muted-foreground" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>Despesa da Empresa</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {item.is_post_closing && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="flex-shrink-0">
+                                  <CalendarClock className="h-4 w-4 text-chart-4" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>Compra pós-fechamento (próxima fatura)</TooltipContent>
+                            </Tooltip>
+                          )}
+                          <p className="text-sm font-medium truncate">{item.description}</p>
+                          {hasInstallments && (
+                            <Badge variant="outline" className="text-xs flex-shrink-0">
+                              <Copy className="h-3 w-3 mr-1" />
+                              {item.installment_current}/{item.installment_total}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{item.date}</p>
                       </div>
-                      <p className="text-xs text-muted-foreground">{item.date}</p>
                     </div>
                     <p className="text-sm font-semibold text-expense whitespace-nowrap">
                       R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Popover 
-                      open={openCategoryPopoverIndex === index} 
-                      onOpenChange={(open) => setOpenCategoryPopoverIndex(open ? index : null)}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={openCategoryPopoverIndex === index}
-                          className={cn(
-                            "h-8 text-xs flex-1 justify-between font-normal",
-                            !item.category_id && "text-muted-foreground"
-                          )}
+                  {item.include_in_import && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Popover 
+                          open={openCategoryPopoverIndex === index} 
+                          onOpenChange={(open) => setOpenCategoryPopoverIndex(open ? index : null)}
                         >
-                          {item.category_id ? (
-                            <span className="flex items-center gap-2 truncate">
-                              <span>{category?.icon}</span>
-                              <span>{category?.name}</span>
-                            </span>
-                          ) : (
-                            "Sem categoria"
-                          )}
-                          <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0" align="start">
-                        <Command>
-                          <CommandInput placeholder="Buscar categoria..." className="h-9" />
-                          <CommandList>
-                            <CommandEmpty>Nenhuma categoria encontrada</CommandEmpty>
-                            <CommandGroup>
-                              <CommandItem
-                                value="sem-categoria"
-                                onSelect={() => {
-                                  handleCategoryChange(index, "");
-                                  setOpenCategoryPopoverIndex(null);
-                                }}
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openCategoryPopoverIndex === index}
+                              className={cn(
+                                "h-8 text-xs flex-1 justify-between font-normal",
+                                !item.category_id && "text-muted-foreground"
+                              )}
+                            >
+                              {item.category_id ? (
+                                <span className="flex items-center gap-2 truncate">
+                                  <span>{category?.icon}</span>
+                                  <span>{category?.name}</span>
+                                </span>
+                              ) : (
+                                "Sem categoria"
+                              )}
+                              <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[200px] p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Buscar categoria..." className="h-9" />
+                              <CommandList>
+                                <CommandEmpty>Nenhuma categoria encontrada</CommandEmpty>
+                                <CommandGroup>
+                                  <CommandItem
+                                    value="sem-categoria"
+                                    onSelect={() => {
+                                      handleCategoryChange(index, "");
+                                      setOpenCategoryPopoverIndex(null);
+                                    }}
+                                  >
+                                    <span className="text-muted-foreground">Sem categoria</span>
+                                    {!item.category_id && (
+                                      <Check className="ml-auto h-4 w-4" />
+                                    )}
+                                  </CommandItem>
+                                  {expenseCategories.map((cat) => (
+                                    <CommandItem
+                                      key={cat.id}
+                                      value={`${cat.name} ${cat.icon}`}
+                                      onSelect={() => {
+                                        handleCategoryChange(index, cat.id);
+                                        setOpenCategoryPopoverIndex(null);
+                                      }}
+                                    >
+                                      <span className="flex items-center gap-2">
+                                        <span>{cat.icon}</span>
+                                        <span>{cat.name}</span>
+                                      </span>
+                                      {item.category_id === cat.id && (
+                                        <Check className="ml-auto h-4 w-4" />
+                                      )}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+
+                        <Popover open={openPopoverIndex === index} onOpenChange={(open) => setOpenPopoverIndex(open ? index : null)}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8 flex-shrink-0">
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-3" align="end">
+                            <div className="space-y-3">
+                              <p className="text-sm font-medium">Nova categoria</p>
+                              <div className="flex gap-2">
+                                <Input
+                                  value={newCategoryIcon}
+                                  onChange={(e) => setNewCategoryIcon(e.target.value)}
+                                  className="w-12 text-center"
+                                  maxLength={2}
+                                />
+                                <Input
+                                  value={newCategoryName}
+                                  onChange={(e) => setNewCategoryName(e.target.value)}
+                                  placeholder="Nome da categoria"
+                                  className="flex-1"
+                                />
+                              </div>
+                              <div className="flex gap-1.5 flex-wrap">
+                                {colorOptions.map((color) => (
+                                  <button
+                                    key={color}
+                                    type="button"
+                                    onClick={() => setNewCategoryColor(color)}
+                                    className={cn(
+                                      "w-6 h-6 rounded-full transition-all",
+                                      newCategoryColor === color && "ring-2 ring-offset-2 ring-primary"
+                                    )}
+                                    style={{ backgroundColor: color }}
+                                  />
+                                ))}
+                              </div>
+                              <Button
+                                size="sm"
+                                className="w-full"
+                                onClick={() => handleCreateCategory(index)}
+                                disabled={!newCategoryName.trim() || isCreatingCategory}
                               >
-                                <span className="text-muted-foreground">Sem categoria</span>
-                                {!item.category_id && (
-                                  <Check className="ml-auto h-4 w-4" />
+                                {isCreatingCategory ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Criar e aplicar"
                                 )}
-                              </CommandItem>
-                              {expenseCategories.map((cat) => (
-                                <CommandItem
-                                  key={cat.id}
-                                  value={`${cat.name} ${cat.icon}`}
-                                  onSelect={() => {
-                                    handleCategoryChange(index, cat.id);
-                                    setOpenCategoryPopoverIndex(null);
-                                  }}
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <span>{cat.icon}</span>
-                                    <span>{cat.name}</span>
-                                  </span>
-                                  {item.category_id === cat.id && (
-                                    <Check className="ml-auto h-4 w-4" />
-                                  )}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
+                              </Button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
 
-                    <Popover open={openPopoverIndex === index} onOpenChange={(open) => setOpenPopoverIndex(open ? index : null)}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-8 w-8 flex-shrink-0">
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64 p-3" align="end">
-                        <div className="space-y-3">
-                          <p className="text-sm font-medium">Nova categoria</p>
-                          <div className="flex gap-2">
-                            <Input
-                              value={newCategoryIcon}
-                              onChange={(e) => setNewCategoryIcon(e.target.value)}
-                              className="w-12 text-center"
-                              maxLength={2}
-                            />
-                            <Input
-                              value={newCategoryName}
-                              onChange={(e) => setNewCategoryName(e.target.value)}
-                              placeholder="Nome da categoria"
-                              className="flex-1"
-                            />
-                          </div>
-                          <div className="flex gap-1.5 flex-wrap">
-                            {colorOptions.map((color) => (
-                              <button
-                                key={color}
-                                type="button"
-                                onClick={() => setNewCategoryColor(color)}
-                                className={cn(
-                                  "w-6 h-6 rounded-full transition-all",
-                                  newCategoryColor === color && "ring-2 ring-offset-2 ring-primary"
-                                )}
-                                style={{ backgroundColor: color }}
-                              />
-                            ))}
-                          </div>
-                          <Button
-                            size="sm"
-                            className="w-full"
-                            onClick={() => handleCreateCategory(index)}
-                            disabled={!newCategoryName.trim() || isCreatingCategory}
-                          >
-                            {isCreatingCategory ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Criar e aplicar"
-                            )}
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                        {/* Corporate expense toggle */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={item.is_corporate ? "default" : "outline"}
+                              size="icon"
+                              className={cn(
+                                "h-8 w-8 flex-shrink-0",
+                                item.is_corporate && "bg-muted text-muted-foreground hover:bg-muted/80"
+                              )}
+                              onClick={() => handleCorporateChange(index, !item.is_corporate)}
+                            >
+                              <Briefcase className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {item.is_corporate ? "Remover da empresa" : "Marcar como empresa"}
+                          </TooltipContent>
+                        </Tooltip>
 
-                    {/* Corporate expense toggle */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant={item.is_corporate ? "default" : "outline"}
-                          size="icon"
-                          className={cn(
-                            "h-8 w-8 flex-shrink-0",
-                            item.is_corporate && "bg-muted text-muted-foreground hover:bg-muted/80"
-                          )}
-                          onClick={() => handleCorporateChange(index, !item.is_corporate)}
-                        >
-                          <Briefcase className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {item.is_corporate ? "Remover da empresa" : "Marcar como empresa"}
-                      </TooltipContent>
-                    </Tooltip>
+                        {/* Notes toggle */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={item.notes ? "default" : "outline"}
+                              size="icon"
+                              className={cn(
+                                "h-8 w-8 flex-shrink-0",
+                                item.notes && "bg-primary/10 text-primary hover:bg-primary/20"
+                              )}
+                              onClick={() => toggleNotes(index)}
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {item.notes ? "Editar descrição" : "Adicionar descrição"}
+                          </TooltipContent>
+                        </Tooltip>
 
-                    {/* Notes toggle */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant={item.notes ? "default" : "outline"}
-                          size="icon"
-                          className={cn(
-                            "h-8 w-8 flex-shrink-0",
-                            item.notes && "bg-primary/10 text-primary hover:bg-primary/20"
-                          )}
-                          onClick={() => toggleNotes(index)}
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {item.notes ? "Editar descrição" : "Adicionar descrição"}
-                      </TooltipContent>
-                    </Tooltip>
-
-                    {item.original_category_id && (
-                      <Badge variant="secondary" className="text-xs">
-                        <Sparkles className="h-3 w-3 mr-1" />
-                        Auto
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Notes field */}
-                  <Collapsible open={isNotesExpanded}>
-                    <CollapsibleContent>
-                      <div className="pt-2">
-                        <Textarea
-                          placeholder="Adicione uma descrição ou observação sobre esta transação..."
-                          value={item.notes}
-                          onChange={(e) => handleNotesChange(index, e.target.value)}
-                          className="text-xs min-h-[60px] resize-none"
-                        />
+                        {item.original_category_id && (
+                          <Badge variant="secondary" className="text-xs">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            Auto
+                          </Badge>
+                        )}
                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
 
-                  {/* Future installments option */}
-                  {hasInstallments && remainingInstallments > 0 && (
-                    <div className="flex items-center gap-2 pt-1 p-2 rounded-md bg-primary/5 border border-primary/20">
-                      <Checkbox
-                        id={`future-${index}`}
-                        checked={item.add_future_installments}
-                        onCheckedChange={(checked) =>
-                          handleFutureInstallmentsChange(index, checked === true)
-                        }
-                      />
-                      <label
-                        htmlFor={`future-${index}`}
-                        className="text-xs cursor-pointer flex-1"
-                      >
-                        <span className="font-medium text-primary">
-                          Adicionar {remainingInstallments} parcelas futuras
-                        </span>
-                        <span className="text-muted-foreground ml-1">
-                          ({item.installment_current! + 1} a {item.installment_total} de R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})
-                        </span>
-                      </label>
-                    </div>
-                  )}
+                      {/* Notes field */}
+                      <Collapsible open={isNotesExpanded}>
+                        <CollapsibleContent>
+                          <div className="pt-2">
+                            <Textarea
+                              placeholder="Adicione uma descrição ou observação sobre esta transação..."
+                              value={item.notes}
+                              onChange={(e) => handleNotesChange(index, e.target.value)}
+                              className="text-xs min-h-[60px] resize-none"
+                            />
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
 
-                  {/* Remember category */}
-                  {categoryChanged && item.category_id && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <Checkbox
-                        id={`remember-${index}`}
-                        checked={item.remember_category}
-                        onCheckedChange={(checked) =>
-                          handleRememberChange(index, checked === true)
-                        }
-                      />
-                      <label
-                        htmlFor={`remember-${index}`}
-                        className="text-xs text-muted-foreground cursor-pointer"
-                      >
-                        Lembrar "{extractKeyword(item.description)}" como "{category?.name}"
-                      </label>
-                    </div>
-                  )}
+                      {/* Future installments option */}
+                      {hasInstallments && remainingInstallments > 0 && (
+                        <div className="flex items-center gap-2 pt-1 p-2 rounded-md bg-primary/5 border border-primary/20">
+                          <Checkbox
+                            id={`future-${index}`}
+                            checked={item.add_future_installments}
+                            onCheckedChange={(checked) =>
+                              handleFutureInstallmentsChange(index, checked === true)
+                            }
+                          />
+                          <label
+                            htmlFor={`future-${index}`}
+                            className="text-xs cursor-pointer flex-1"
+                          >
+                            <span className="font-medium text-primary">
+                              Adicionar {remainingInstallments} parcelas futuras
+                            </span>
+                            <span className="text-muted-foreground ml-1">
+                              ({item.installment_current! + 1} a {item.installment_total} de R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})
+                            </span>
+                          </label>
+                        </div>
+                      )}
 
-                  {/* Remember corporate status */}
-                  {item.is_corporate && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <Checkbox
-                        id={`remember-corp-${index}`}
-                        checked={item.remember_corporate}
-                        onCheckedChange={(checked) =>
-                          handleRememberCorporateChange(index, checked === true)
-                        }
-                      />
-                      <label
-                        htmlFor={`remember-corp-${index}`}
-                        className="text-xs text-muted-foreground cursor-pointer"
-                      >
-                        Lembrar "{extractKeyword(item.description)}" como despesa da empresa
-                      </label>
-                    </div>
+                      {/* Remember category */}
+                      {categoryChanged && item.category_id && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Checkbox
+                            id={`remember-${index}`}
+                            checked={item.remember_category}
+                            onCheckedChange={(checked) =>
+                              handleRememberChange(index, checked === true)
+                            }
+                          />
+                          <label
+                            htmlFor={`remember-${index}`}
+                            className="text-xs text-muted-foreground cursor-pointer"
+                          >
+                            Lembrar "{extractKeyword(item.description)}" como "{category?.name}"
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Remember corporate status */}
+                      {item.is_corporate && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Checkbox
+                            id={`remember-corp-${index}`}
+                            checked={item.remember_corporate}
+                            onCheckedChange={(checked) =>
+                              handleRememberCorporateChange(index, checked === true)
+                            }
+                          />
+                          <label
+                            htmlFor={`remember-corp-${index}`}
+                            className="text-xs text-muted-foreground cursor-pointer"
+                          >
+                            Lembrar "{extractKeyword(item.description)}" como despesa da empresa
+                          </label>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               );
@@ -781,6 +855,11 @@ export function InvoiceReviewModal({
                   <span className="font-medium text-primary">
                     {futureInstallmentsToAdd} parcelas futuras
                   </span>
+                </span>
+              )}
+              {excludedCount > 0 && (
+                <span className="text-muted-foreground text-xs">
+                  ({excludedCount} {excludedCount === 1 ? "ignorada" : "ignoradas"})
                 </span>
               )}
             </div>
@@ -809,7 +888,7 @@ export function InvoiceReviewModal({
             >
               Cancelar
             </Button>
-            <Button onClick={handleImport} disabled={isImporting}>
+            <Button onClick={handleImport} disabled={isImporting || includedItems.length === 0}>
               {isImporting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -818,7 +897,7 @@ export function InvoiceReviewModal({
               ) : (
                 <>
                   <Check className="h-4 w-4 mr-2" />
-                  Confirmar Importação
+                  Confirmar ({includedItems.length})
                 </>
               )}
             </Button>
