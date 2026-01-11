@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban } from "lucide-react";
 import {
   Dialog,
@@ -79,11 +79,29 @@ export function AccountReviewModal({
     "#3B82F6", "#8B5CF6", "#EC4899", "#6B7280"
   ];
 
+  // Track if initialization has already run for current items
+  const hasInitializedRef = useRef(false);
+  const itemsKeyRef = useRef<string>("");
+
+  // Create a stable key for items to detect real changes
+  const getItemsKey = useCallback((items: AccountImportedItem[]) => {
+    return items.map(i => `${i.date}-${i.amount}-${i.description}`).join("|");
+  }, []);
+
   // Initialize review items with suggested categories and check duplicates
   useEffect(() => {
+    const currentItemsKey = getItemsKey(items);
+    
+    // Skip if already initialized with these exact items
+    if (hasInitializedRef.current && itemsKeyRef.current === currentItemsKey) {
+      return;
+    }
+
     const initializeItems = async () => {
       if (items.length === 0 || !open || !user) return;
       
+      hasInitializedRef.current = true;
+      itemsKeyRef.current = currentItemsKey;
       setIsCheckingDuplicates(true);
       
       try {
@@ -139,7 +157,15 @@ export function AccountReviewModal({
     };
 
     initializeItems();
-  }, [items, open, findCategoryForDescription, accountId, user]);
+  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription]);
+
+  // Reset initialization flag when modal closes
+  useEffect(() => {
+    if (!open) {
+      hasInitializedRef.current = false;
+      itemsKeyRef.current = "";
+    }
+  }, [open]);
 
   const handleCategoryChange = (index: number, categoryId: string) => {
     setReviewItems((prev) =>
