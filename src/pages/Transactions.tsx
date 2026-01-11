@@ -238,12 +238,12 @@ export default function Transactions() {
     updateTransaction.mutate({ id: transactionId, category_id: categoryId });
   };
 
-  // Calculate totals per tab
-  const tabTotalIncome = filteredByTab
+  // Calculate totals based on filtered transactions (respects all filters)
+  const tabTotalIncome = filteredTransactions
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + Number(t.amount), 0);
   
-  const tabTotalExpense = filteredByTab
+  const tabTotalExpense = filteredTransactions
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
