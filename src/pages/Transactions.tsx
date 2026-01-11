@@ -371,6 +371,93 @@ export default function Transactions() {
               </Button>
             </div>
 
+            {/* Active Filters Chips */}
+            {activeFiltersCount > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {filters.type !== "all" && (
+                  <Badge variant="secondary" className="gap-1 pr-1">
+                    Tipo: {filters.type === "income" ? "Receita" : "Despesa"}
+                    <button
+                      onClick={() => setFilters((prev) => ({ ...prev, type: "all" }))}
+                      className="ml-1 rounded-full hover:bg-muted p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filters.status !== "all" && (
+                  <Badge variant="secondary" className="gap-1 pr-1">
+                    Status: {filters.status === "completed" ? "Concluída" : "Pendente"}
+                    <button
+                      onClick={() => setFilters((prev) => ({ ...prev, status: "all" }))}
+                      className="ml-1 rounded-full hover:bg-muted p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filters.accountId && (
+                  <Badge variant="secondary" className="gap-1 pr-1">
+                    Conta filtrada
+                    <button
+                      onClick={() => setFilters((prev) => ({ ...prev, accountId: null }))}
+                      className="ml-1 rounded-full hover:bg-muted p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filters.creditCardId && (
+                  <Badge variant="secondary" className="gap-1 pr-1">
+                    Cartão filtrado
+                    <button
+                      onClick={() => setFilters((prev) => ({ ...prev, creditCardId: null }))}
+                      className="ml-1 rounded-full hover:bg-muted p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filters.dateRange && (
+                  <Badge variant="secondary" className="gap-1 pr-1">
+                    Período personalizado
+                    <button
+                      onClick={() => setFilters((prev) => ({ ...prev, dateRange: null }))}
+                      className="ml-1 rounded-full hover:bg-muted p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filters.categoryIds.length > 0 && (
+                  <Badge variant="secondary" className="gap-1 pr-1">
+                    {filters.categoryIds.length} categoria{filters.categoryIds.length > 1 ? "s" : ""}
+                    <button
+                      onClick={() => setFilters((prev) => ({ ...prev, categoryIds: [] }))}
+                      className="ml-1 rounded-full hover:bg-muted p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs"
+                  onClick={() => setFilters({
+                    categoryIds: [],
+                    type: "all",
+                    accountId: null,
+                    creditCardId: null,
+                    status: "all",
+                    dateRange: null,
+                  })}
+                >
+                  Limpar todos
+                </Button>
+              </div>
+            )}
+
             {/* Bulk Actions Bar */}
             {selectedTransactions.length > 0 && (
               <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
@@ -648,7 +735,13 @@ export default function Transactions() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  {showAll ? "Receitas (Página)" : activeTab === "credit" ? "Receitas (Cartão)" : "Receitas (Conta)"}
+                  {activeFiltersCount > 0 || searchQuery
+                    ? "Receitas (filtradas)"
+                    : showAll 
+                      ? "Receitas (Página)" 
+                      : activeTab === "credit" 
+                        ? "Receitas (Cartão)" 
+                        : "Receitas (Conta)"}
                 </p>
                 <p className="text-lg font-bold text-income">
                   R$ {tabTotalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -665,7 +758,13 @@ export default function Transactions() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  {showAll ? "Despesas (Página)" : activeTab === "credit" ? "Despesas (Cartão)" : "Despesas (Conta)"}
+                  {activeFiltersCount > 0 || searchQuery
+                    ? "Despesas (filtradas)"
+                    : showAll 
+                      ? "Despesas (Página)" 
+                      : activeTab === "credit" 
+                        ? "Despesas (Cartão)" 
+                        : "Despesas (Conta)"}
                 </p>
                 <p className="text-lg font-bold text-expense">
                   R$ {tabTotalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
