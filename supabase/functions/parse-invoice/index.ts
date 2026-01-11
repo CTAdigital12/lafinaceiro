@@ -97,7 +97,7 @@ Formato de resposta esperado:
 }`
       : `Você é um assistente de OCR altamente preciso, especializado em extrair dados de faturas de cartão de crédito.
 
-TAREFA: Extraia TODAS as transações/compras da fatura com PRECISÃO ABSOLUTA nos valores.
+TAREFA: Extraia TODAS as transações/compras da fatura com PRECISÃO ABSOLUTA nos valores e datas.
 
 REGRAS CRÍTICAS DE PRECISÃO:
 1. LEIA CADA VALOR EXATAMENTE COMO APARECE - não arredonde, não troque dígitos
@@ -106,17 +106,31 @@ REGRAS CRÍTICAS DE PRECISÃO:
 4. NÃO associe valores de uma linha com descrições de outra linha
 5. Confira duas vezes cada valor antes de incluir no resultado
 
-CONTEXTO TEMPORAL E CICLO DE FATURA:
-- Esta é a fatura de ${targetMonthName} de ${targetYear}
-- O cartão fecha no dia ${closingDate} de cada mês
-- Período: ${closingDate + 1}/${prevMonthName}/${prevYear} até ${closingDate}/${targetMonthName}/${targetYear}
+CICLO DA FATURA - ENTENDA BEM:
+- Esta é a fatura de referência: ${targetMonthName.toUpperCase()} de ${targetYear}
+- O cartão FECHA no dia ${closingDate} de cada mês
+- PERÍODO COBRADO: dia ${closingDate + 1} de ${prevMonthName}/${prevYear} ATÉ dia ${closingDate} de ${targetMonthName}/${targetYear}
 
-REGRA PARA DETERMINAR O ANO/MÊS DE CADA COMPRA:
-1. Dia > ${closingDate}: mês anterior (${prevMonthName}/${prevYear})
-2. Dia <= ${closingDate}: mês atual (${targetMonthName}/${targetYear})
+REGRA CRÍTICA PARA DETERMINAR A DATA CORRETA:
+- Se a data do documento mostra dia > ${closingDate} (ex: dia 15, 20, 25, 29...):
+  → Essa compra é do MÊS ANTERIOR: ${prevMonthName.toUpperCase()} de ${prevYear}
+  → Exemplo: "29/01" ou "29 JAN" → deve ser ${prevYear}-${String(prevMonth).padStart(2, '0')}-29
+
+- Se a data do documento mostra dia <= ${closingDate} (ex: dia 1, 2, 3... até ${closingDate}):
+  → Essa compra é do MÊS DA FATURA: ${targetMonthName.toUpperCase()} de ${targetYear}
+  → Exemplo: "05/01" ou "05 JAN" → deve ser ${targetYear}-${String(targetMonth).padStart(2, '0')}-05
+
+EXEMPLOS CONCRETOS (fatura ${targetMonthName}/${targetYear}, fechamento dia ${closingDate}):
+| No documento | Data correta    | Porque                                |
+|--------------|-----------------|---------------------------------------|
+| 09/${String(prevMonth).padStart(2, '0')}       | ${prevYear}-${String(prevMonth).padStart(2, '0')}-09 | Dia 9 <= ${closingDate}? Não, é > ${closingDate}, então ${prevMonthName}/${prevYear} |
+| 25/${String(prevMonth).padStart(2, '0')}       | ${prevYear}-${String(prevMonth).padStart(2, '0')}-25 | Dia 25 > ${closingDate}, então ${prevMonthName}/${prevYear}            |
+| 29/01        | ${prevYear}-${String(prevMonth).padStart(2, '0')}-29 | Dia 29 > ${closingDate}, então ${prevMonthName}/${prevYear} (NÃO janeiro!) |
+| 05/01        | ${targetYear}-${String(targetMonth).padStart(2, '0')}-05 | Dia 5 <= ${closingDate}, então ${targetMonthName}/${targetYear}         |
+| 08/01        | ${targetYear}-${String(targetMonth).padStart(2, '0')}-08 | Dia 8 <= ${closingDate}, então ${targetMonthName}/${targetYear}         |
 
 Para cada transação, extraia:
-- date: Data da compra (YYYY-MM-DD)
+- date: Data da compra (YYYY-MM-DD) - SIGA A REGRA ACIMA!
 - description: Nome do estabelecimento (sem cidade, sem categoria)
 - amount: Valor EXATO em reais (número positivo, sem R$). LEIA COM CUIDADO!
 - installment_current: Número da parcela atual (se parcelada)
@@ -137,7 +151,13 @@ Formato JSON:
     const userPrompt = isAccountMode
       ? `Extraia todas as movimentações deste extrato bancário de ${targetMonthName}/${targetYear}. Use o ano ${targetYear} para todas as datas. Retorne apenas o JSON.`
       : `Extraia todas as transações/compras desta fatura de cartão de crédito de ${targetMonthName}/${targetYear}. 
-LEMBRE-SE: O cartão fecha dia ${closingDate}. Compras com dia > ${closingDate} são de ${prevMonthName}/${prevYear}. Compras com dia <= ${closingDate} são de ${targetMonthName}/${targetYear}. 
+
+ATENÇÃO CRÍTICA NAS DATAS:
+- Fechamento: dia ${closingDate}
+- Se dia > ${closingDate} → usar ${prevMonthName}/${prevYear}
+- Se dia <= ${closingDate} → usar ${targetMonthName}/${targetYear}
+- Data "29/01" com fechamento dia ${closingDate} = ${prevYear}-${String(prevMonth).padStart(2, '0')}-29 (NÃO ${targetYear}-01-29!)
+
 Retorne apenas o JSON.`;
 
     console.log("Sending to Google Gemini API for processing...");
@@ -222,6 +242,23 @@ Retorne apenas o JSON.`;
       console.error("Failed to parse AI response:", parseError);
       throw new Error("Não foi possível processar o documento. Tente novamente ou use outro formato.");
     }
+
+    // Sanity check: correct any dates that are in the future
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // End of today
+    
+    items = items.map(item => {
+      const itemDate = new Date(item.date + 'T12:00:00Z');
+      if (itemDate > today) {
+        // If date is in the future, move it back one month
+        const correctedDate = new Date(itemDate);
+        correctedDate.setMonth(correctedDate.getMonth() - 1);
+        const correctedDateStr = correctedDate.toISOString().split('T')[0];
+        console.log(`Corrected future date: ${item.date} -> ${correctedDateStr} for "${item.description}"`);
+        return { ...item, date: correctedDateStr };
+      }
+      return item;
+    });
 
     console.log(`Extracted ${items.length} items from document`);
 
