@@ -166,7 +166,7 @@ Retorne apenas o JSON.`;
         ],
         generationConfig: {
           temperature: 0,
-          maxOutputTokens: 8192,
+          maxOutputTokens: 65536,
         },
       }),
     });
