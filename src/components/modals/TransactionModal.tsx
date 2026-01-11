@@ -34,9 +34,10 @@ interface TransactionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transaction?: Transaction | null;
+  duplicateFrom?: Transaction | null;
 }
 
-export function TransactionModal({ open, onOpenChange, transaction }: TransactionModalProps) {
+export function TransactionModal({ open, onOpenChange, transaction, duplicateFrom }: TransactionModalProps) {
   const [type, setType] = useState<"income" | "expense">("expense");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -54,21 +55,26 @@ export function TransactionModal({ open, onOpenChange, transaction }: Transactio
   const { createTransaction, updateTransaction } = useTransactions();
 
   const isEditing = !!transaction;
+  const isDuplicating = !!duplicateFrom;
   const categories = type === "income" ? incomeCategories : expenseCategories;
 
-  // Initialize form with transaction data when editing
+  // Source data for editing or duplicating
+  const sourceData = transaction || duplicateFrom;
+
+  // Initialize form with transaction data when editing or duplicating
   useEffect(() => {
-    if (transaction) {
-      setType(transaction.type as "income" | "expense");
-      setDescription(transaction.description);
-      setAmount(String(transaction.amount));
-      setCategoryId(transaction.category_id || "");
-      setAccountId(transaction.account_id || "");
-      setCreditCardId(transaction.credit_card_id || "");
-      setDate(parseISO(transaction.date));
-      setStatus(transaction.status as "completed" | "pending");
-      setPaymentMethod(transaction.credit_card_id ? "credit_card" : "account");
-      setIsCorporateExpense(transaction.is_corporate_expense || false);
+    if (sourceData) {
+      setType(sourceData.type as "income" | "expense");
+      setDescription(sourceData.description);
+      setAmount(String(sourceData.amount));
+      setCategoryId(sourceData.category_id || "");
+      setAccountId(sourceData.account_id || "");
+      setCreditCardId(sourceData.credit_card_id || "");
+      // For duplicating, use today's date; for editing, use original date
+      setDate(isDuplicating ? new Date() : parseISO(sourceData.date));
+      setStatus(sourceData.status as "completed" | "pending");
+      setPaymentMethod(sourceData.credit_card_id ? "credit_card" : "account");
+      setIsCorporateExpense(sourceData.is_corporate_expense || false);
     } else {
       setType("expense");
       setDescription("");
@@ -81,7 +87,7 @@ export function TransactionModal({ open, onOpenChange, transaction }: Transactio
       setPaymentMethod("account");
       setIsCorporateExpense(false);
     }
-  }, [transaction, open]);
+  }, [sourceData, open, isDuplicating]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +119,9 @@ export function TransactionModal({ open, onOpenChange, transaction }: Transactio
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar Transação" : "Nova Transação"}</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Editar Transação" : isDuplicating ? "Duplicar Transação" : "Nova Transação"}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Type Toggle */}
