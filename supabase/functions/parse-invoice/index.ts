@@ -90,7 +90,7 @@ function inferPurchaseYear(
   return { year, isPostClosing };
 }
 
-// Generate future installment transactions
+// Generate future installment transactions with progressive due dates
 function generateFutureInstallments(
   item: ProcessedInvoiceItem
 ): ProcessedInvoiceItem[] {
@@ -104,8 +104,12 @@ function generateFutureInstallments(
   }
 
   const futureItems: ProcessedInvoiceItem[] = [];
-  const baseDate = new Date(item.purchase_date + 'T12:00:00Z');
-  const baseDueDate = new Date(item.due_date + 'T12:00:00Z');
+  
+  // Parse base due date - this is critical for calculating future dates
+  const baseDueDateParts = item.due_date.split('-');
+  const baseDueYear = parseInt(baseDueDateParts[0], 10);
+  const baseDueMonth = parseInt(baseDueDateParts[1], 10) - 1; // JS months are 0-indexed
+  const baseDueDay = parseInt(baseDueDateParts[2], 10);
   
   // Clean description - remove current installment info
   const cleanDescription = item.description
@@ -117,21 +121,37 @@ function generateFutureInstallments(
     .trim();
 
   for (let i = 1; i <= remaining; i++) {
-    const futureDueDate = new Date(baseDueDate);
-    futureDueDate.setMonth(futureDueDate.getMonth() + i);
+    // Calculate future due date by adding i months to the base due date
+    // This correctly handles year transitions (e.g., Dec -> Jan next year)
+    let futureMonth = baseDueMonth + i;
+    let futureYear = baseDueYear;
+    
+    // Handle month overflow (year transition)
+    while (futureMonth > 11) {
+      futureMonth -= 12;
+      futureYear += 1;
+    }
+    
+    // Handle day adjustment for months with fewer days (e.g., day 31 in February)
+    const maxDayInMonth = new Date(futureYear, futureMonth + 1, 0).getDate();
+    const adjustedDay = Math.min(baseDueDay, maxDayInMonth);
+    
+    const futureDueDateStr = `${futureYear}-${String(futureMonth + 1).padStart(2, '0')}-${String(adjustedDay).padStart(2, '0')}`;
     
     const installmentNumber = item.installment_current + i;
     
     futureItems.push({
-      purchase_date: item.purchase_date, // Mantém a data original da compra
+      purchase_date: item.purchase_date, // Mantém a data original da compra (imutável)
       posting_date: item.posting_date,
-      due_date: futureDueDate.toISOString().split('T')[0],
+      due_date: futureDueDateStr, // Data de vencimento progressiva
       transaction_value: item.transaction_value,
       description: `${cleanDescription} ${installmentNumber}/${item.installment_total}`,
       installment_current: installmentNumber,
       installment_total: item.installment_total,
       is_post_closing: false,
     });
+    
+    console.log(`Future installment ${installmentNumber}/${item.installment_total}: due_date=${futureDueDateStr}`);
   }
 
   return futureItems;
