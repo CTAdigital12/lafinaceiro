@@ -21,9 +21,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GOOGLE_AI_API_KEY = Deno.env.get('GOOGLE_AI_API_KEY');
+    if (!GOOGLE_AI_API_KEY) {
+      throw new Error("GOOGLE_AI_API_KEY is not configured");
     }
 
     const formData = await req.formData();
@@ -140,59 +140,58 @@ Formato JSON:
 LEMBRE-SE: O cartão fecha dia ${closingDate}. Compras com dia > ${closingDate} são de ${prevMonthName}/${prevYear}. Compras com dia <= ${closingDate} são de ${targetMonthName}/${targetYear}. 
 Retorne apenas o JSON.`;
 
-    console.log("Sending to Lovable AI for processing...");
+    console.log("Sending to Google Gemini API for processing...");
 
-    // Call Lovable AI Gateway
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call Google Gemini API directly
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GOOGLE_AI_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        temperature: 0,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { 
-            role: "user", 
-            content: [
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: systemPrompt },
               {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mimeType};base64,${base64}`
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64
                 }
               },
-              {
-                type: "text",
-                text: userPrompt
-              }
+              { text: userPrompt }
             ]
           }
         ],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 8192,
+        },
       }),
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Google Gemini API error:", response.status, errorText);
+      
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns minutos." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos insuficientes. Adicione créditos na sua conta Lovable." }), {
-          status: 402,
+      if (response.status === 403) {
+        return new Response(JSON.stringify({ error: "API Key inválida ou sem permissão. Verifique sua chave do Google AI." }), {
+          status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw new Error(`Google Gemini API error: ${response.status}`);
     }
 
     const aiResponse = await response.json();
-    const content = aiResponse.choices?.[0]?.message?.content;
+    const content = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
     
     console.log("AI response received:", content);
 
