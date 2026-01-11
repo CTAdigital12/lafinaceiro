@@ -21,6 +21,7 @@ import {
   Download,
   X,
   Tag,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +70,7 @@ type TransactionTab = "checking" | "credit";
 export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [duplicatingTransaction, setDuplicatingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TransactionTab>("checking");
@@ -255,6 +257,13 @@ export default function Transactions() {
 
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
+    setDuplicatingTransaction(null);
+    setIsModalOpen(true);
+  };
+
+  const handleDuplicate = (transaction: Transaction) => {
+    setDuplicatingTransaction(transaction);
+    setEditingTransaction(null);
     setIsModalOpen(true);
   };
 
@@ -262,6 +271,7 @@ export default function Transactions() {
     setIsModalOpen(open);
     if (!open) {
       setEditingTransaction(null);
+      setDuplicatingTransaction(null);
     }
   };
 
@@ -658,7 +668,17 @@ export default function Transactions() {
                               variant="ghost" 
                               size="icon" 
                               className="h-8 w-8"
+                              onClick={() => handleDuplicate(transaction)}
+                              title="Duplicar transação"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
                               onClick={() => handleEdit(transaction)}
+                              title="Editar transação"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -667,6 +687,7 @@ export default function Transactions() {
                               size="icon" 
                               className="h-8 w-8 text-expense hover:text-expense"
                               onClick={() => deleteTransaction.mutate(transaction.id)}
+                              title="Excluir transação"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -794,6 +815,7 @@ export default function Transactions() {
         open={isModalOpen} 
         onOpenChange={handleModalClose} 
         transaction={editingTransaction}
+        duplicateFrom={duplicatingTransaction}
       />
 
       {/* Bulk Delete Confirmation Dialog */}
