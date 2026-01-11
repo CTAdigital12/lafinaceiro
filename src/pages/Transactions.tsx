@@ -52,6 +52,7 @@ import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { TransactionModal } from "@/components/modals/TransactionModal";
+import { TransactionFiltersModal, TransactionFilters } from "@/components/modals/TransactionFiltersModal";
 import { CategorySelector } from "@/components/CategorySelector";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
@@ -76,11 +77,23 @@ export default function Transactions() {
   const [showCurrentInvoice, setShowCurrentInvoice] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBulkCategorySelector, setShowBulkCategorySelector] = useState(false);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
+  const [filters, setFilters] = useState<TransactionFilters>({
+    categoryIds: [],
+    type: "all",
+    accountId: null,
+    creditCardId: null,
+    status: "all",
+    dateRange: null,
+  });
   const pageSize = 20;
   
   const { month, year } = useDate();
   const { toast } = useToast();
   const { categories } = useCategories();
+  
+  // Use filterByDueDate when showing current invoice on credit tab
+  const filterByDueDate = showCurrentInvoice && activeTab === "credit";
   
   const { 
     transactions, 
@@ -91,8 +104,17 @@ export default function Transactions() {
     totalPages,
     deleteTransaction,
     updateTransaction,
-  } = useTransactions(undefined, undefined, { showAll, page: currentPage, pageSize });
+  } = useTransactions(undefined, undefined, { showAll, page: currentPage, pageSize, filterByDueDate });
   const { totalBalance } = useAccounts();
+  
+  // Count active filters
+  const activeFiltersCount =
+    filters.categoryIds.length +
+    (filters.type !== "all" ? 1 : 0) +
+    (filters.accountId ? 1 : 0) +
+    (filters.creditCardId ? 1 : 0) +
+    (filters.status !== "all" ? 1 : 0) +
+    (filters.dateRange ? 1 : 0);
 
   // Bulk delete handler
   const handleBulkDelete = async () => {
@@ -160,16 +182,42 @@ export default function Transactions() {
     return t.credit_card_id === null;
   });
 
-  // Filter by current invoice (for credit card tab)
-  const filteredByInvoice = showCurrentInvoice && activeTab === "credit"
-    ? filteredByTab.filter((t) => {
-        if (!t.due_date) return false;
-        const [dueYear, dueMonth] = t.due_date.split("-").map(Number);
-        return dueYear === year && dueMonth === month;
-      })
-    : filteredByTab;
+  // Apply advanced filters
+  const filteredByAdvanced = filteredByTab.filter((t) => {
+    // Filter by category
+    if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(t.category_id || "")) {
+      return false;
+    }
+    // Filter by type
+    if (filters.type !== "all" && t.type !== filters.type) {
+      return false;
+    }
+    // Filter by account
+    if (filters.accountId && t.account_id !== filters.accountId) {
+      return false;
+    }
+    // Filter by credit card
+    if (filters.creditCardId && t.credit_card_id !== filters.creditCardId) {
+      return false;
+    }
+    // Filter by status
+    if (filters.status !== "all" && t.status !== filters.status) {
+      return false;
+    }
+    // Filter by date range
+    if (filters.dateRange) {
+      const transactionDate = new Date(t.date);
+      if (filters.dateRange.from && transactionDate < filters.dateRange.from) {
+        return false;
+      }
+      if (filters.dateRange.to && transactionDate > filters.dateRange.to) {
+        return false;
+      }
+    }
+    return true;
+  });
 
-  const filteredTransactions = filteredByInvoice.filter((t) =>
+  const filteredTransactions = filteredByAdvanced.filter((t) =>
     t.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -308,9 +356,18 @@ export default function Transactions() {
                 )}
               </Button>
 
-              <Button variant="outline" className="gap-2">
+              <Button 
+                variant={activeFiltersCount > 0 ? "default" : "outline"} 
+                className="gap-2"
+                onClick={() => setShowFiltersModal(true)}
+              >
                 <Filter className="h-4 w-4" />
                 Filtros
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-xs">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
               </Button>
             </div>
 
@@ -661,6 +718,15 @@ export default function Transactions() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Filters Modal */}
+      <TransactionFiltersModal
+        open={showFiltersModal}
+        onOpenChange={setShowFiltersModal}
+        filters={filters}
+        onApplyFilters={setFilters}
+        activeTab={activeTab}
+      />
     </div>
   );
 }
