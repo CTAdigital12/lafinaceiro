@@ -18,6 +18,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Receipt,
+  Download,
+  X,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,12 +37,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useCategories } from "@/hooks/useCategories";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { CategorySelector } from "@/components/CategorySelector";
 import { useDate } from "@/contexts/DateContext";
+import { useToast } from "@/hooks/use-toast";
 
 // Format date string (YYYY-MM-DD) to Brazilian format without timezone issues
 function formatDateBR(dateString: string | null): string {
@@ -59,9 +74,13 @@ export default function Transactions() {
   const [showAll, setShowAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [showCurrentInvoice, setShowCurrentInvoice] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showBulkCategorySelector, setShowBulkCategorySelector] = useState(false);
   const pageSize = 20;
   
   const { month, year } = useDate();
+  const { toast } = useToast();
+  const { categories } = useCategories();
   
   const { 
     transactions, 
@@ -74,6 +93,58 @@ export default function Transactions() {
     updateTransaction,
   } = useTransactions(undefined, undefined, { showAll, page: currentPage, pageSize });
   const { totalBalance } = useAccounts();
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    for (const id of selectedTransactions) {
+      await deleteTransaction.mutateAsync(id);
+    }
+    setSelectedTransactions([]);
+    setShowDeleteDialog(false);
+    toast({ title: `${selectedTransactions.length} transações excluídas!` });
+  };
+
+  // Bulk category update handler
+  const handleBulkCategoryUpdate = async (categoryId: string) => {
+    for (const id of selectedTransactions) {
+      await updateTransaction.mutateAsync({ id, category_id: categoryId });
+    }
+    setSelectedTransactions([]);
+    setShowBulkCategorySelector(false);
+    toast({ title: `Categoria atualizada em ${selectedTransactions.length} transações!` });
+  };
+
+  // Export transactions to CSV
+  const handleExport = () => {
+    const transactionsToExport = selectedTransactions.length > 0
+      ? filteredTransactions.filter(t => selectedTransactions.includes(t.id))
+      : filteredTransactions;
+
+    const headers = ["Data", "Vencimento", "Descrição", "Categoria", "Conta/Cartão", "Tipo", "Valor", "Status"];
+    const csvContent = [
+      headers.join(";"),
+      ...transactionsToExport.map(t => [
+        formatDateBR(t.date),
+        formatDateBR(t.due_date),
+        `"${t.description.replace(/"/g, '""')}"`,
+        t.categories?.name || "",
+        t.credit_card_id ? t.credit_cards?.name : t.accounts?.name || "",
+        t.type === "income" ? "Receita" : "Despesa",
+        Number(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
+        t.status === "completed" ? "Concluída" : "Pendente",
+      ].join(";"))
+    ].join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `transacoes_${year}-${String(month).padStart(2, "0")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    toast({ title: `${transactionsToExport.length} transações exportadas!` });
+  };
 
   // Reset page when toggling showAll
   const handleShowAllChange = (checked: boolean) => {
@@ -101,6 +172,18 @@ export default function Transactions() {
   const filteredTransactions = filteredByInvoice.filter((t) =>
     t.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Select all visible transactions
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedTransactions(filteredTransactions.map(t => t.id));
+    } else {
+      setSelectedTransactions([]);
+    }
+  };
+
+  const allSelected = filteredTransactions.length > 0 && 
+    filteredTransactions.every(t => selectedTransactions.includes(t.id));
 
   // Handle category update inline
   const handleCategoryChange = (transactionId: string, categoryId: string) => {
@@ -215,11 +298,91 @@ export default function Transactions() {
                 </Button>
               )}
 
+              <Button variant="outline" className="gap-2" onClick={handleExport}>
+                <Download className="h-4 w-4" />
+                Exportar
+                {selectedTransactions.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-xs">
+                    {selectedTransactions.length}
+                  </Badge>
+                )}
+              </Button>
+
               <Button variant="outline" className="gap-2">
                 <Filter className="h-4 w-4" />
                 Filtros
               </Button>
             </div>
+
+            {/* Bulk Actions Bar */}
+            {selectedTransactions.length > 0 && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <Badge variant="default" className="font-medium">
+                  {selectedTransactions.length} selecionada{selectedTransactions.length > 1 ? "s" : ""}
+                </Badge>
+                
+                <div className="flex items-center gap-2 ml-auto">
+                  {/* Bulk Category Change */}
+                  {showBulkCategorySelector ? (
+                    <div className="flex items-center gap-2 bg-card rounded-lg border border-border p-2">
+                      <Tag className="h-4 w-4 text-muted-foreground" />
+                      <select
+                        className="bg-transparent text-sm border-none focus:ring-0 outline-none"
+                        onChange={(e) => {
+                          if (e.target.value) handleBulkCategoryUpdate(e.target.value);
+                        }}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Selecionar categoria...</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.icon} {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setShowBulkCategorySelector(false)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => setShowBulkCategorySelector(true)}
+                    >
+                      <Tag className="h-4 w-4" />
+                      Alterar Categoria
+                    </Button>
+                  )}
+
+                  {/* Bulk Delete */}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowDeleteDialog(true)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir
+                  </Button>
+
+                  {/* Clear Selection */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedTransactions([])}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Pagination Info */}
             {showAll && totalCount > 0 && (
@@ -275,7 +438,12 @@ export default function Transactions() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Data Compra</TableHead>
                       {activeTab === "credit" && (
@@ -471,6 +639,28 @@ export default function Transactions() {
         onOpenChange={handleModalClose} 
         transaction={editingTransaction}
       />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir transações?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você está prestes a excluir {selectedTransactions.length} transação{selectedTransactions.length > 1 ? "ões" : ""}.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
