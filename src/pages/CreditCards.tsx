@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditCards";
 import { useCreditCardReconciliation } from "@/hooks/useCreditCardReconciliation";
 import { CreditCardModal } from "@/components/modals/CreditCardModal";
-import { InvoiceImportModal, ImportedItem } from "@/components/modals/InvoiceImportModal";
+import { InvoiceImportModal, ImportedItem, ImportCompleteData } from "@/components/modals/InvoiceImportModal";
 import { InvoiceReviewModal } from "@/components/modals/InvoiceReviewModal";
 import { InstallmentsDashboard } from "@/components/credit-cards/InstallmentsDashboard";
 import { ReconciliationCard } from "@/components/credit-cards/ReconciliationCard";
@@ -154,7 +154,7 @@ export default function CreditCards() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
   const [importingCard, setImportingCard] = useState<CreditCardType | null>(null);
-  const [importedItems, setImportedItems] = useState<ImportedItem[]>([]);
+  const [importData, setImportData] = useState<ImportCompleteData | null>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   // Store credit card info separately for review modal to avoid losing it when import modal closes
   const [reviewCardId, setReviewCardId] = useState<string>("");
@@ -179,8 +179,8 @@ export default function CreditCards() {
     setReviewCardName(card.name);
   };
 
-  const handleImportComplete = (items: ImportedItem[]) => {
-    setImportedItems(items);
+  const handleImportComplete = (data: ImportCompleteData) => {
+    setImportData(data);
     setIsReviewOpen(true);
   };
 
@@ -312,7 +312,7 @@ export default function CreditCards() {
       <InvoiceReviewModal
         open={isReviewOpen}
         onOpenChange={setIsReviewOpen}
-        items={importedItems}
+        importData={importData}
         creditCardId={reviewCardId}
         creditCardName={reviewCardName}
       />

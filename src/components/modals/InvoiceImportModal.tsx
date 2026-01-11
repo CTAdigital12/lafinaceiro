@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Upload, FileText, Loader2, X, Check, AlertCircle, Calendar } from "lucide-react";
+import { Upload, FileText, Loader2, X, Check, AlertCircle, Calendar, Settings } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { useDate } from "@/contexts/DateContext";
 
@@ -25,7 +31,7 @@ interface InvoiceImportModalProps {
   creditCardId: string;
   creditCardName: string;
   closingDate: number;
-  onImportComplete: (items: ImportedItem[]) => void;
+  onImportComplete: (data: ImportCompleteData) => void;
 }
 
 export interface ImportedItem {
@@ -34,6 +40,16 @@ export interface ImportedItem {
   amount: number;
   installment_current?: number;
   installment_total?: number;
+  is_post_closing?: boolean;
+}
+
+export interface ImportCompleteData {
+  items: ImportedItem[];
+  future_installments: ImportedItem[];
+  post_closing_count: number;
+  invoice_month: number;
+  invoice_year: number;
+  closing_day: number;
 }
 
 const MONTHS = [
@@ -51,12 +67,14 @@ const MONTHS = [
   { value: "12", label: "Dezembro" },
 ];
 
+const CLOSING_DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
+
 export function InvoiceImportModal({
   open,
   onOpenChange,
   creditCardId,
   creditCardName,
-  closingDate,
+  closingDate: defaultClosingDate,
   onImportComplete,
 }: InvoiceImportModalProps) {
   const { currentDate } = useDate();
@@ -66,6 +84,8 @@ export function InvoiceImportModal({
   const [file, setFile] = useState<File | null>(null);
   const [invoiceMonth, setInvoiceMonth] = useState<string>(() => String(currentDate.getMonth() + 1));
   const [invoiceYear, setInvoiceYear] = useState<string>(() => String(currentDate.getFullYear()));
+  const [closingDay, setClosingDay] = useState<number>(defaultClosingDate);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -130,7 +150,7 @@ export function InvoiceImportModal({
       formData.append('credit_card_id', creditCardId);
       formData.append('invoice_month', invoiceMonth);
       formData.append('invoice_year', invoiceYear);
-      formData.append('closing_date', String(closingDate));
+      formData.append('closing_date', String(closingDay));
 
       // Extended timeout for AI processing (3 minutes)
       const controller = new AbortController();
@@ -157,7 +177,14 @@ export function InvoiceImportModal({
       }
 
       if (data.items && data.items.length > 0) {
-        onImportComplete(data.items);
+        onImportComplete({
+          items: data.items,
+          future_installments: data.future_installments || [],
+          post_closing_count: data.post_closing_count || 0,
+          invoice_month: parseInt(invoiceMonth),
+          invoice_year: parseInt(invoiceYear),
+          closing_day: closingDay,
+        });
         onOpenChange(false);
         resetState();
       } else {
@@ -175,6 +202,7 @@ export function InvoiceImportModal({
     setFile(null);
     setError(null);
     setIsProcessing(false);
+    setShowAdvanced(false);
   };
 
   const handleClose = (open: boolean) => {
@@ -188,6 +216,16 @@ export function InvoiceImportModal({
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
+  // Calculate billing cycle info
+  const month = parseInt(invoiceMonth);
+  const year = parseInt(invoiceYear);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const startDay = closingDay + 1;
+  const endDay = closingDay;
+  const prevMonthName = MONTHS.find(m => m.value === String(prevMonth))?.label || "";
+  const currentMonthName = MONTHS.find(m => m.value === String(month))?.label || "";
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -199,11 +237,11 @@ export function InvoiceImportModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Month/Year selector */}
+          {/* Month/Year selector - MANDATORY */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2 text-sm font-medium">
               <Calendar className="h-4 w-4" />
-              Período da Fatura
+              Período da Fatura *
             </Label>
             <div className="flex gap-2">
               <Select value={invoiceMonth} onValueChange={setInvoiceMonth}>
@@ -211,9 +249,9 @@ export function InvoiceImportModal({
                   <SelectValue placeholder="Mês" />
                 </SelectTrigger>
                 <SelectContent>
-                  {MONTHS.map((month) => (
-                    <SelectItem key={month.value} value={month.value}>
-                      {month.label}
+                  {MONTHS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -223,38 +261,61 @@ export function InvoiceImportModal({
                   <SelectValue placeholder="Ano" />
                 </SelectTrigger>
                 <SelectContent>
-                  {yearOptions.map((year) => (
-                    <SelectItem key={year} value={String(year)}>
-                      {year}
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            {/* Billing cycle period info */}
-            {(() => {
-              const month = parseInt(invoiceMonth);
-              const year = parseInt(invoiceYear);
-              const prevMonth = month === 1 ? 12 : month - 1;
-              const prevYear = month === 1 ? year - 1 : year;
-              const startDay = closingDate + 1;
-              const endDay = closingDate;
-              const prevMonthName = MONTHS.find(m => m.value === String(prevMonth))?.label || "";
-              const currentMonthName = MONTHS.find(m => m.value === String(month))?.label || "";
-              
-              return (
-                <div className="p-3 rounded-lg bg-muted/50 border text-sm">
-                  <p className="font-medium text-foreground mb-1">Ciclo desta fatura:</p>
-                  <p className="text-muted-foreground">
-                    {startDay.toString().padStart(2, '0')}/{prevMonthName.slice(0, 3)}/{prevYear} até {endDay.toString().padStart(2, '0')}/{currentMonthName.slice(0, 3)}/{year}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Cartão fecha dia {closingDate}
-                  </p>
-                </div>
-              );
-            })()}
           </div>
+
+          {/* Advanced settings (closing day) */}
+          <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground">
+                <Settings className="h-4 w-4" />
+                Configurações avançadas
+                <span className="ml-auto text-xs">
+                  {showAdvanced ? "▲" : "▼"}
+                </span>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-2">
+              <div className="space-y-2">
+                <Label className="text-sm">Dia de Fechamento</Label>
+                <Select value={String(closingDay)} onValueChange={(v) => setClosingDay(parseInt(v))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Dia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLOSING_DAYS.map((d) => (
+                      <SelectItem key={d} value={String(d)}>
+                        Dia {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Compras após o dia {closingDay} entram na próxima fatura
+                </p>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Billing cycle info */}
+          <div className="p-3 rounded-lg bg-muted/50 border text-sm">
+            <p className="font-medium text-foreground mb-1">Ciclo desta fatura:</p>
+            <p className="text-muted-foreground">
+              {startDay.toString().padStart(2, '0')}/{prevMonthName.slice(0, 3)}/{prevYear} até {endDay.toString().padStart(2, '0')}/{currentMonthName.slice(0, 3)}/{year}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Cartão fecha dia {closingDay}
+            </p>
+          </div>
+
+          {/* File upload area */}
           {!file ? (
             <div
               onDragOver={handleDragOver}
