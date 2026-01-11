@@ -64,6 +64,7 @@ interface ReviewItem extends ImportedItem {
   // Computed for display
   amount: number;
   date: string;
+  due_date: string;
 }
 
 interface InvoiceReviewModalProps {
@@ -117,6 +118,9 @@ export function InvoiceReviewModal({
   // Initialize review items with suggested categories and corporate status
   useEffect(() => {
     if (items.length > 0 && open) {
+      // Get due_date from import data
+      const invoiceDueDate = importData?.due_date || "";
+      
       const itemsWithCategories = items.map((item) => {
         const suggestedCategoryId = findCategoryForDescription(item.description);
         const suggestedCorporate = findCorporateForDescription(item.description);
@@ -126,6 +130,7 @@ export function InvoiceReviewModal({
           // Map new structure to legacy fields for display
           amount: item.transaction_value,
           date: item.purchase_date,
+          due_date: item.due_date || invoiceDueDate,
           category_id: suggestedCategoryId,
           original_category_id: suggestedCategoryId,
           remember_category: false,
@@ -140,7 +145,7 @@ export function InvoiceReviewModal({
       setExpandedNotes(new Set());
       setShowPostClosingWarning(postClosingCount > 0);
     }
-  }, [items, open, findCategoryForDescription, findCorporateForDescription, postClosingCount]);
+  }, [items, open, findCategoryForDescription, findCorporateForDescription, postClosingCount, importData?.due_date]);
 
   const handleCategoryChange = (index: number, categoryId: string) => {
     setReviewItems((prev) =>
@@ -256,6 +261,7 @@ export function InvoiceReviewModal({
     description: string;
     amount: number;
     date: string;
+    due_date: string;
     notes: string;
     category_id: string | null;
     is_corporate: boolean;
@@ -266,12 +272,14 @@ export function InvoiceReviewModal({
       description: string;
       amount: number;
       date: string;
+      due_date: string;
       notes: string;
       category_id: string | null;
       is_corporate: boolean;
     }> = [];
     
-    const baseDate = parse(item.date, "yyyy-MM-dd", new Date());
+    // Use due_date as base for calculating future due dates (progressive)
+    const baseDueDate = item.due_date ? parse(item.due_date, "yyyy-MM-dd", new Date()) : new Date();
     const remaining = item.installment_total - item.installment_current;
     
     const baseDescription = item.description
@@ -282,12 +290,14 @@ export function InvoiceReviewModal({
     
     for (let i = 1; i <= remaining; i++) {
       const installmentNumber = item.installment_current + i;
-      const futureDate = addMonths(baseDate, i);
+      // Progressive due date: base due date + i months
+      const futureDueDate = addMonths(baseDueDate, i);
       
       futureInstallments.push({
         description: `${baseDescription} ${installmentNumber}/${item.installment_total}`,
         amount: item.amount,
-        date: format(futureDate, "yyyy-MM-dd"),
+        date: item.date, // purchase_date stays the same (original purchase date)
+        due_date: format(futureDueDate, "yyyy-MM-dd"), // progressive due date
         notes: item.notes ? `${item.notes} (Parcela ${installmentNumber}/${item.installment_total})` : `Parcela ${installmentNumber}/${item.installment_total}`,
         category_id: item.category_id,
         is_corporate: item.is_corporate,
@@ -321,11 +331,16 @@ export function InvoiceReviewModal({
         }
       }
 
+      // Get current timestamp for imported_at
+      const importedAt = new Date().toISOString();
+
       // Collect all transactions to create (including future installments)
       const allTransactions: Array<{
         description: string;
         amount: number;
         date: string;
+        due_date: string | null;
+        imported_at: string;
         type: "expense" | "income";
         category_id: string | null;
         credit_card_id: string;
@@ -343,6 +358,8 @@ export function InvoiceReviewModal({
           description: item.notes ? `${item.description} - ${item.notes}` : item.description,
           amount: item.amount,
           date: item.date,
+          due_date: item.due_date || null,
+          imported_at: importedAt,
           type: "expense",
           category_id: categoryId,
           credit_card_id: creditCardId,
@@ -362,7 +379,9 @@ export function InvoiceReviewModal({
             allTransactions.push({
               description: future.notes ? `${future.description} - ${future.notes}` : future.description,
               amount: future.amount,
-              date: future.date,
+              date: future.date, // purchase_date (original)
+              due_date: future.due_date, // progressive due_date
+              imported_at: importedAt,
               type: "expense",
               category_id: futureCategoryId,
               credit_card_id: creditCardId,

@@ -448,7 +448,9 @@ export type Database = {
           credit_card_id: string | null
           date: string
           description: string
+          due_date: string | null
           id: string
+          imported_at: string | null
           is_corporate_expense: boolean
           reimbursement_status: string | null
           status: string
@@ -464,7 +466,9 @@ export type Database = {
           credit_card_id?: string | null
           date?: string
           description: string
+          due_date?: string | null
           id?: string
+          imported_at?: string | null
           is_corporate_expense?: boolean
           reimbursement_status?: string | null
           status?: string
@@ -480,7 +484,9 @@ export type Database = {
           credit_card_id?: string | null
           date?: string
           description?: string
+          due_date?: string | null
           id?: string
+          imported_at?: string | null
           is_corporate_expense?: boolean
           reimbursement_status?: string | null
           status?: string

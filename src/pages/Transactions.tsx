@@ -232,7 +232,10 @@ export default function Transactions() {
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="w-12"></TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Data</TableHead>
+                      <TableHead>Data Compra</TableHead>
+                      {activeTab === "credit" && (
+                        <TableHead className="text-primary font-medium">Vencimento</TableHead>
+                      )}
                       <TableHead>Descrição</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>{activeTab === "credit" ? "Cartão" : "Conta"}</TableHead>
@@ -259,6 +262,14 @@ export default function Transactions() {
                         <TableCell className="text-muted-foreground">
                           {new Date(transaction.date).toLocaleDateString("pt-BR")}
                         </TableCell>
+                        {activeTab === "credit" && (
+                          <TableCell className="text-primary font-medium">
+                            {transaction.due_date 
+                              ? new Date(transaction.due_date).toLocaleDateString("pt-BR")
+                              : "-"
+                            }
+                          </TableCell>
+                        )}
                         <TableCell className="font-medium">{transaction.description}</TableCell>
                         <TableCell>
                           {transaction.categories ? (

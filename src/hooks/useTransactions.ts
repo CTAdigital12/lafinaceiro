@@ -15,12 +15,15 @@ export interface Transaction {
   amount: number;
   type: "income" | "expense";
   date: string;
+  due_date: string | null;
+  imported_at: string | null;
   status: "completed" | "pending";
   is_corporate_expense: boolean;
   created_at: string;
   updated_at: string;
   categories?: { name: string; icon: string; color: string } | null;
   accounts?: { name: string } | null;
+  credit_cards?: { name: string; due_date: number } | null;
 }
 
 interface UseTransactionsOptions {
@@ -53,7 +56,8 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         .select(`
           *,
           categories (name, icon, color),
-          accounts (name)
+          accounts (name),
+          credit_cards (name, due_date)
         `, { count: "exact" });
 
       // Apply date filter only if not showing all
@@ -80,7 +84,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const createTransaction = useMutation({
-    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts"> & { silent?: boolean }) => {
+    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at"> & { due_date?: string | null; imported_at?: string | null; silent?: boolean }) => {
       // Sanitize UUID fields - convert empty strings to null
       const { silent, ...transactionData } = transaction;
       const sanitizedTransaction = {
@@ -89,6 +93,8 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         category_id: transactionData.category_id && transactionData.category_id.trim() !== "" ? transactionData.category_id : null,
         account_id: transactionData.account_id && transactionData.account_id.trim() !== "" ? transactionData.account_id : null,
         credit_card_id: transactionData.credit_card_id && transactionData.credit_card_id.trim() !== "" ? transactionData.credit_card_id : null,
+        due_date: transactionData.due_date || null,
+        imported_at: transactionData.imported_at || null,
       };
       
       const { data, error } = await supabase
