@@ -191,11 +191,21 @@ Retorne apenas o JSON.`;
     }
 
     const aiResponse = await response.json();
+    console.log("Full AI response:", JSON.stringify(aiResponse, null, 2));
+    
+    // Check for blocked content or other issues
+    if (aiResponse.promptFeedback?.blockReason) {
+      console.error("Content blocked:", aiResponse.promptFeedback.blockReason);
+      throw new Error(`Conteúdo bloqueado: ${aiResponse.promptFeedback.blockReason}`);
+    }
+    
     const content = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    console.log("AI response received:", content);
+    console.log("AI response content:", content);
 
     if (!content) {
+      // Log more details about the response structure
+      console.error("No content found. Candidates:", JSON.stringify(aiResponse.candidates));
       throw new Error("No content in AI response");
     }
 
