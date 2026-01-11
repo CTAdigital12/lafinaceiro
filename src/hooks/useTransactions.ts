@@ -30,6 +30,7 @@ interface UseTransactionsOptions {
   showAll?: boolean;
   page?: number;
   pageSize?: number;
+  filterByDueDate?: boolean;
 }
 
 export function useTransactions(overrideMonth?: number, overrideYear?: number, options: UseTransactionsOptions = {}) {
@@ -38,7 +39,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { showAll = false, page = 1, pageSize = 20 } = options;
+  const { showAll = false, page = 1, pageSize = 20, filterByDueDate = false } = options;
 
   // Use override values if provided, otherwise use context
   const month = overrideMonth ?? contextMonth;
@@ -49,7 +50,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   // Query for paginated transactions (all or filtered by date)
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, page, pageSize],
+    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, page, pageSize, filterByDueDate],
     queryFn: async () => {
       let query = supabase
         .from("transactions")
@@ -62,7 +63,13 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
       // Apply date filter only if not showing all
       if (!showAll) {
-        query = query.gte("date", startDate).lte("date", endDate);
+        if (filterByDueDate) {
+          // Filter by due_date for credit card invoices
+          query = query.gte("due_date", startDate).lte("due_date", endDate);
+        } else {
+          // Filter by transaction date
+          query = query.gte("date", startDate).lte("date", endDate);
+        }
       }
 
       // Apply pagination
