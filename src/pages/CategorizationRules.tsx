@@ -44,11 +44,22 @@ import { useCategories } from "@/hooks/useCategories";
 import { CategorySelector } from "@/components/CategorySelector";
 
 export default function CategorizationRules() {
-  const { rules, isLoading, updateRule, deleteRule, applyRulesToUncategorized, isApplyingRules } = useCategorizationRules();
+  const { 
+    rules, 
+    isLoading, 
+    updateRule, 
+    deleteRule, 
+    previewRulesApplication,
+    isLoadingPreview,
+    applyRulesToUncategorized, 
+    isApplyingRules 
+  } = useCategorizationRules();
   const { categories } = useCategories();
   const [searchQuery, setSearchQuery] = useState("");
   const [editingRule, setEditingRule] = useState<CategorizationRule | null>(null);
   const [deleteRuleId, setDeleteRuleId] = useState<string | null>(null);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [previewData, setPreviewData] = useState<{ ruleId: string; keyword: string; categoryId: string | null; count: number }[]>([]);
   
   // Edit form state
   const [editKeyword, setEditKeyword] = useState("");
@@ -90,6 +101,19 @@ export default function CategorizationRules() {
     setDeleteRuleId(null);
   };
 
+  const handleApplyRulesClick = async () => {
+    const preview = await previewRulesApplication();
+    setPreviewData(preview);
+    setShowPreviewDialog(true);
+  };
+
+  const handleConfirmApply = async () => {
+    setShowPreviewDialog(false);
+    await applyRulesToUncategorized();
+  };
+
+  const totalTransactionsToUpdate = previewData.reduce((sum, p) => sum + p.count, 0);
+
   const getCategoryInfo = (categoryId: string | null) => {
     if (!categoryId) return null;
     return categories.find((c) => c.id === categoryId);
@@ -129,11 +153,16 @@ export default function CategorizationRules() {
         </div>
         
         <Button 
-          onClick={() => applyRulesToUncategorized()} 
-          disabled={isApplyingRules || rules.length === 0}
+          onClick={handleApplyRulesClick} 
+          disabled={isLoadingPreview || isApplyingRules || rules.length === 0}
           className="gap-2"
         >
-          {isApplyingRules ? (
+          {isLoadingPreview ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Analisando...
+            </>
+          ) : isApplyingRules ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
               Aplicando...
@@ -306,6 +335,72 @@ export default function CategorizationRules() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="h-5 w-5" />
+              Prévia da Aplicação de Regras
+            </DialogTitle>
+            <DialogDescription>
+              {totalTransactionsToUpdate > 0 
+                ? `${totalTransactionsToUpdate} transação(ões) serão categorizadas`
+                : "Nenhuma transação será afetada"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            {previewData.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>Nenhuma transação sem categoria corresponde às regras existentes.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {previewData.map((item) => {
+                  const category = getCategoryInfo(item.categoryId);
+                  return (
+                    <div 
+                      key={item.ruleId} 
+                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono text-sm font-medium truncate">
+                          {item.keyword}
+                        </p>
+                        {category && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <span>{category.icon}</span>
+                            <span>{category.name}</span>
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant="secondary" className="ml-2 shrink-0">
+                        {item.count} transação{item.count !== 1 ? "ões" : ""}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleConfirmApply} 
+              disabled={totalTransactionsToUpdate === 0}
+              className="gap-2"
+            >
+              <Wand2 className="h-4 w-4" />
+              Aplicar {totalTransactionsToUpdate > 0 && `(${totalTransactionsToUpdate})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

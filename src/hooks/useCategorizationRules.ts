@@ -132,8 +132,54 @@ export function useCategorizationRules() {
 
   // State for bulk apply operation
   const [isApplyingRules, setIsApplyingRules] = useState(false);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
-  // Function to apply all rules to uncategorized transactions
+  // Preview which transactions would be affected by rules
+  const previewRulesApplication = async (): Promise<{ ruleId: string; keyword: string; categoryId: string | null; count: number; transactionIds: string[] }[]> => {
+    setIsLoadingPreview(true);
+    
+    try {
+      // Fetch all transactions without category
+      const { data: uncategorizedTransactions, error: fetchError } = await supabase
+        .from("transactions")
+        .select("id, description")
+        .is("category_id", null);
+
+      if (fetchError) throw fetchError;
+
+      if (!uncategorizedTransactions || uncategorizedTransactions.length === 0) {
+        return [];
+      }
+
+      const preview: { ruleId: string; keyword: string; categoryId: string | null; count: number; transactionIds: string[] }[] = [];
+      const matchedTransactionIds = new Set<string>();
+
+      // For each rule, count matching transactions
+      for (const rule of rules) {
+        const matchingTransactions = uncategorizedTransactions.filter(
+          (t) => !matchedTransactionIds.has(t.id) && t.description.toUpperCase().includes(rule.keyword.toUpperCase())
+        );
+
+        if (matchingTransactions.length > 0) {
+          matchingTransactions.forEach((t) => matchedTransactionIds.add(t.id));
+          preview.push({
+            ruleId: rule.id,
+            keyword: rule.keyword,
+            categoryId: rule.category_id,
+            count: matchingTransactions.length,
+            transactionIds: matchingTransactions.map((t) => t.id),
+          });
+        }
+      }
+
+      return preview;
+    } catch (error) {
+      console.error("Error previewing rules:", error);
+      return [];
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
   const applyRulesToUncategorized = async (): Promise<number> => {
     setIsApplyingRules(true);
     
@@ -211,6 +257,8 @@ export function useCategorizationRules() {
     deleteRule,
     findCategoryForDescription,
     findCorporateForDescription,
+    previewRulesApplication,
+    isLoadingPreview,
     applyRulesToUncategorized,
     isApplyingRules,
   };
