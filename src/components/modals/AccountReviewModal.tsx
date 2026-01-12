@@ -310,27 +310,36 @@ export function AccountReviewModal({
 
       // Calculate balance change
       let balanceChange = 0;
+      let successCount = 0;
+      let errorCount = 0;
 
       // Create transactions
       for (const item of itemsToImport) {
-        await createTransaction.mutateAsync({
-          description: item.description,
-          amount: item.amount,
-          date: item.date,
-          type: item.type,
-          category_id: item.category_id || null,
-          account_id: accountId,
-          credit_card_id: null,
-          status: "completed",
-          is_corporate_expense: item.is_corporate,
-          reimbursement_status: item.is_corporate ? "pending" : null,
-        });
+        try {
+          await createTransaction.mutateAsync({
+            description: item.description,
+            amount: item.amount,
+            date: item.date,
+            type: item.type,
+            category_id: item.category_id || null,
+            account_id: accountId,
+            credit_card_id: null,
+            status: "completed",
+            is_corporate_expense: item.is_corporate,
+            reimbursement_status: item.is_corporate ? "pending" : null,
+            silent: true,
+          });
+          successCount++;
 
-        // Update balance calculation
-        if (item.type === "income") {
-          balanceChange += item.amount;
-        } else {
-          balanceChange -= item.amount;
+          // Update balance calculation
+          if (item.type === "income") {
+            balanceChange += item.amount;
+          } else {
+            balanceChange -= item.amount;
+          }
+        } catch (error) {
+          console.error("Error creating transaction:", error);
+          errorCount++;
         }
       }
 
@@ -353,9 +362,24 @@ export function AccountReviewModal({
       const corporateCount = itemsToImport.filter((item) => item.is_corporate).length;
       const totalRules = rulesToCreate.length + corporateRulesToCreate.length;
 
+      let description = `${successCount} transações importadas`;
+      if (errorCount > 0) {
+        description += ` • ${errorCount} erros`;
+      }
+      if (skippedCount > 0) {
+        description += ` • ${skippedCount} duplicatas ignoradas`;
+      }
+      if (corporateCount > 0) {
+        description += ` • ${corporateCount} reembolsos pendentes`;
+      }
+      if (totalRules > 0) {
+        description += ` • ${totalRules} regras criadas`;
+      }
+
       toast({
-        title: "Extrato importado com sucesso!",
-        description: `${itemsToImport.length} transações adicionadas${skippedCount > 0 ? `, ${skippedCount} duplicatas ignoradas` : ""}${corporateCount > 0 ? `, ${corporateCount} reembolsos pendentes` : ""}${totalRules > 0 ? ` e ${totalRules} regras criadas` : ""}`,
+        title: errorCount > 0 ? "Extrato importado com erros" : "Extrato importado com sucesso!",
+        description,
+        variant: errorCount > 0 ? "destructive" : "default",
       });
 
       onOpenChange(false);
