@@ -8,17 +8,76 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useDate } from "@/contexts/DateContext";
+import { Loader2 } from "lucide-react";
 
-const data = [
-  { month: "Jan", receitas: 4500, despesas: 3200 },
-  { month: "Fev", receitas: 5200, despesas: 3800 },
-  { month: "Mar", receitas: 4800, despesas: 4100 },
-  { month: "Abr", receitas: 5500, despesas: 3600 },
-  { month: "Mai", receitas: 4900, despesas: 4200 },
-  { month: "Jun", receitas: 6200, despesas: 4500 },
-];
+interface MonthData {
+  month: string;
+  receitas: number;
+  despesas: number;
+}
 
 export function BalanceChart() {
+  const { user } = useAuth();
+  const { month, year } = useDate();
+
+  const { data: chartData, isLoading } = useQuery({
+    queryKey: ["balance-chart", user?.id, year, month],
+    queryFn: async () => {
+      // Generate last 6 months
+      const months: { month: number; year: number; label: string }[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date(year, month - 1 - i, 1);
+        months.push({
+          month: date.getMonth() + 1,
+          year: date.getFullYear(),
+          label: date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+        });
+      }
+
+      // Fetch all transactions for the 6-month period
+      const startDate = `${months[0].year}-${String(months[0].month).padStart(2, "0")}-01`;
+      const lastMonth = months[months.length - 1];
+      const endDate = new Date(lastMonth.year, lastMonth.month, 0).toISOString().split("T")[0];
+
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("amount, type, date, is_corporate_expense")
+        .gte("date", startDate)
+        .lte("date", endDate);
+
+      if (error) throw error;
+
+      // Aggregate by month
+      const result: MonthData[] = months.map((m) => {
+        const monthTransactions = data?.filter((t) => {
+          const tDate = new Date(t.date);
+          return tDate.getMonth() + 1 === m.month && tDate.getFullYear() === m.year;
+        }) || [];
+
+        const receitas = monthTransactions
+          .filter((t) => t.type === "income")
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+
+        const despesas = monthTransactions
+          .filter((t) => t.type === "expense" && !t.is_corporate_expense)
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+
+        return {
+          month: m.label.charAt(0).toUpperCase() + m.label.slice(1),
+          receitas,
+          despesas,
+        };
+      });
+
+      return result;
+    },
+    enabled: !!user,
+  });
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -34,6 +93,19 @@ export function BalanceChart() {
     }
     return null;
   };
+
+  if (isLoading) {
+    return (
+      <div className="bg-card rounded-xl border border-border p-5 shadow-card animate-slide-up">
+        <h3 className="text-lg font-semibold text-foreground mb-4">Balanço Mensal</h3>
+        <div className="h-[300px] flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  const data = chartData || [];
 
   return (
     <div className="bg-card rounded-xl border border-border p-5 shadow-card animate-slide-up">
