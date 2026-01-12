@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, ChevronDown, ChevronUp, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -36,7 +37,6 @@ import {
 import {
   Collapsible,
   CollapsibleContent,
-  CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
   Alert,
@@ -56,8 +56,10 @@ interface ReviewItem extends ImportedItem {
   category_id: string | null;
   original_category_id: string | null;
   remember_category: boolean;
+  rule_keyword: string;
   is_corporate: boolean;
   remember_corporate: boolean;
+  corporate_keyword: string;
   notes: string;
   add_future_installments: boolean;
   include_in_import: boolean;
@@ -91,11 +93,8 @@ export function InvoiceReviewModal({
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryIcon, setNewCategoryIcon] = useState("📦");
-  const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
+  const [categorySearch, setCategorySearch] = useState("");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
-  const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
   const [openCategoryPopoverIndex, setOpenCategoryPopoverIndex] = useState<number | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [showPostClosingWarning, setShowPostClosingWarning] = useState(true);
@@ -134,8 +133,10 @@ export function InvoiceReviewModal({
           category_id: suggestedCategoryId,
           original_category_id: suggestedCategoryId,
           remember_category: false,
+          rule_keyword: item.description.toUpperCase(),
           is_corporate: suggestedCorporate,
           remember_corporate: false,
+          corporate_keyword: item.description.toUpperCase(),
           notes: "",
           add_future_installments: isInstallment, // Auto-check for installments that have more to come
           include_in_import: !item.is_post_closing, // Exclude post-closing by default
@@ -157,6 +158,24 @@ export function InvoiceReviewModal({
               remember_category: item.original_category_id !== categoryId ? item.remember_category : false,
             }
           : item
+      )
+    );
+    setOpenCategoryPopoverIndex(null);
+    setCategorySearch("");
+  };
+
+  const handleRuleKeywordChange = (index: number, keyword: string) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, rule_keyword: keyword.toUpperCase() } : item
+      )
+    );
+  };
+
+  const handleCorporateKeywordChange = (index: number, keyword: string) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, corporate_keyword: keyword.toUpperCase() } : item
       )
     );
   };
@@ -221,25 +240,30 @@ export function InvoiceReviewModal({
     });
   };
 
-  const handleCreateCategory = async (index: number) => {
-    if (!newCategoryName.trim()) return;
+  const handleCreateCategory = async (index: number, name: string) => {
+    if (!name.trim()) return;
     
     setIsCreatingCategory(true);
     try {
       const newCategory = await createCategory.mutateAsync({
-        name: newCategoryName.trim(),
-        icon: newCategoryIcon,
-        color: newCategoryColor,
+        name: name.trim(),
+        icon: "📦",
+        color: colorOptions[Math.floor(Math.random() * colorOptions.length)],
         type: "expense",
       });
       
       handleCategoryChange(index, newCategory.id);
-      setNewCategoryName("");
-      setNewCategoryIcon("📦");
-      setNewCategoryColor("#3B82F6");
-      setOpenPopoverIndex(null);
+      setCategorySearch("");
+      toast({
+        title: `Categoria "${name}" criada!`,
+        description: "A categoria foi criada e aplicada à transação.",
+      });
     } catch (error) {
       console.error("Error creating category:", error);
+      toast({
+        title: "Erro ao criar categoria",
+        variant: "destructive",
+      });
     } finally {
       setIsCreatingCategory(false);
     }
@@ -314,11 +338,11 @@ export function InvoiceReviewModal({
       // Only import items that are included
       const itemsToImport = reviewItems.filter(item => item.include_in_import);
 
-      // First, create categorization rules for items marked to remember
+      // First, create categorization rules for items marked to remember (using edited keywords)
       const rulesToCreate = itemsToImport
-        .filter((item) => (item.remember_category && item.category_id && item.category_id.trim() !== "" && item.category_id !== item.original_category_id) || item.remember_corporate)
+        .filter((item) => (item.remember_category && item.category_id && item.category_id.trim() !== "" && item.category_id !== item.original_category_id && item.rule_keyword.trim()) || (item.remember_corporate && item.corporate_keyword.trim()))
         .map((item) => ({
-          keyword: extractKeyword(item.description),
+          keyword: item.remember_category ? item.rule_keyword.trim() : item.corporate_keyword.trim(),
           category_id: item.category_id && item.category_id.trim() !== "" ? item.category_id : null,
           is_corporate: item.is_corporate,
         }));
@@ -627,10 +651,14 @@ export function InvoiceReviewModal({
 
                   {item.include_in_import && (
                     <>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Combobox de Categoria com Busca e Criação */}
                         <Popover 
                           open={openCategoryPopoverIndex === index} 
-                          onOpenChange={(open) => setOpenCategoryPopoverIndex(open ? index : null)}
+                          onOpenChange={(open) => {
+                            setOpenCategoryPopoverIndex(open ? index : null);
+                            if (!open) setCategorySearch("");
+                          }}
                         >
                           <PopoverTrigger asChild>
                             <Button
@@ -638,7 +666,7 @@ export function InvoiceReviewModal({
                               role="combobox"
                               aria-expanded={openCategoryPopoverIndex === index}
                               className={cn(
-                                "h-8 text-xs flex-1 justify-between font-normal",
+                                "h-8 text-xs flex-1 min-w-[150px] justify-between font-normal",
                                 !item.category_id && "text-muted-foreground"
                               )}
                             >
@@ -653,98 +681,80 @@ export function InvoiceReviewModal({
                               <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[200px] p-0" align="start">
+                          <PopoverContent className="w-[220px] p-0" align="start">
                             <Command>
-                              <CommandInput placeholder="Buscar categoria..." className="h-9" />
+                              <CommandInput 
+                                placeholder="Buscar ou criar..." 
+                                className="h-9"
+                                value={categorySearch}
+                                onValueChange={setCategorySearch}
+                              />
                               <CommandList>
-                                <CommandEmpty>Nenhuma categoria encontrada</CommandEmpty>
+                                <CommandEmpty className="py-2 px-3 text-sm">
+                                  {categorySearch.trim() && !expenseCategories.some(c => c.name.toLowerCase() === categorySearch.toLowerCase()) && (
+                                    <Button
+                                      variant="ghost"
+                                      className="w-full justify-start h-8 text-xs"
+                                      onClick={() => handleCreateCategory(index, categorySearch)}
+                                      disabled={isCreatingCategory}
+                                    >
+                                      {isCreatingCategory ? (
+                                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                      ) : (
+                                        <Plus className="h-3 w-3 mr-2" />
+                                      )}
+                                      Criar "{categorySearch}"
+                                    </Button>
+                                  )}
+                                  {!categorySearch.trim() && "Nenhuma categoria encontrada."}
+                                </CommandEmpty>
                                 <CommandGroup>
                                   <CommandItem
                                     value="sem-categoria"
-                                    onSelect={() => {
-                                      handleCategoryChange(index, "");
-                                      setOpenCategoryPopoverIndex(null);
-                                    }}
+                                    onSelect={() => handleCategoryChange(index, "")}
                                   >
-                                    <span className="text-muted-foreground">Sem categoria</span>
+                                    <span className="mr-2">⊘</span>
+                                    Sem categoria
                                     {!item.category_id && (
                                       <Check className="ml-auto h-4 w-4" />
                                     )}
                                   </CommandItem>
-                                  {expenseCategories.map((cat) => (
-                                    <CommandItem
-                                      key={cat.id}
-                                      value={`${cat.name} ${cat.icon}`}
-                                      onSelect={() => {
-                                        handleCategoryChange(index, cat.id);
-                                        setOpenCategoryPopoverIndex(null);
-                                      }}
-                                    >
-                                      <span className="flex items-center gap-2">
-                                        <span>{cat.icon}</span>
-                                        <span>{cat.name}</span>
-                                      </span>
-                                      {item.category_id === cat.id && (
-                                        <Check className="ml-auto h-4 w-4" />
-                                      )}
-                                    </CommandItem>
-                                  ))}
+                                  {expenseCategories
+                                    .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
+                                    .map((cat) => (
+                                      <CommandItem
+                                        key={cat.id}
+                                        value={cat.name}
+                                        onSelect={() => handleCategoryChange(index, cat.id)}
+                                      >
+                                        <span className="mr-2">{cat.icon}</span>
+                                        {cat.name}
+                                        {item.category_id === cat.id && (
+                                          <Check className="ml-auto h-4 w-4" />
+                                        )}
+                                      </CommandItem>
+                                    ))}
                                 </CommandGroup>
+                                {categorySearch.trim() && !expenseCategories.some(c => c.name.toLowerCase() === categorySearch.toLowerCase()) && expenseCategories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length > 0 && (
+                                  <>
+                                    <CommandSeparator />
+                                    <CommandGroup>
+                                      <CommandItem
+                                        onSelect={() => handleCreateCategory(index, categorySearch)}
+                                        disabled={isCreatingCategory}
+                                      >
+                                        {isCreatingCategory ? (
+                                          <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                        ) : (
+                                          <Plus className="h-3 w-3 mr-2" />
+                                        )}
+                                        Criar "{categorySearch}"
+                                      </CommandItem>
+                                    </CommandGroup>
+                                  </>
+                                )}
                               </CommandList>
                             </Command>
-                          </PopoverContent>
-                        </Popover>
-
-                        <Popover open={openPopoverIndex === index} onOpenChange={(open) => setOpenPopoverIndex(open ? index : null)}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8 flex-shrink-0">
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64 p-3" align="end">
-                            <div className="space-y-3">
-                              <p className="text-sm font-medium">Nova categoria</p>
-                              <div className="flex gap-2">
-                                <Input
-                                  value={newCategoryIcon}
-                                  onChange={(e) => setNewCategoryIcon(e.target.value)}
-                                  className="w-12 text-center"
-                                  maxLength={2}
-                                />
-                                <Input
-                                  value={newCategoryName}
-                                  onChange={(e) => setNewCategoryName(e.target.value)}
-                                  placeholder="Nome da categoria"
-                                  className="flex-1"
-                                />
-                              </div>
-                              <div className="flex gap-1.5 flex-wrap">
-                                {colorOptions.map((color) => (
-                                  <button
-                                    key={color}
-                                    type="button"
-                                    onClick={() => setNewCategoryColor(color)}
-                                    className={cn(
-                                      "w-6 h-6 rounded-full transition-all",
-                                      newCategoryColor === color && "ring-2 ring-offset-2 ring-primary"
-                                    )}
-                                    style={{ backgroundColor: color }}
-                                  />
-                                ))}
-                              </div>
-                              <Button
-                                size="sm"
-                                className="w-full"
-                                onClick={() => handleCreateCategory(index)}
-                                disabled={!newCategoryName.trim() || isCreatingCategory}
-                              >
-                                {isCreatingCategory ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  "Criar e aplicar"
-                                )}
-                              </Button>
-                            </div>
                           </PopoverContent>
                         </Popover>
 
@@ -794,6 +804,25 @@ export function InvoiceReviewModal({
                             Auto
                           </Badge>
                         )}
+
+                        {/* Checkbox Lembrar Categoria */}
+                        {categoryChanged && item.category_id && (
+                          <div className="flex items-center gap-1.5">
+                            <Checkbox
+                              id={`remember-${index}`}
+                              checked={item.remember_category}
+                              onCheckedChange={(checked) =>
+                                handleRememberChange(index, checked === true)
+                              }
+                            />
+                            <label
+                              htmlFor={`remember-${index}`}
+                              className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap"
+                            >
+                              Lembrar
+                            </label>
+                          </div>
+                        )}
                       </div>
 
                       {/* Notes field */}
@@ -834,41 +863,59 @@ export function InvoiceReviewModal({
                         </div>
                       )}
 
-                      {/* Remember category */}
-                      {categoryChanged && item.category_id && (
-                        <div className="flex items-center gap-2 pt-1">
-                          <Checkbox
-                            id={`remember-${index}`}
-                            checked={item.remember_category}
-                            onCheckedChange={(checked) =>
-                              handleRememberChange(index, checked === true)
-                            }
-                          />
-                          <label
-                            htmlFor={`remember-${index}`}
-                            className="text-xs text-muted-foreground cursor-pointer"
-                          >
-                            Lembrar "{extractKeyword(item.description)}" como "{category?.name}"
+                      {/* Input de Keyword da Regra (Condicional) */}
+                      {item.remember_category && categoryChanged && item.category_id && (
+                        <div className="space-y-1.5 pt-1 border-t border-dashed">
+                          <label className="text-xs text-muted-foreground">
+                            Se a descrição contiver o texto:
                           </label>
+                          <Input
+                            value={item.rule_keyword}
+                            onChange={(e) => handleRuleKeywordChange(index, e.target.value)}
+                            placeholder="Digite o texto chave para identificação"
+                            className="h-8 text-xs font-mono"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            → Será categorizado como "{category?.name}"
+                          </p>
                         </div>
                       )}
 
-                      {/* Remember corporate status */}
+                      {/* Remember corporate status with editable keyword */}
                       {item.is_corporate && (
-                        <div className="flex items-center gap-2 pt-1">
-                          <Checkbox
-                            id={`remember-corp-${index}`}
-                            checked={item.remember_corporate}
-                            onCheckedChange={(checked) =>
-                              handleRememberCorporateChange(index, checked === true)
-                            }
-                          />
-                          <label
-                            htmlFor={`remember-corp-${index}`}
-                            className="text-xs text-muted-foreground cursor-pointer"
-                          >
-                            Lembrar "{extractKeyword(item.description)}" como despesa da empresa
-                          </label>
+                        <div className="space-y-2 pt-1 border-t border-dashed">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`remember-corp-${index}`}
+                              checked={item.remember_corporate}
+                              onCheckedChange={(checked) =>
+                                handleRememberCorporateChange(index, checked === true)
+                              }
+                            />
+                            <label
+                              htmlFor={`remember-corp-${index}`}
+                              className="text-xs text-muted-foreground cursor-pointer"
+                            >
+                              Lembrar como despesa da empresa
+                            </label>
+                          </div>
+                          
+                          {item.remember_corporate && (
+                            <div className="space-y-1.5 ml-5">
+                              <label className="text-xs text-muted-foreground">
+                                Se a descrição contiver o texto:
+                              </label>
+                              <Input
+                                value={item.corporate_keyword}
+                                onChange={(e) => handleCorporateKeywordChange(index, e.target.value)}
+                                placeholder="Digite o texto chave para identificação"
+                                className="h-8 text-xs font-mono"
+                              />
+                              <p className="text-[10px] text-muted-foreground">
+                                → Será marcado como despesa corporativa (reembolso)
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </>
