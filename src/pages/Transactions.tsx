@@ -15,13 +15,12 @@ import {
   Building2,
   CalendarDays,
   List,
-  ChevronLeft,
-  ChevronRight,
   Receipt,
   Download,
   X,
   Tag,
   Copy,
+  Building,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,7 +74,7 @@ export default function Transactions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TransactionTab>("checking");
   const [showAll, setShowAll] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [loadedCount, setLoadedCount] = useState(20);
   const [showCurrentInvoice, setShowCurrentInvoice] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBulkCategorySelector, setShowBulkCategorySelector] = useState(false);
@@ -103,12 +102,12 @@ export default function Transactions() {
     totalIncome, 
     totalExpense, 
     totalCount,
-    totalPages,
+    hasMore,
     deleteTransaction,
     updateTransaction,
   } = useTransactions(undefined, undefined, { 
     showAll, 
-    page: currentPage, 
+    loadedCount,
     pageSize, 
     filterByDueDate,
     creditCardFilter: activeTab === "credit" ? "only" : "exclude",
@@ -144,6 +143,15 @@ export default function Transactions() {
     toast({ title: `Categoria atualizada em ${selectedTransactions.length} transações!` });
   };
 
+  // Bulk corporate expense toggle handler
+  const handleBulkCorporateToggle = async () => {
+    for (const id of selectedTransactions) {
+      await updateTransaction.mutateAsync({ id, is_corporate_expense: true });
+    }
+    setSelectedTransactions([]);
+    toast({ title: `${selectedTransactions.length} transações marcadas como despesa empresarial!` });
+  };
+
   // Export transactions to CSV
   const handleExport = () => {
     const transactionsToExport = selectedTransactions.length > 0
@@ -176,16 +184,20 @@ export default function Transactions() {
     toast({ title: `${transactionsToExport.length} transações exportadas!` });
   };
 
-  // Reset page when toggling showAll
+  // Reset loadedCount when toggling showAll
   const handleShowAllChange = (checked: boolean) => {
     setShowAll(checked);
-    setCurrentPage(1);
+    setLoadedCount(20);
   };
 
-  // Reset page when changing tabs
+  // Load more transactions
+  const handleLoadMore = () => {
+    setLoadedCount(prev => prev + 20);
+  };
+
   const handleTabChange = (value: string) => {
     setActiveTab(value as TransactionTab);
-    setCurrentPage(1);
+    setLoadedCount(20);
     setSelectedTransactions([]);
   };
 
@@ -520,6 +532,17 @@ export default function Transactions() {
                     </Button>
                   )}
 
+                  {/* Bulk Corporate Expense */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleBulkCorporateToggle}
+                  >
+                    <Building className="h-4 w-4" />
+                    Marcar Empresarial
+                  </Button>
+
                   {/* Bulk Delete */}
                   <Button
                     variant="destructive"
@@ -543,35 +566,12 @@ export default function Transactions() {
               </div>
             )}
 
-            {/* Pagination Info */}
-            {showAll && totalCount > 0 && (
+            {/* Transactions Info */}
+            {totalCount > 0 && (
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Mostrando {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, totalCount)} de {totalCount} transações
+                  Mostrando {filteredTransactions.length} de {totalCount} transações
                 </span>
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="px-2">
-                      Página {currentPage} de {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
               </div>
             )}
 
@@ -703,29 +703,15 @@ export default function Transactions() {
                   </TableBody>
                 </Table>
 
-                {/* Bottom Pagination */}
-                {showAll && totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 p-4 border-t border-border">
+                {/* Load More Button */}
+                {hasMore && (
+                  <div className="flex items-center justify-center p-4 border-t border-border">
                     <Button
                       variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
+                      onClick={handleLoadMore}
+                      className="gap-2"
                     >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Anterior
-                    </Button>
-                    <span className="px-4 text-sm text-muted-foreground">
-                      Página {currentPage} de {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      Próxima
-                      <ChevronRight className="h-4 w-4 ml-1" />
+                      Carregar mais ({totalCount - transactions.length} restantes)
                     </Button>
                   </div>
                 )}
