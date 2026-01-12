@@ -6,6 +6,7 @@ import {
   Loader2,
   BookMarked,
   Building2,
+  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +44,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { CategorySelector } from "@/components/CategorySelector";
 
 export default function CategorizationRules() {
-  const { rules, isLoading, updateRule, deleteRule } = useCategorizationRules();
+  const { rules, isLoading, updateRule, deleteRule, applyRulesToUncategorized, isApplyingRules } = useCategorizationRules();
   const { categories } = useCategories();
   const [searchQuery, setSearchQuery] = useState("");
   const [editingRule, setEditingRule] = useState<CategorizationRule | null>(null);
@@ -115,8 +116,8 @@ export default function CategorizationRules() {
         </p>
       </div>
 
-      {/* Search */}
-      <div className="flex gap-3">
+      {/* Search and Actions */}
+      <div className="flex flex-col sm:flex-row gap-3 justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -126,6 +127,24 @@ export default function CategorizationRules() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        
+        <Button 
+          onClick={() => applyRulesToUncategorized()} 
+          disabled={isApplyingRules || rules.length === 0}
+          className="gap-2"
+        >
+          {isApplyingRules ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Aplicando...
+            </>
+          ) : (
+            <>
+              <Wand2 className="h-4 w-4" />
+              Aplicar Regras
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Rules Table */}
