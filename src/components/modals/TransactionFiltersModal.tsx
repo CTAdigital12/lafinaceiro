@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Filter, Calendar } from "lucide-react";
+import { X, Filter, Calendar, Check, ChevronsUpDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,19 +9,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -55,6 +56,18 @@ const defaultFilters: TransactionFilters = {
   dateRange: null,
 };
 
+const typeOptions = [
+  { value: "all", label: "Todos" },
+  { value: "income", label: "Receita" },
+  { value: "expense", label: "Despesa" },
+];
+
+const statusOptions = [
+  { value: "all", label: "Todos" },
+  { value: "completed", label: "Concluída" },
+  { value: "pending", label: "Pendente" },
+];
+
 export function TransactionFiltersModal({
   open,
   onOpenChange,
@@ -66,6 +79,11 @@ export function TransactionFiltersModal({
   const { incomeCategories, expenseCategories } = useCategories();
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
+
+  const [openTypePopover, setOpenTypePopover] = useState(false);
+  const [openStatusPopover, setOpenStatusPopover] = useState(false);
+  const [openAccountPopover, setOpenAccountPopover] = useState(false);
+  const [openCardPopover, setOpenCardPopover] = useState(false);
 
   const allCategories = [...incomeCategories, ...expenseCategories];
 
@@ -120,93 +138,204 @@ export function TransactionFiltersModal({
           {/* Tipo de Transação */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">Tipo de Transação</Label>
-            <Select
-              value={localFilters.type}
-              onValueChange={(value: "all" | "income" | "expense") =>
-                setLocalFilters((prev) => ({ ...prev, type: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="income">Receita</SelectItem>
-                <SelectItem value="expense">Despesa</SelectItem>
-              </SelectContent>
-            </Select>
+            <Popover open={openTypePopover} onOpenChange={setOpenTypePopover}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openTypePopover}
+                  className="w-full justify-between"
+                >
+                  {typeOptions.find(o => o.value === localFilters.type)?.label || "Selecionar tipo"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar tipo..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum tipo encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {typeOptions.map((option) => (
+                        <CommandItem
+                          key={option.value}
+                          value={option.label}
+                          onSelect={() => {
+                            setLocalFilters((prev) => ({ ...prev, type: option.value as "all" | "income" | "expense" }));
+                            setOpenTypePopover(false);
+                          }}
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", localFilters.type === option.value ? "opacity-100" : "opacity-0")}
+                          />
+                          {option.label}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Status */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">Status</Label>
-            <Select
-              value={localFilters.status}
-              onValueChange={(value: "all" | "completed" | "pending") =>
-                setLocalFilters((prev) => ({ ...prev, status: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="completed">Concluída</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-              </SelectContent>
-            </Select>
+            <Popover open={openStatusPopover} onOpenChange={setOpenStatusPopover}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openStatusPopover}
+                  className="w-full justify-between"
+                >
+                  {statusOptions.find(o => o.value === localFilters.status)?.label || "Selecionar status"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar status..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum status encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {statusOptions.map((option) => (
+                        <CommandItem
+                          key={option.value}
+                          value={option.label}
+                          onSelect={() => {
+                            setLocalFilters((prev) => ({ ...prev, status: option.value as "all" | "completed" | "pending" }));
+                            setOpenStatusPopover(false);
+                          }}
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", localFilters.status === option.value ? "opacity-100" : "opacity-0")}
+                          />
+                          {option.label}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Conta ou Cartão */}
           {activeTab === "checking" ? (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Conta</Label>
-              <Select
-                value={localFilters.accountId || "all"}
-                onValueChange={(value) =>
-                  setLocalFilters((prev) => ({
-                    ...prev,
-                    accountId: value === "all" ? null : value,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecionar conta" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as contas</SelectItem>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={openAccountPopover} onOpenChange={setOpenAccountPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openAccountPopover}
+                    className="w-full justify-between"
+                  >
+                    {localFilters.accountId
+                      ? accounts.find(a => a.id === localFilters.accountId)?.name || "Todas as contas"
+                      : "Todas as contas"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar conta..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhuma conta encontrada.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="Todas as contas"
+                          onSelect={() => {
+                            setLocalFilters((prev) => ({ ...prev, accountId: null }));
+                            setOpenAccountPopover(false);
+                          }}
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", !localFilters.accountId ? "opacity-100" : "opacity-0")}
+                          />
+                          Todas as contas
+                        </CommandItem>
+                        {accounts.map((account) => (
+                          <CommandItem
+                            key={account.id}
+                            value={account.name}
+                            onSelect={() => {
+                              setLocalFilters((prev) => ({ ...prev, accountId: account.id }));
+                              setOpenAccountPopover(false);
+                            }}
+                          >
+                            <Check
+                              className={cn("mr-2 h-4 w-4", localFilters.accountId === account.id ? "opacity-100" : "opacity-0")}
+                            />
+                            {account.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           ) : (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Cartão</Label>
-              <Select
-                value={localFilters.creditCardId || "all"}
-                onValueChange={(value) =>
-                  setLocalFilters((prev) => ({
-                    ...prev,
-                    creditCardId: value === "all" ? null : value,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecionar cartão" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os cartões</SelectItem>
-                  {creditCards.map((card) => (
-                    <SelectItem key={card.id} value={card.id}>
-                      {card.name} •{card.last_digits}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={openCardPopover} onOpenChange={setOpenCardPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCardPopover}
+                    className="w-full justify-between"
+                  >
+                    {localFilters.creditCardId
+                      ? (() => {
+                          const card = creditCards.find(c => c.id === localFilters.creditCardId);
+                          return card ? `${card.name} •${card.last_digits}` : "Todos os cartões";
+                        })()
+                      : "Todos os cartões"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar cartão..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum cartão encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="Todos os cartões"
+                          onSelect={() => {
+                            setLocalFilters((prev) => ({ ...prev, creditCardId: null }));
+                            setOpenCardPopover(false);
+                          }}
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", !localFilters.creditCardId ? "opacity-100" : "opacity-0")}
+                          />
+                          Todos os cartões
+                        </CommandItem>
+                        {creditCards.map((card) => (
+                          <CommandItem
+                            key={card.id}
+                            value={`${card.name} ${card.last_digits}`}
+                            onSelect={() => {
+                              setLocalFilters((prev) => ({ ...prev, creditCardId: card.id }));
+                              setOpenCardPopover(false);
+                            }}
+                          >
+                            <Check
+                              className={cn("mr-2 h-4 w-4", localFilters.creditCardId === card.id ? "opacity-100" : "opacity-0")}
+                            />
+                            {card.name} •{card.last_digits}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 

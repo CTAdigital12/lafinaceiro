@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { CalendarIcon, Loader2, Briefcase, BookMarked } from "lucide-react";
+import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -52,6 +60,9 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [isCorporateExpense, setIsCorporateExpense] = useState(false);
   const [saveRule, setSaveRule] = useState(false);
   const [ruleKeyword, setRuleKeyword] = useState("");
+  const [openCategoryPopover, setOpenCategoryPopover] = useState(false);
+  const [openAccountPopover, setOpenAccountPopover] = useState(false);
+  const [openCardPopover, setOpenCardPopover] = useState(false);
   
   const { incomeCategories, expenseCategories } = useCategories();
   const { accounts } = useAccounts();
@@ -200,18 +211,52 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           {/* Category */}
           <div className="space-y-2">
             <Label>Categoria</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.icon} {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={openCategoryPopover} onOpenChange={setOpenCategoryPopover}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openCategoryPopover}
+                  className="w-full justify-between"
+                >
+                  {categoryId ? (
+                    <span className="flex items-center gap-2">
+                      {categories.find(c => c.id === categoryId)?.icon}
+                      {categories.find(c => c.id === categoryId)?.name}
+                    </span>
+                  ) : (
+                    "Selecione uma categoria"
+                  )}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar categoria..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma categoria encontrada.</CommandEmpty>
+                    <CommandGroup>
+                      {categories.map((cat) => (
+                        <CommandItem
+                          key={cat.id}
+                          value={cat.name}
+                          onSelect={() => {
+                            setCategoryId(cat.id);
+                            setOpenCategoryPopover(false);
+                          }}
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", categoryId === cat.id ? "opacity-100" : "opacity-0")}
+                          />
+                          <span className="mr-2">{cat.icon}</span>
+                          {cat.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Payment Method Toggle */}
@@ -249,34 +294,100 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           {paymentMethod === "account" ? (
             <div className="space-y-2">
               <Label>Conta</Label>
-              <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma conta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id}>
-                      {acc.icon} {acc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={openAccountPopover} onOpenChange={setOpenAccountPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openAccountPopover}
+                    className="w-full justify-between"
+                  >
+                    {accountId ? (
+                      <span className="flex items-center gap-2">
+                        {accounts.find(a => a.id === accountId)?.icon}
+                        {accounts.find(a => a.id === accountId)?.name}
+                      </span>
+                    ) : (
+                      "Selecione uma conta"
+                    )}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar conta..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhuma conta encontrada.</CommandEmpty>
+                      <CommandGroup>
+                        {accounts.map((acc) => (
+                          <CommandItem
+                            key={acc.id}
+                            value={acc.name}
+                            onSelect={() => {
+                              setAccountId(acc.id);
+                              setOpenAccountPopover(false);
+                            }}
+                          >
+                            <Check
+                              className={cn("mr-2 h-4 w-4", accountId === acc.id ? "opacity-100" : "opacity-0")}
+                            />
+                            <span className="mr-2">{acc.icon}</span>
+                            {acc.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           ) : (
             <div className="space-y-2">
               <Label>Cartão de Crédito</Label>
-              <Select value={creditCardId} onValueChange={setCreditCardId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um cartão" />
-                </SelectTrigger>
-                <SelectContent>
-                  {creditCards.map((card) => (
-                    <SelectItem key={card.id} value={card.id}>
-                      💳 {card.name} (*{card.last_digits})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={openCardPopover} onOpenChange={setOpenCardPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCardPopover}
+                    className="w-full justify-between"
+                  >
+                    {creditCardId ? (
+                      <span className="flex items-center gap-2">
+                        💳 {creditCards.find(c => c.id === creditCardId)?.name} (*{creditCards.find(c => c.id === creditCardId)?.last_digits})
+                      </span>
+                    ) : (
+                      "Selecione um cartão"
+                    )}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar cartão..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum cartão encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {creditCards.map((card) => (
+                          <CommandItem
+                            key={card.id}
+                            value={`${card.name} ${card.last_digits}`}
+                            onSelect={() => {
+                              setCreditCardId(card.id);
+                              setOpenCardPopover(false);
+                            }}
+                          >
+                            <Check
+                              className={cn("mr-2 h-4 w-4", creditCardId === card.id ? "opacity-100" : "opacity-0")}
+                            />
+                            💳 {card.name} (*{card.last_digits})
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 

@@ -3,10 +3,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useBudgets } from "@/hooks/useBudgets";
 import { useCategories } from "@/hooks/useCategories";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check, ChevronsUpDown } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 interface NewBudgetModalProps {
   open: boolean;
@@ -20,6 +33,7 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
   const { categories } = useCategories();
   const [categoryId, setCategoryId] = useState("");
   const [plannedAmount, setPlannedAmount] = useState("");
+  const [openCategoryPopover, setOpenCategoryPopover] = useState(false);
 
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
@@ -52,18 +66,52 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="category">Categoria</Label>
-            <Select value={categoryId} onValueChange={setCategoryId} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {expenseCategories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.icon} {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={openCategoryPopover} onOpenChange={setOpenCategoryPopover}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openCategoryPopover}
+                  className="w-full justify-between"
+                >
+                  {categoryId ? (
+                    <span className="flex items-center gap-2">
+                      {expenseCategories.find(c => c.id === categoryId)?.icon}
+                      {expenseCategories.find(c => c.id === categoryId)?.name}
+                    </span>
+                  ) : (
+                    "Selecione uma categoria"
+                  )}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar categoria..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma categoria encontrada.</CommandEmpty>
+                    <CommandGroup>
+                      {expenseCategories.map((category) => (
+                        <CommandItem
+                          key={category.id}
+                          value={category.name}
+                          onSelect={() => {
+                            setCategoryId(category.id);
+                            setOpenCategoryPopover(false);
+                          }}
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", categoryId === category.id ? "opacity-100" : "opacity-0")}
+                          />
+                          <span className="mr-2">{category.icon}</span>
+                          {category.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-2">
