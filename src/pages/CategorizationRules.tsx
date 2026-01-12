@@ -7,7 +7,10 @@ import {
   BookMarked,
   Building2,
   Wand2,
+  CheckSquare,
+  Square,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -59,7 +62,8 @@ export default function CategorizationRules() {
   const [editingRule, setEditingRule] = useState<CategorizationRule | null>(null);
   const [deleteRuleId, setDeleteRuleId] = useState<string | null>(null);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
-  const [previewData, setPreviewData] = useState<{ ruleId: string; keyword: string; categoryId: string | null; count: number }[]>([]);
+  const [previewData, setPreviewData] = useState<{ ruleId: string; keyword: string; categoryId: string | null; count: number; transactionIds: string[] }[]>([]);
+  const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
   
   // Edit form state
   const [editKeyword, setEditKeyword] = useState("");
@@ -104,15 +108,44 @@ export default function CategorizationRules() {
   const handleApplyRulesClick = async () => {
     const preview = await previewRulesApplication();
     setPreviewData(preview);
+    // Select all rules by default
+    setSelectedRuleIds(new Set(preview.map((p) => p.ruleId)));
     setShowPreviewDialog(true);
   };
 
   const handleConfirmApply = async () => {
+    // Get transaction IDs from selected rules only
+    const selectedTransactionIds = previewData
+      .filter((p) => selectedRuleIds.has(p.ruleId))
+      .flatMap((p) => p.transactionIds);
+    
     setShowPreviewDialog(false);
-    await applyRulesToUncategorized();
+    await applyRulesToUncategorized(selectedTransactionIds);
   };
 
-  const totalTransactionsToUpdate = previewData.reduce((sum, p) => sum + p.count, 0);
+  const toggleRuleSelection = (ruleId: string) => {
+    setSelectedRuleIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(ruleId)) {
+        newSet.delete(ruleId);
+      } else {
+        newSet.add(ruleId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllRules = () => {
+    if (selectedRuleIds.size === previewData.length) {
+      setSelectedRuleIds(new Set());
+    } else {
+      setSelectedRuleIds(new Set(previewData.map((p) => p.ruleId)));
+    }
+  };
+
+  const selectedTransactionsCount = previewData
+    .filter((p) => selectedRuleIds.has(p.ruleId))
+    .reduce((sum, p) => sum + p.count, 0);
 
   const getCategoryInfo = (categoryId: string | null) => {
     if (!categoryId) return null;
@@ -345,9 +378,9 @@ export default function CategorizationRules() {
               Prévia da Aplicação de Regras
             </DialogTitle>
             <DialogDescription>
-              {totalTransactionsToUpdate > 0 
-                ? `${totalTransactionsToUpdate} transação(ões) serão categorizadas`
-                : "Nenhuma transação será afetada"}
+              {selectedTransactionsCount > 0 
+                ? `${selectedTransactionsCount} transação(ões) selecionada(s) para categorizar`
+                : "Selecione as regras que deseja aplicar"}
             </DialogDescription>
           </DialogHeader>
 
@@ -357,31 +390,61 @@ export default function CategorizationRules() {
                 <p>Nenhuma transação sem categoria corresponde às regras existentes.</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {previewData.map((item) => {
-                  const category = getCategoryInfo(item.categoryId);
-                  return (
-                    <div 
-                      key={item.ruleId} 
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-mono text-sm font-medium truncate">
-                          {item.keyword}
-                        </p>
-                        {category && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <span>{category.icon}</span>
-                            <span>{category.name}</span>
+              <div className="space-y-3">
+                {/* Select All Header */}
+                <div 
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 cursor-pointer border-b border-border pb-3"
+                  onClick={toggleAllRules}
+                >
+                  <Checkbox 
+                    checked={selectedRuleIds.size === previewData.length}
+                    onCheckedChange={() => toggleAllRules()}
+                  />
+                  <span className="text-sm font-medium">
+                    {selectedRuleIds.size === previewData.length ? "Desmarcar todas" : "Selecionar todas"}
+                  </span>
+                  <Badge variant="outline" className="ml-auto">
+                    {selectedRuleIds.size}/{previewData.length}
+                  </Badge>
+                </div>
+
+                {/* Rules List */}
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {previewData.map((item) => {
+                    const category = getCategoryInfo(item.categoryId);
+                    const isSelected = selectedRuleIds.has(item.ruleId);
+                    return (
+                      <div 
+                        key={item.ruleId} 
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          isSelected 
+                            ? "bg-primary/5 border-primary/30" 
+                            : "bg-muted/50 border-border hover:bg-muted/70"
+                        }`}
+                        onClick={() => toggleRuleSelection(item.ruleId)}
+                      >
+                        <Checkbox 
+                          checked={isSelected}
+                          onCheckedChange={() => toggleRuleSelection(item.ruleId)}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono text-sm font-medium truncate">
+                            {item.keyword}
                           </p>
-                        )}
+                          {category && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <span>{category.icon}</span>
+                              <span>{category.name}</span>
+                            </p>
+                          )}
+                        </div>
+                        <Badge variant={isSelected ? "default" : "secondary"} className="shrink-0">
+                          {item.count} transação{item.count !== 1 ? "ões" : ""}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary" className="ml-2 shrink-0">
-                        {item.count} transação{item.count !== 1 ? "ões" : ""}
-                      </Badge>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -392,11 +455,11 @@ export default function CategorizationRules() {
             </Button>
             <Button 
               onClick={handleConfirmApply} 
-              disabled={totalTransactionsToUpdate === 0}
+              disabled={selectedTransactionsCount === 0}
               className="gap-2"
             >
               <Wand2 className="h-4 w-4" />
-              Aplicar {totalTransactionsToUpdate > 0 && `(${totalTransactionsToUpdate})`}
+              Aplicar {selectedTransactionsCount > 0 && `(${selectedTransactionsCount})`}
             </Button>
           </DialogFooter>
         </DialogContent>
