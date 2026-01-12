@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,8 @@ interface ReviewItem extends AccountImportedItem {
   remember_category: boolean;
   isDuplicate: boolean;
   forceImport: boolean;
+  is_corporate: boolean;
+  remember_corporate: boolean;
 }
 
 interface AccountReviewModalProps {
@@ -60,7 +62,7 @@ export function AccountReviewModal({
 }: AccountReviewModalProps) {
   const { user } = useAuth();
   const { categories, createCategory } = useCategories();
-  const { findCategoryForDescription, createRule } = useCategorizationRules();
+  const { findCategoryForDescription, findCorporateForDescription, createRule } = useCategorizationRules();
   const { createTransaction } = useTransactions();
   const { updateAccount } = useAccounts();
   const { toast } = useToast();
@@ -115,6 +117,7 @@ export function AccountReviewModal({
 
         const itemsWithCategories = items.map((item) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
+          const isCorporate = findCorporateForDescription(item.description);
           
           // Check for duplicates: same date, amount, and similar description
           const isDuplicate = existing.some(
@@ -132,6 +135,8 @@ export function AccountReviewModal({
             remember_category: false,
             isDuplicate,
             forceImport: false,
+            is_corporate: isCorporate,
+            remember_corporate: false,
           };
         });
         
@@ -141,6 +146,7 @@ export function AccountReviewModal({
         // Initialize without duplicate checking if it fails
         const itemsWithCategories = items.map((item) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
+          const isCorporate = findCorporateForDescription(item.description);
           return {
             ...item,
             category_id: suggestedCategoryId,
@@ -148,6 +154,8 @@ export function AccountReviewModal({
             remember_category: false,
             isDuplicate: false,
             forceImport: false,
+            is_corporate: isCorporate,
+            remember_corporate: false,
           };
         });
         setReviewItems(itemsWithCategories);
@@ -157,7 +165,7 @@ export function AccountReviewModal({
     };
 
     initializeItems();
-  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription]);
+  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription, findCorporateForDescription]);
 
   // Reset initialization flag when modal closes
   useEffect(() => {
@@ -193,6 +201,24 @@ export function AccountReviewModal({
     setReviewItems((prev) =>
       prev.map((item, i) =>
         i === index ? { ...item, forceImport: force } : item
+      )
+    );
+  };
+
+  const handleCorporateChange = (index: number, isCorporate: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? { ...item, is_corporate: isCorporate, remember_corporate: false }
+          : item
+      )
+    );
+  };
+
+  const handleRememberCorporateChange = (index: number, remember: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, remember_corporate: remember } : item
       )
     );
   };
@@ -246,10 +272,20 @@ export function AccountReviewModal({
         .map((item) => ({
           keyword: extractKeyword(item.description),
           category_id: item.category_id!,
+          is_corporate: item.is_corporate,
         }));
 
-      // Create rules
-      for (const rule of rulesToCreate) {
+      // Create corporate rules for items marked to remember as corporate
+      const corporateRulesToCreate = itemsToImport
+        .filter((item) => item.remember_corporate && item.is_corporate)
+        .map((item) => ({
+          keyword: extractKeyword(item.description),
+          category_id: item.category_id || null,
+          is_corporate: true,
+        }));
+
+      // Create all rules
+      for (const rule of [...rulesToCreate, ...corporateRulesToCreate]) {
         await createRule.mutateAsync(rule);
       }
 
@@ -267,7 +303,8 @@ export function AccountReviewModal({
           account_id: accountId,
           credit_card_id: null,
           status: "completed",
-          is_corporate_expense: false,
+          is_corporate_expense: item.is_corporate,
+          reimbursement_status: item.is_corporate ? "pending" : null,
         });
 
         // Update balance calculation
@@ -294,10 +331,12 @@ export function AccountReviewModal({
       }
 
       const skippedCount = reviewItems.length - itemsToImport.length;
+      const corporateCount = itemsToImport.filter((item) => item.is_corporate).length;
+      const totalRules = rulesToCreate.length + corporateRulesToCreate.length;
 
       toast({
         title: "Extrato importado com sucesso!",
-        description: `${itemsToImport.length} transações adicionadas${skippedCount > 0 ? `, ${skippedCount} duplicatas ignoradas` : ""}${rulesToCreate.length > 0 ? ` e ${rulesToCreate.length} regras de categorização criadas` : ""}`,
+        description: `${itemsToImport.length} transações adicionadas${skippedCount > 0 ? `, ${skippedCount} duplicatas ignoradas` : ""}${corporateCount > 0 ? `, ${corporateCount} reembolsos pendentes` : ""}${totalRules > 0 ? ` e ${totalRules} regras criadas` : ""}`,
       });
 
       onOpenChange(false);
@@ -329,6 +368,10 @@ export function AccountReviewModal({
   ).length;
 
   const duplicateCount = reviewItems.filter((item) => item.isDuplicate && !item.forceImport).length;
+  
+  const corporateCount = reviewItems.filter(
+    (item) => item.is_corporate && item.type === "expense" && (!item.isDuplicate || item.forceImport)
+  ).length;
 
   return (
     <Dialog open={open} onOpenChange={isImporting ? () => {} : onOpenChange}>
@@ -388,11 +431,17 @@ export function AccountReviewModal({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium truncate">{item.description}</p>
                         {item.isDuplicate && (
                           <Badge variant="secondary" className="text-xs flex-shrink-0">
                             Já importada
+                          </Badge>
+                        )}
+                        {item.is_corporate && !item.isDuplicate && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0 text-primary border-primary">
+                            <Briefcase className="h-3 w-3 mr-1" />
+                            Reembolso
                           </Badge>
                         )}
                       </div>
@@ -534,6 +583,43 @@ export function AccountReviewModal({
                           </label>
                         </div>
                       )}
+
+                      {item.type === "expense" && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Checkbox
+                            id={`corporate-${index}`}
+                            checked={item.is_corporate}
+                            onCheckedChange={(checked) =>
+                              handleCorporateChange(index, checked === true)
+                            }
+                          />
+                          <label
+                            htmlFor={`corporate-${index}`}
+                            className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1"
+                          >
+                            <Briefcase className="h-3 w-3" />
+                            Pedir reembolso
+                          </label>
+                        </div>
+                      )}
+
+                      {item.is_corporate && item.type === "expense" && (
+                        <div className="flex items-center gap-2 pt-1 ml-4">
+                          <Checkbox
+                            id={`remember-corporate-${index}`}
+                            checked={item.remember_corporate}
+                            onCheckedChange={(checked) =>
+                              handleRememberCorporateChange(index, checked === true)
+                            }
+                          />
+                          <label
+                            htmlFor={`remember-corporate-${index}`}
+                            className="text-xs text-muted-foreground cursor-pointer"
+                          >
+                            Lembrar "{extractKeyword(item.description)}" como corporativa
+                          </label>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -556,6 +642,13 @@ export function AccountReviewModal({
                 -R$ {totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </span>
             </div>
+            {corporateCount > 0 && (
+              <div className="flex items-center gap-1">
+                <Briefcase className="h-3 w-3 text-primary" />
+                <span className="text-muted-foreground">Reembolsos: </span>
+                <span className="font-semibold text-primary">{corporateCount} {corporateCount === 1 ? "item" : "itens"}</span>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <Button
