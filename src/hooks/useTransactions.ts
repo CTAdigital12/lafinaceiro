@@ -81,16 +81,24 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         query = query.is("credit_card_id", null);
       }
 
-      // Apply pagination
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
+      // Apply pagination only if not fetching all transactions for dashboard
+      if (options.showAll) {
+        const { data, error, count } = await query
+          .order("date", { ascending: false });
 
-      const { data, error, count } = await query
-        .order("date", { ascending: false })
-        .range(from, to);
+        if (error) throw error;
+        return { transactions: data as Transaction[], totalCount: count || 0 };
+      } else {
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
 
-      if (error) throw error;
-      return { transactions: data as Transaction[], totalCount: count || 0 };
+        const { data, error, count } = await query
+          .order("date", { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+        return { transactions: data as Transaction[], totalCount: count || 0 };
+      }
     },
     enabled: !!user,
   });
