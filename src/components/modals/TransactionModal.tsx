@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { CalendarIcon, Loader2, Briefcase } from "lucide-react";
+import { CalendarIcon, Loader2, Briefcase, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
+import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 
 interface TransactionModalProps {
   open: boolean;
@@ -48,11 +50,14 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [status, setStatus] = useState<"completed" | "pending">("completed");
   const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_card">("account");
   const [isCorporateExpense, setIsCorporateExpense] = useState(false);
+  const [saveRule, setSaveRule] = useState(false);
+  const [ruleKeyword, setRuleKeyword] = useState("");
   
   const { incomeCategories, expenseCategories } = useCategories();
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
   const { createTransaction, updateTransaction } = useTransactions();
+  const { createRule } = useCategorizationRules();
 
   const isEditing = !!transaction;
   const isDuplicating = !!duplicateFrom;
@@ -75,6 +80,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setStatus(sourceData.status as "completed" | "pending");
       setPaymentMethod(sourceData.credit_card_id ? "credit_card" : "account");
       setIsCorporateExpense(sourceData.is_corporate_expense || false);
+      setSaveRule(false);
+      setRuleKeyword("");
     } else {
       setType("expense");
       setDescription("");
@@ -86,6 +93,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setStatus("completed");
       setPaymentMethod("account");
       setIsCorporateExpense(false);
+      setSaveRule(false);
+      setRuleKeyword("");
     }
   }, [sourceData, open, isDuplicating]);
 
@@ -103,6 +112,15 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       status,
       is_corporate_expense: isCorporateExpense,
     };
+
+    // Save categorization rule if checkbox is checked and keyword is provided
+    if (saveRule && ruleKeyword.trim()) {
+      await createRule.mutateAsync({
+        keyword: ruleKeyword.trim(),
+        category_id: categoryId || null,
+        is_corporate: isCorporateExpense,
+      });
+    }
 
     if (isEditing && transaction) {
       await updateTransaction.mutateAsync({ id: transaction.id, ...transactionData });
@@ -325,6 +343,45 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
               />
             </div>
           )}
+
+          {/* Save Rule */}
+          <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-3">
+              <Checkbox
+                id="save-rule"
+                checked={saveRule}
+                onCheckedChange={(checked) => setSaveRule(checked === true)}
+              />
+              <div className="flex items-center gap-2">
+                <BookMarked className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="save-rule" className="text-sm font-medium cursor-pointer">
+                  Lembrar regra de categorização
+                </Label>
+              </div>
+            </div>
+            
+            {saveRule && (
+              <div className="space-y-2 pl-6">
+                <Label htmlFor="rule-keyword" className="text-xs text-muted-foreground">
+                  Texto chave para identificação
+                </Label>
+                <Input
+                  id="rule-keyword"
+                  value={ruleKeyword}
+                  onChange={(e) => setRuleKeyword(e.target.value)}
+                  placeholder={description.toUpperCase().slice(0, 20) || "Ex: UBER, SPOTIFY"}
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Transações contendo este texto serão automaticamente categorizadas
+                  {categoryId && categories.find(c => c.id === categoryId) && (
+                    <> como <strong>{categories.find(c => c.id === categoryId)?.name}</strong></>
+                  )}
+                  {isCorporateExpense && <> e marcadas como despesa corporativa</>}
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Submit */}
           <Button type="submit" className="w-full" disabled={isPending}>
