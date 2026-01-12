@@ -180,27 +180,40 @@ export function useCategorizationRules() {
       setIsLoadingPreview(false);
     }
   };
-  const applyRulesToUncategorized = async (): Promise<number> => {
+  const applyRulesToUncategorized = async (transactionIds?: string[]): Promise<number> => {
     setIsApplyingRules(true);
     
     try {
-      // Fetch all transactions without category
-      const { data: uncategorizedTransactions, error: fetchError } = await supabase
-        .from("transactions")
-        .select("id, description")
-        .is("category_id", null);
+      // If specific transaction IDs are provided, use them. Otherwise fetch all uncategorized
+      let transactionsToProcess: { id: string; description: string }[];
+      
+      if (transactionIds && transactionIds.length > 0) {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("id, description")
+          .in("id", transactionIds);
+        
+        if (error) throw error;
+        transactionsToProcess = data || [];
+      } else {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("id, description")
+          .is("category_id", null);
+        
+        if (error) throw error;
+        transactionsToProcess = data || [];
+      }
 
-      if (fetchError) throw fetchError;
-
-      if (!uncategorizedTransactions || uncategorizedTransactions.length === 0) {
-        toast({ title: "Nenhuma transação sem categoria encontrada" });
+      if (transactionsToProcess.length === 0) {
+        toast({ title: "Nenhuma transação para processar" });
         return 0;
       }
 
       let updatedCount = 0;
 
       // For each transaction, check if any rule matches
-      for (const transaction of uncategorizedTransactions) {
+      for (const transaction of transactionsToProcess) {
         const upperDesc = transaction.description.toUpperCase();
         
         for (const rule of rules) {
