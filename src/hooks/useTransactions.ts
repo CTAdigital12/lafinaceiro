@@ -105,7 +105,9 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   const transactions = paginatedData?.transactions || [];
   const totalCount = paginatedData?.totalCount || 0;
-  const totalPages = Math.ceil(totalCount / pageSize);
+  // When showAll is true, we load all transactions without pagination
+  // so totalPages should be 1 (no pagination needed)
+  const totalPages = showAll ? 1 : Math.ceil(totalCount / pageSize);
 
   const createTransaction = useMutation({
     mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; silent?: boolean }) => {
