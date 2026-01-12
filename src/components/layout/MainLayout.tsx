@@ -1,5 +1,5 @@
 import { ReactNode, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,21 +14,28 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { currentDate, setCurrentDate } = useDate();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    // SECURITY: Immediate redirect if not authenticated
+    // This runs before any content is rendered
     if (!loading && !user) {
-      navigate("/auth");
+      navigate("/auth", { replace: true });
     }
   }, [user, loading, navigate]);
 
+  // SECURITY: Show nothing during loading or if not authenticated
+  // This prevents any flash of protected content
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-balance" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
+  // SECURITY: Return null immediately if no user
+  // This ensures no protected content renders before redirect
   if (!user) {
     return null;
   }

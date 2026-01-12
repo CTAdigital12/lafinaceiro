@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,16 +8,16 @@ const corsHeaders = {
 };
 
 interface RawInvoiceItem {
-  date: string;           // "DD/MM" from AI
+  date: string;
   description: string;
   amount: number;
 }
 
 interface ProcessedInvoiceItem {
-  purchase_date: string;       // Data da compra (YYYY-MM-DD) - imutável, do PDF
-  posting_date: string;        // Data do upload (YYYY-MM-DD) - hoje
-  due_date: string;            // Data de vencimento (YYYY-MM-DD) - do cabeçalho
-  transaction_value: number;   // Valor da linha/parcela
+  purchase_date: string;
+  posting_date: string;
+  due_date: string;
+  transaction_value: number;
   description: string;
   installment_current?: number;
   installment_total?: number;
@@ -24,22 +25,17 @@ interface ProcessedInvoiceItem {
 }
 
 interface InvoiceMetadata {
-  due_date: string | null;     // "YYYY-MM-DD" extracted from header
-  invoice_total: number | null; // Total desta fatura
+  due_date: string | null;
+  invoice_total: number | null;
 }
 
 // Detect installment pattern in description using regex
 function detectInstallmentPattern(description: string): { current: number; total: number } | null {
-  // Patterns to match:
-  // "3/10", "03/10" at the end of description
-  // "PARC 3/6", "PARC 03/06"
-  // "(3/10)", "(03/10)"
-  
   const patterns = [
-    /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/i,                           // "3/10" at end
-    /(\d{1,2})\s+de\s+(\d{1,2})\s*$/i,                           // "3 de 10" at end
-    /PARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})/i,               // "PARC 3/6" or "PARCELA 3/6"
-    /\((\d{1,2})\s*\/\s*(\d{1,2})\)\s*$/i,                       // "(3/10)" at end
+    /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/i,
+    /(\d{1,2})\s+de\s+(\d{1,2})\s*$/i,
+    /PARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})/i,
+    /\((\d{1,2})\s*\/\s*(\d{1,2})\)\s*$/i,
   ];
 
   for (const pattern of patterns) {
@@ -48,7 +44,6 @@ function detectInstallmentPattern(description: string): { current: number; total
       const current = parseInt(match[1], 10);
       const total = parseInt(match[2], 10);
       
-      // Validate that it looks like installment info (not a date or other number)
       if (current > 0 && total > 0 && current <= total && total <= 48) {
         return { current, total };
       }
@@ -69,22 +64,15 @@ function inferPurchaseYear(
   let year: number;
   let isPostClosing = false;
 
-  // REGRA: Se o mês da transação for maior que o mês da fatura, 
-  // a transação aconteceu no ano anterior
-  // Exemplo: Fatura Jan/2026, transação em Dez -> transação é Dez/2025
   if (purchaseMonth > invoiceMonth) {
     year = invoiceYear - 1;
   } else if (purchaseMonth === invoiceMonth) {
-    // Mesmo mês - verificar se é pós-fechamento
     year = invoiceYear;
     if (purchaseDay > closingDay) {
       isPostClosing = true;
     }
   } else {
-    // Mês menor que o mês da fatura - mesmo ano
     year = invoiceYear;
-    // Verificar se transação em meses anteriores mas após fechamento
-    // Isso não deveria acontecer em fatura normal, mas manter lógica
   }
 
   return { year, isPostClosing };
@@ -105,13 +93,11 @@ function generateFutureInstallments(
 
   const futureItems: ProcessedInvoiceItem[] = [];
   
-  // Parse base due date - this is critical for calculating future dates
   const baseDueDateParts = item.due_date.split('-');
   const baseDueYear = parseInt(baseDueDateParts[0], 10);
-  const baseDueMonth = parseInt(baseDueDateParts[1], 10) - 1; // JS months are 0-indexed
+  const baseDueMonth = parseInt(baseDueDateParts[1], 10) - 1;
   const baseDueDay = parseInt(baseDueDateParts[2], 10);
   
-  // Clean description - remove current installment info
   const cleanDescription = item.description
     .replace(/\s*\d{1,2}\s*\/\s*\d{1,2}\s*$/g, '')
     .replace(/\s*\d{1,2}\s+de\s+\d{1,2}\s*$/gi, '')
@@ -121,18 +107,14 @@ function generateFutureInstallments(
     .trim();
 
   for (let i = 1; i <= remaining; i++) {
-    // Calculate future due date by adding i months to the base due date
-    // This correctly handles year transitions (e.g., Dec -> Jan next year)
     let futureMonth = baseDueMonth + i;
     let futureYear = baseDueYear;
     
-    // Handle month overflow (year transition)
     while (futureMonth > 11) {
       futureMonth -= 12;
       futureYear += 1;
     }
     
-    // Handle day adjustment for months with fewer days (e.g., day 31 in February)
     const maxDayInMonth = new Date(futureYear, futureMonth + 1, 0).getDate();
     const adjustedDay = Math.min(baseDueDay, maxDayInMonth);
     
@@ -141,31 +123,69 @@ function generateFutureInstallments(
     const installmentNumber = item.installment_current + i;
     
     futureItems.push({
-      purchase_date: item.purchase_date, // Mantém a data original da compra (imutável)
+      purchase_date: item.purchase_date,
       posting_date: item.posting_date,
-      due_date: futureDueDateStr, // Data de vencimento progressiva
+      due_date: futureDueDateStr,
       transaction_value: item.transaction_value,
       description: `${cleanDescription} ${installmentNumber}/${item.installment_total}`,
       installment_current: installmentNumber,
       installment_total: item.installment_total,
       is_post_closing: false,
     });
-    
-    console.log(`Future installment ${installmentNumber}/${item.installment_total}: due_date=${futureDueDateStr}`);
   }
 
   return futureItems;
 }
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // ================================================================
+    // SECURITY: Authentication Validation (Zero Trust)
+    // ================================================================
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      console.error('Security: Missing or invalid Authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Acesso não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate the JWT token
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      console.error('Security: Invalid JWT token', claimsError?.message);
+      return new Response(
+        JSON.stringify({ error: 'Sessão inválida ou expirada' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+    console.log(`Authenticated user: ${userId}`);
+    // ================================================================
+
     const GOOGLE_AI_API_KEY = Deno.env.get('GOOGLE_AI_API_KEY');
     if (!GOOGLE_AI_API_KEY) {
-      throw new Error("GOOGLE_AI_API_KEY is not configured");
+      console.error('Configuration error: GOOGLE_AI_API_KEY not set');
+      return new Response(
+        JSON.stringify({ error: 'Erro de configuração do servidor' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const formData = await req.formData();
@@ -178,11 +198,14 @@ serve(async (req) => {
     const closingDateStr = formData.get('closing_date') as string;
 
     if (!file) {
-      throw new Error("No file provided");
+      return new Response(
+        JSON.stringify({ error: 'Nenhum arquivo enviado' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const now = new Date();
-    const postingDate = now.toISOString().split('T')[0]; // Data do upload
+    const postingDate = now.toISOString().split('T')[0];
     const invoiceYear = invoiceYearStr ? parseInt(invoiceYearStr) : now.getFullYear();
     const invoiceMonth = invoiceMonthStr ? parseInt(invoiceMonthStr) : now.getMonth() + 1;
     const closingDay = closingDateStr ? parseInt(closingDateStr) : 10;
@@ -191,9 +214,8 @@ serve(async (req) => {
       new Date(invoiceYear, invoiceMonth - 1, 1)
     );
 
-    console.log(`Processing file: ${file.name}, mode: ${mode || 'credit_card'}`);
+    console.log(`Processing file: ${file.name}, mode: ${mode || 'credit_card'}, user: ${userId}`);
     console.log(`Invoice period: ${invoiceMonthName}/${invoiceYear}, closing day: ${closingDay}`);
-    console.log(`Posting date (today): ${postingDate}`);
 
     // Convert file to base64
     const arrayBuffer = await file.arrayBuffer();
@@ -209,7 +231,6 @@ serve(async (req) => {
 
     const isAccountMode = mode === 'account';
     
-    // Updated prompt for Itaú Personnalité invoices
     const systemPrompt = isAccountMode
       ? `Você é um assistente especializado em extrair dados de extratos bancários.
 
@@ -299,8 +320,7 @@ IMPORTANTE:
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
+      console.error("Gemini API error:", response.status);
       
       if (response.status === 429) {
         return new Response(
@@ -310,11 +330,14 @@ IMPORTANTE:
       }
       if (response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "API Key inválida ou sem permissão." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Erro de configuração do servidor" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      throw new Error(`Gemini API error: ${response.status}`);
+      return new Response(
+        JSON.stringify({ error: "Erro ao processar documento" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const aiResponse = await response.json();
@@ -322,14 +345,20 @@ IMPORTANTE:
     
     if (aiResponse.promptFeedback?.blockReason) {
       console.error("Content blocked:", aiResponse.promptFeedback.blockReason);
-      throw new Error(`Conteúdo bloqueado: ${aiResponse.promptFeedback.blockReason}`);
+      return new Response(
+        JSON.stringify({ error: "Conteúdo do documento não pôde ser processado" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     
     const content = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!content) {
       console.error("No content in response");
-      throw new Error("Resposta vazia da IA");
+      return new Response(
+        JSON.stringify({ error: "Não foi possível extrair dados do documento" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Parse JSON from AI response
@@ -342,9 +371,7 @@ IMPORTANTE:
         const parsed = JSON.parse(jsonMatch[0]);
         rawItems = parsed.items || [];
         
-        // Extract metadata if available
         if (parsed.metadata) {
-          // Parse due_date from DD/MM/YYYY to YYYY-MM-DD
           if (parsed.metadata.due_date) {
             const dueDateParts = parsed.metadata.due_date.split('/');
             if (dueDateParts.length === 3) {
@@ -355,28 +382,26 @@ IMPORTANTE:
         }
       }
     } catch (parseError) {
-      console.error("Failed to parse AI response:", parseError);
-      throw new Error("Não foi possível processar o documento.");
+      console.error("Failed to parse AI response");
+      return new Response(
+        JSON.stringify({ error: "Erro ao processar resposta do documento" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log(`Extracted ${rawItems.length} raw items from AI`);
-    console.log(`Metadata: due_date=${metadata.due_date}, invoice_total=${metadata.invoice_total}`);
 
-    // Default due_date if not extracted (15th of invoice month)
     const defaultDueDate = `${invoiceYear}-${String(invoiceMonth).padStart(2, '0')}-15`;
     const dueDate = metadata.due_date || defaultDueDate;
 
-    // Process items: infer year, detect installments, generate future installments
     const processedItems: ProcessedInvoiceItem[] = [];
     const futureInstallments: ProcessedInvoiceItem[] = [];
     let postClosingCount = 0;
     let calculatedTotal = 0;
 
     for (const rawItem of rawItems) {
-      // Parse DD/MM from raw date
       const dateParts = rawItem.date.split('/');
       if (dateParts.length < 2) {
-        console.warn(`Invalid date format: ${rawItem.date}, skipping`);
         continue;
       }
       
@@ -384,11 +409,9 @@ IMPORTANTE:
       const purchaseMonth = parseInt(dateParts[1], 10);
       
       if (isNaN(purchaseDay) || isNaN(purchaseMonth)) {
-        console.warn(`Invalid date values: ${rawItem.date}, skipping`);
         continue;
       }
 
-      // Infer year based on invoice context
       const { year: purchaseYear, isPostClosing } = inferPurchaseYear(
         purchaseDay,
         purchaseMonth,
@@ -399,12 +422,7 @@ IMPORTANTE:
 
       const purchaseDate = `${purchaseYear}-${String(purchaseMonth).padStart(2, '0')}-${String(purchaseDay).padStart(2, '0')}`;
 
-      // Detect installment pattern in description
       const installmentInfo = detectInstallmentPattern(rawItem.description);
-      
-      if (installmentInfo) {
-        console.log(`Detected installment ${installmentInfo.current}/${installmentInfo.total} in: "${rawItem.description}"`);
-      }
 
       const transactionValue = Math.abs(rawItem.amount);
       calculatedTotal += transactionValue;
@@ -422,36 +440,25 @@ IMPORTANTE:
 
       if (isPostClosing && !isAccountMode) {
         postClosingCount++;
-        console.log(`Post-closing transaction detected: ${rawItem.description} on ${purchaseDate}`);
       }
 
       processedItems.push(processedItem);
 
-      // Generate future installments for items with remaining installments
       if (!isAccountMode && installmentInfo && installmentInfo.current < installmentInfo.total) {
         const future = generateFutureInstallments(processedItem);
         futureInstallments.push(...future);
-        console.log(`Generated ${future.length} future installments for: "${rawItem.description}"`);
       }
     }
 
-    console.log(`Processed ${processedItems.length} items, ${futureInstallments.length} future installments`);
-    console.log(`Calculated total: R$ ${calculatedTotal.toFixed(2)}`);
-    
-    // Validation: compare calculated total with invoice total
+    console.log(`Processed ${processedItems.length} items for user ${userId}`);
+
     let validationWarning: string | null = null;
     if (metadata.invoice_total) {
       const difference = Math.abs(calculatedTotal - metadata.invoice_total);
-      console.log(`Invoice total from PDF: R$ ${metadata.invoice_total.toFixed(2)}, difference: R$ ${difference.toFixed(2)}`);
       
       if (difference > 1.00) {
         validationWarning = `Atenção: A soma dos itens (R$ ${calculatedTotal.toFixed(2)}) difere do total da fatura (R$ ${metadata.invoice_total.toFixed(2)}). Diferença: R$ ${difference.toFixed(2)}. Verifique se há encargos, IOF ou multas não listados.`;
-        console.warn(validationWarning);
       }
-    }
-
-    if (postClosingCount > 0) {
-      console.log(`${postClosingCount} transactions are after closing date (day ${closingDay})`);
     }
 
     return new Response(
@@ -464,7 +471,6 @@ IMPORTANTE:
         account_id: accountId,
         invoice_month: invoiceMonth,
         invoice_year: invoiceYear,
-        closing_day: closingDay,
         due_date: dueDate,
         invoice_total: metadata.invoice_total,
         calculated_total: calculatedTotal,
@@ -474,11 +480,10 @@ IMPORTANTE:
     );
 
   } catch (error) {
-    console.error("Error processing document:", error);
+    // SECURITY: Never expose internal error details
+    console.error("Edge function error:", error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Erro ao processar documento" 
-      }),
+      JSON.stringify({ error: "Erro ao processar solicitação" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
