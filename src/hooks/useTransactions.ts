@@ -29,7 +29,7 @@ export interface Transaction {
 
 interface UseTransactionsOptions {
   showAll?: boolean;
-  page?: number;
+  loadedCount?: number;
   pageSize?: number;
   filterByDueDate?: boolean;
   creditCardFilter?: "only" | "exclude" | null;
@@ -41,7 +41,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { showAll = false, page = 1, pageSize = 20, filterByDueDate = false, creditCardFilter = null } = options;
+  const { showAll = false, loadedCount = 20, pageSize = 20, filterByDueDate = false, creditCardFilter = null } = options;
 
   // Use override values if provided, otherwise use context
   const month = overrideMonth ?? contextMonth;
@@ -50,9 +50,9 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
   const endDate = new Date(year, month, 0).toISOString().split("T")[0];
 
-  // Query for paginated transactions (all or filtered by date)
+  // Query for transactions with "load more" support
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, page, pageSize, filterByDueDate, creditCardFilter],
+    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, loadedCount, filterByDueDate, creditCardFilter],
     queryFn: async () => {
       let query = supabase
         .from("transactions")
@@ -81,33 +81,20 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         query = query.is("credit_card_id", null);
       }
 
-      // Apply pagination only if not fetching all transactions for dashboard
-      if (options.showAll) {
-        const { data, error, count } = await query
-          .order("date", { ascending: false });
+      // Use loadedCount to limit results (for "load more" functionality)
+      const { data, error, count } = await query
+        .order("date", { ascending: false })
+        .range(0, loadedCount - 1);
 
-        if (error) throw error;
-        return { transactions: data as Transaction[], totalCount: count || 0 };
-      } else {
-        const from = (page - 1) * pageSize;
-        const to = from + pageSize - 1;
-
-        const { data, error, count } = await query
-          .order("date", { ascending: false })
-          .range(from, to);
-
-        if (error) throw error;
-        return { transactions: data as Transaction[], totalCount: count || 0 };
-      }
+      if (error) throw error;
+      return { transactions: data as Transaction[], totalCount: count || 0 };
     },
     enabled: !!user,
   });
 
   const transactions = paginatedData?.transactions || [];
   const totalCount = paginatedData?.totalCount || 0;
-  // When showAll is true, we load all transactions without pagination
-  // so totalPages should be 1 (no pagination needed)
-  const totalPages = showAll ? 1 : Math.ceil(totalCount / pageSize);
+  const hasMore = transactions.length < totalCount;
 
   const createTransaction = useMutation({
     mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; silent?: boolean }) => {
@@ -199,7 +186,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     totalIncome,
     totalExpense,
     totalCount,
-    totalPages,
+    hasMore,
     createTransaction,
     updateTransaction,
     deleteTransaction,
