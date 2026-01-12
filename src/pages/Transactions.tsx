@@ -106,7 +106,13 @@ export default function Transactions() {
     totalPages,
     deleteTransaction,
     updateTransaction,
-  } = useTransactions(undefined, undefined, { showAll, page: currentPage, pageSize, filterByDueDate });
+  } = useTransactions(undefined, undefined, { 
+    showAll, 
+    page: currentPage, 
+    pageSize, 
+    filterByDueDate,
+    creditCardFilter: activeTab === "credit" ? "only" : "exclude",
+  });
   const { totalBalance } = useAccounts();
   
   // Count active filters
@@ -176,16 +182,15 @@ export default function Transactions() {
     setCurrentPage(1);
   };
 
-  // Filter transactions by tab type
-  const filteredByTab = transactions.filter((t) => {
-    if (activeTab === "credit") {
-      return t.credit_card_id !== null;
-    }
-    return t.credit_card_id === null;
-  });
+  // Reset page when changing tabs
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as TransactionTab);
+    setCurrentPage(1);
+    setSelectedTransactions([]);
+  };
 
-  // Apply advanced filters
-  const filteredByAdvanced = filteredByTab.filter((t) => {
+  // Apply advanced filters (no need for tab filtering since query already filters by credit_card_id)
+  const filteredByAdvanced = transactions.filter((t) => {
     // Filter by category
     if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(t.category_id || "")) {
       return false;
@@ -300,7 +305,7 @@ export default function Transactions() {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TransactionTab)}>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="checking" className="gap-2">
               <Building2 className="h-4 w-4" />

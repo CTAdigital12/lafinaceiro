@@ -11,6 +11,7 @@ import {
   Tags,
   Briefcase,
   TrendingUp,
+  BookMarked,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -22,6 +23,7 @@ const navItems = [
   { icon: ArrowLeftRight, label: "Transações", path: "/transactions" },
   { icon: CreditCard, label: "Cartões de Crédito", path: "/credit-cards" },
   { icon: Tags, label: "Categorias", path: "/categories" },
+  { icon: BookMarked, label: "Regras", path: "/categorization-rules" },
   { icon: Target, label: "Planejamento", path: "/planning" },
   { icon: TrendingUp, label: "Investimentos", path: "/investments" },
   { icon: BarChart3, label: "Relatórios", path: "/reports" },

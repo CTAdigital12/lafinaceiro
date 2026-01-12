@@ -59,6 +59,32 @@ export function useCategorizationRules() {
     },
   });
 
+  const updateRule = useMutation({
+    mutationFn: async ({ id, keyword, category_id, is_corporate }: { id: string; keyword?: string; category_id?: string | null; is_corporate?: boolean }) => {
+      const updateData: Record<string, unknown> = {};
+      if (keyword !== undefined) updateData.keyword = keyword.toUpperCase();
+      if (category_id !== undefined) updateData.category_id = category_id;
+      if (is_corporate !== undefined) updateData.is_corporate = is_corporate;
+
+      const { data, error } = await supabase
+        .from("categorization_rules")
+        .update(updateData)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categorization_rules"] });
+      toast({ title: "Regra atualizada!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar regra", description: error.message, variant: "destructive" });
+    },
+  });
+
   const deleteRule = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -107,6 +133,7 @@ export function useCategorizationRules() {
     rules,
     isLoading,
     createRule,
+    updateRule,
     deleteRule,
     findCategoryForDescription,
     findCorporateForDescription,

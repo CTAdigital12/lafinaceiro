@@ -32,6 +32,7 @@ interface UseTransactionsOptions {
   page?: number;
   pageSize?: number;
   filterByDueDate?: boolean;
+  creditCardFilter?: "only" | "exclude" | null;
 }
 
 export function useTransactions(overrideMonth?: number, overrideYear?: number, options: UseTransactionsOptions = {}) {
@@ -40,7 +41,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { showAll = false, page = 1, pageSize = 20, filterByDueDate = false } = options;
+  const { showAll = false, page = 1, pageSize = 20, filterByDueDate = false, creditCardFilter = null } = options;
 
   // Use override values if provided, otherwise use context
   const month = overrideMonth ?? contextMonth;
@@ -51,7 +52,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   // Query for paginated transactions (all or filtered by date)
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, page, pageSize, filterByDueDate],
+    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, page, pageSize, filterByDueDate, creditCardFilter],
     queryFn: async () => {
       let query = supabase
         .from("transactions")
@@ -71,6 +72,13 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
           // Filter by transaction date
           query = query.gte("date", startDate).lte("date", endDate);
         }
+      }
+
+      // Apply credit card filter
+      if (creditCardFilter === "only") {
+        query = query.not("credit_card_id", "is", null);
+      } else if (creditCardFilter === "exclude") {
+        query = query.is("credit_card_id", null);
       }
 
       // Apply pagination
