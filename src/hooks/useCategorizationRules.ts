@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 export interface CategorizationRule {
   id: string;
@@ -129,6 +130,79 @@ export function useCategorizationRules() {
     return false;
   };
 
+  // State for bulk apply operation
+  const [isApplyingRules, setIsApplyingRules] = useState(false);
+
+  // Function to apply all rules to uncategorized transactions
+  const applyRulesToUncategorized = async (): Promise<number> => {
+    setIsApplyingRules(true);
+    
+    try {
+      // Fetch all transactions without category
+      const { data: uncategorizedTransactions, error: fetchError } = await supabase
+        .from("transactions")
+        .select("id, description")
+        .is("category_id", null);
+
+      if (fetchError) throw fetchError;
+
+      if (!uncategorizedTransactions || uncategorizedTransactions.length === 0) {
+        toast({ title: "Nenhuma transação sem categoria encontrada" });
+        return 0;
+      }
+
+      let updatedCount = 0;
+
+      // For each transaction, check if any rule matches
+      for (const transaction of uncategorizedTransactions) {
+        const upperDesc = transaction.description.toUpperCase();
+        
+        for (const rule of rules) {
+          if (upperDesc.includes(rule.keyword.toUpperCase())) {
+            // Found a matching rule, update the transaction
+            const { error: updateError } = await supabase
+              .from("transactions")
+              .update({
+                category_id: rule.category_id,
+                is_corporate_expense: rule.is_corporate,
+              })
+              .eq("id", transaction.id);
+
+            if (!updateError) {
+              updatedCount++;
+            }
+            break; // Only apply the first matching rule
+          }
+        }
+      }
+
+      if (updatedCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ["transactions"] });
+        toast({ 
+          title: "Regras aplicadas com sucesso!",
+          description: `${updatedCount} transação(ões) categorizada(s)` 
+        });
+      } else {
+        toast({ 
+          title: "Nenhuma correspondência encontrada",
+          description: "Nenhuma transação corresponde às regras existentes" 
+        });
+      }
+
+      return updatedCount;
+    } catch (error) {
+      console.error("Error applying rules:", error);
+      toast({ 
+        title: "Erro ao aplicar regras", 
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive" 
+      });
+      return 0;
+    } finally {
+      setIsApplyingRules(false);
+    }
+  };
+
   return {
     rules,
     isLoading,
@@ -137,5 +211,7 @@ export function useCategorizationRules() {
     deleteRule,
     findCategoryForDescription,
     findCorporateForDescription,
+    applyRulesToUncategorized,
+    isApplyingRules,
   };
 }
