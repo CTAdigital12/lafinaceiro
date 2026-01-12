@@ -9,11 +9,11 @@ import { useCategories } from "@/hooks/useCategories";
 
 export default function Dashboard() {
   const { totalBalance, isLoading: accountsLoading } = useAccounts();
-  // Use showAll: true to fetch all transactions for accurate totals
+  // Use showAll: false but with high loadedCount to get all transactions for the month
   const { transactions, totalIncome, totalExpense, isLoading: transactionsLoading } = useTransactions(
     undefined,
     undefined,
-    { showAll: true }
+    { showAll: false, loadedCount: 1000 }
   );
   const { totalInvoice, isLoading: cardsLoading } = useCreditCards();
   const { expenseCategories, incomeCategories, isLoading: categoriesLoading } = useCategories();
