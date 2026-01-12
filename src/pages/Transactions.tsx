@@ -144,12 +144,16 @@ export default function Transactions() {
   };
 
   // Bulk corporate expense toggle handler
-  const handleBulkCorporateToggle = async () => {
+  const handleBulkCorporateToggle = async (markAsCorporate: boolean) => {
     for (const id of selectedTransactions) {
-      await updateTransaction.mutateAsync({ id, is_corporate_expense: true });
+      await updateTransaction.mutateAsync({ id, is_corporate_expense: markAsCorporate });
     }
     setSelectedTransactions([]);
-    toast({ title: `${selectedTransactions.length} transações marcadas como despesa empresarial!` });
+    toast({ 
+      title: markAsCorporate 
+        ? `${selectedTransactions.length} transações marcadas como empresarial!` 
+        : `${selectedTransactions.length} transações desmarcadas como empresarial!`
+    });
   };
 
   // Export transactions to CSV
@@ -537,10 +541,19 @@ export default function Transactions() {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    onClick={handleBulkCorporateToggle}
+                    onClick={() => handleBulkCorporateToggle(true)}
                   >
                     <Building className="h-4 w-4" />
                     Marcar Empresarial
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleBulkCorporateToggle(false)}
+                  >
+                    <X className="h-4 w-4" />
+                    Desmarcar Empresarial
                   </Button>
 
                   {/* Bulk Delete */}
@@ -639,7 +652,17 @@ export default function Transactions() {
                             {formatDateBR(transaction.due_date)}
                           </TableCell>
                         )}
-                        <TableCell className="font-medium">{transaction.description}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {transaction.description}
+                            {transaction.is_corporate_expense && (
+                              <Badge variant="outline" className="text-xs gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30">
+                                <Building className="h-3 w-3" />
+                                Empresarial
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <CategorySelector
                             value={transaction.category_id}
