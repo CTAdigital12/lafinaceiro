@@ -19,6 +19,7 @@ export interface Transaction {
   imported_at: string | null;
   status: "completed" | "pending";
   is_corporate_expense: boolean;
+  reimbursement_status: string | null;
   created_at: string;
   updated_at: string;
   categories?: { id: string; name: string; icon: string; color: string } | null;
@@ -91,7 +92,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const createTransaction = useMutation({
-    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at"> & { due_date?: string | null; imported_at?: string | null; silent?: boolean }) => {
+    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; silent?: boolean }) => {
       // Sanitize UUID fields - convert empty strings to null
       const { silent, ...transactionData } = transaction;
       const sanitizedTransaction = {
@@ -102,6 +103,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         credit_card_id: transactionData.credit_card_id && transactionData.credit_card_id.trim() !== "" ? transactionData.credit_card_id : null,
         due_date: transactionData.due_date || null,
         imported_at: transactionData.imported_at || null,
+        reimbursement_status: transactionData.reimbursement_status || null,
       };
       
       const { data, error } = await supabase
