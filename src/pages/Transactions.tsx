@@ -380,15 +380,19 @@ export default function Transactions() {
               
               {/* Show All Toggle */}
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card">
-                <CalendarDays className={cn("h-4 w-4", !showAll && "text-primary")} />
+                <CalendarDays className={cn("h-4 w-4 transition-colors", !showAll ? "text-primary" : "text-muted-foreground")} />
                 <Switch
                   id="show-all"
                   checked={showAll}
                   onCheckedChange={handleShowAllChange}
                 />
-                <List className={cn("h-4 w-4", showAll && "text-primary")} />
-                <Label htmlFor="show-all" className="text-sm cursor-pointer">
-                  {showAll ? "Todas" : "Mês"}
+                <List className={cn("h-4 w-4 transition-colors", showAll ? "text-primary" : "text-muted-foreground")} />
+                <Label htmlFor="show-all" className="text-sm cursor-pointer min-w-[70px]">
+                  {showAll ? "Todas" : (
+                    <span className="font-medium text-primary">
+                      {String(month).padStart(2, "0")}/{year}
+                    </span>
+                  )}
                 </Label>
               </div>
 
@@ -806,6 +810,22 @@ export default function Transactions() {
                     ))}
                   </TableBody>
                 </Table>
+
+                {/* Empty State */}
+                {filteredTransactions.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <CalendarDays className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-lg font-medium text-muted-foreground mb-2">
+                      Nenhuma transação encontrada
+                    </p>
+                    <p className="text-sm text-muted-foreground/70 max-w-md">
+                      {showAll 
+                        ? "Não há transações que correspondam aos filtros aplicados." 
+                        : `Não há transações em ${String(month).padStart(2, "0")}/${year}. Tente selecionar outro mês ou ativar "Todas".`
+                      }
+                    </p>
+                  </div>
+                )}
 
                 {/* Load More Button */}
                 {hasMore && (
