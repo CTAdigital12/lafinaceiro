@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown } from "lucide-react";
+import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,9 +45,10 @@ interface TransactionModalProps {
   onOpenChange: (open: boolean) => void;
   transaction?: Transaction | null;
   duplicateFrom?: Transaction | null;
+  refundFrom?: Transaction | null;
 }
 
-export function TransactionModal({ open, onOpenChange, transaction, duplicateFrom }: TransactionModalProps) {
+export function TransactionModal({ open, onOpenChange, transaction, duplicateFrom, refundFrom }: TransactionModalProps) {
   const [type, setType] = useState<"income" | "expense">("expense");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -58,6 +59,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [status, setStatus] = useState<"completed" | "pending">("completed");
   const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_card">("account");
   const [isCorporateExpense, setIsCorporateExpense] = useState(false);
+  const [isRefund, setIsRefund] = useState(false);
+  const [refundedTransactionId, setRefundedTransactionId] = useState<string | null>(null);
   const [saveRule, setSaveRule] = useState(false);
   const [ruleKeyword, setRuleKeyword] = useState("");
   const [openCategoryPopover, setOpenCategoryPopover] = useState(false);
@@ -72,14 +75,31 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
 
   const isEditing = !!transaction;
   const isDuplicating = !!duplicateFrom;
+  const isCreatingRefund = !!refundFrom;
   const categories = type === "income" ? incomeCategories : expenseCategories;
 
-  // Source data for editing or duplicating
-  const sourceData = transaction || duplicateFrom;
+  // Source data for editing, duplicating, or creating refund
+  const sourceData = transaction || duplicateFrom || refundFrom;
 
-  // Initialize form with transaction data when editing or duplicating
+  // Initialize form with transaction data when editing, duplicating, or creating refund
   useEffect(() => {
-    if (sourceData) {
+    if (refundFrom) {
+      // Creating a refund from an existing transaction
+      setType(refundFrom.type as "income" | "expense");
+      setDescription(`Extorno: ${refundFrom.description}`);
+      setAmount(String(refundFrom.amount));
+      setCategoryId(refundFrom.category_id || "");
+      setAccountId(refundFrom.account_id || "");
+      setCreditCardId(refundFrom.credit_card_id || "");
+      setDate(new Date());
+      setStatus("completed");
+      setPaymentMethod(refundFrom.credit_card_id ? "credit_card" : "account");
+      setIsCorporateExpense(refundFrom.is_corporate_expense || false);
+      setIsRefund(true);
+      setRefundedTransactionId(refundFrom.id);
+      setSaveRule(false);
+      setRuleKeyword("");
+    } else if (sourceData) {
       setType(sourceData.type as "income" | "expense");
       setDescription(sourceData.description);
       setAmount(String(sourceData.amount));
@@ -91,6 +111,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setStatus(sourceData.status as "completed" | "pending");
       setPaymentMethod(sourceData.credit_card_id ? "credit_card" : "account");
       setIsCorporateExpense(sourceData.is_corporate_expense || false);
+      setIsRefund(sourceData.is_refund || false);
+      setRefundedTransactionId(sourceData.refunded_transaction_id || null);
       setSaveRule(false);
       setRuleKeyword("");
     } else {
@@ -104,10 +126,12 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setStatus("completed");
       setPaymentMethod("account");
       setIsCorporateExpense(false);
+      setIsRefund(false);
+      setRefundedTransactionId(null);
       setSaveRule(false);
       setRuleKeyword("");
     }
-  }, [sourceData, open, isDuplicating]);
+  }, [sourceData, open, isDuplicating, refundFrom]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +146,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       date: format(date, "yyyy-MM-dd"),
       status,
       is_corporate_expense: isCorporateExpense,
+      is_refund: isRefund,
+      refunded_transaction_id: refundedTransactionId,
     };
 
     // Save categorization rule if checkbox is checked and keyword is provided
@@ -149,7 +175,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Editar Transação" : isDuplicating ? "Duplicar Transação" : "Nova Transação"}
+            {isEditing ? "Editar Transação" : isDuplicating ? "Duplicar Transação" : isCreatingRefund ? "Criar Extorno" : "Nova Transação"}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -431,6 +457,29 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                 <SelectItem value="pending">Pendente</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Refund Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <RotateCcw className="h-4 w-4 text-amber-600" />
+              </div>
+              <div>
+                <Label htmlFor="refund" className="text-sm font-medium cursor-pointer">
+                  Extorno
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {type === "expense" ? "Devolução/estorno de compra" : "Devolução de receita"}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="refund"
+              checked={isRefund}
+              onCheckedChange={setIsRefund}
+              disabled={isCreatingRefund}
+            />
           </div>
 
           {/* Corporate Expense - Only show for expenses */}
