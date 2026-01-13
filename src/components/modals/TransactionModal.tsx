@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { format, parseISO } from "date-fns";
-import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw } from "lucide-react";
+import { format, parseISO, addMonths } from "date-fns";
+import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +67,11 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [openAccountPopover, setOpenAccountPopover] = useState(false);
   const [openCardPopover, setOpenCardPopover] = useState(false);
   
+  // Installment-related state
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [installmentNumber, setInstallmentNumber] = useState(1);
+  const [totalInstallments, setTotalInstallments] = useState(2);
+  
   const { incomeCategories, expenseCategories } = useCategories();
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
@@ -130,29 +135,15 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setRefundedTransactionId(null);
       setSaveRule(false);
       setRuleKeyword("");
+      setIsInstallment(false);
+      setInstallmentNumber(1);
+      setTotalInstallments(2);
     }
   }, [sourceData, open, isDuplicating, refundFrom]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const transactionData = {
-      description,
-      amount: parseFloat(amount),
-      type,
-      category_id: categoryId || null,
-      account_id: paymentMethod === "account" ? (accountId || null) : null,
-      credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
-      date: format(date, "yyyy-MM-dd"),
-      status,
-      is_corporate_expense: isCorporateExpense,
-      is_refund: isRefund,
-      refunded_transaction_id: refundedTransactionId,
-      installment_group_id: null,
-      installment_number: null,
-      total_installments: null,
-    };
-
     // Save categorization rule if checkbox is checked and keyword is provided
     if (saveRule && ruleKeyword.trim()) {
       await createRule.mutateAsync({
@@ -162,10 +153,59 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       });
     }
 
-    if (isEditing && transaction) {
-      await updateTransaction.mutateAsync({ id: transaction.id, ...transactionData });
+    // Handle installment creation (only for new transactions)
+    if (isInstallment && paymentMethod === "credit_card" && !isEditing) {
+      const groupId = crypto.randomUUID();
+      const baseDate = date;
+      
+      // Create all installments from current number to total
+      for (let i = installmentNumber; i <= totalInstallments; i++) {
+        const installmentDate = addMonths(baseDate, i - installmentNumber);
+        
+        const installmentData = {
+          description: `${description} ${i}/${totalInstallments}`,
+          amount: parseFloat(amount),
+          type,
+          category_id: categoryId || null,
+          account_id: null,
+          credit_card_id: creditCardId || null,
+          date: format(installmentDate, "yyyy-MM-dd"),
+          due_date: format(installmentDate, "yyyy-MM-dd"),
+          status: i === installmentNumber ? status : "pending",
+          is_corporate_expense: isCorporateExpense,
+          is_refund: false,
+          refunded_transaction_id: null,
+          installment_group_id: groupId,
+          installment_number: i,
+          total_installments: totalInstallments,
+        };
+
+        await createTransaction.mutateAsync(installmentData);
+      }
     } else {
-      await createTransaction.mutateAsync(transactionData);
+      // Normal single transaction creation/update
+      const transactionData = {
+        description,
+        amount: parseFloat(amount),
+        type,
+        category_id: categoryId || null,
+        account_id: paymentMethod === "account" ? (accountId || null) : null,
+        credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
+        date: format(date, "yyyy-MM-dd"),
+        status,
+        is_corporate_expense: isCorporateExpense,
+        is_refund: isRefund,
+        refunded_transaction_id: refundedTransactionId,
+        installment_group_id: null,
+        installment_number: null,
+        total_installments: null,
+      };
+
+      if (isEditing && transaction) {
+        await updateTransaction.mutateAsync({ id: transaction.id, ...transactionData });
+      } else {
+        await createTransaction.mutateAsync(transactionData);
+      }
     }
 
     onOpenChange(false);
@@ -419,6 +459,71 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
               </Popover>
             </div>
           )}
+
+          {/* Installment Toggle - Only for credit card payments */}
+          {paymentMethod === "credit_card" && !isEditing && (
+            <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Layers className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <Label htmlFor="installment" className="text-sm font-medium cursor-pointer">
+                      É compra parcelada?
+                    </Label>
+                    <p className="text-xs text-muted-foreground">Cria todas as parcelas automaticamente</p>
+                  </div>
+                </div>
+                <Switch
+                  id="installment"
+                  checked={isInstallment}
+                  onCheckedChange={setIsInstallment}
+                />
+              </div>
+              
+              {isInstallment && (
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="installment-number" className="text-xs text-muted-foreground">
+                      Parcela Atual
+                    </Label>
+                    <Input
+                      id="installment-number"
+                      type="number"
+                      min={1}
+                      max={totalInstallments}
+                      value={installmentNumber}
+                      onChange={(e) => setInstallmentNumber(Math.max(1, Math.min(parseInt(e.target.value) || 1, totalInstallments)))}
+                      className="text-center"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="total-installments" className="text-xs text-muted-foreground">
+                      Total de Parcelas
+                    </Label>
+                    <Input
+                      id="total-installments"
+                      type="number"
+                      min={2}
+                      max={48}
+                      value={totalInstallments}
+                      onChange={(e) => {
+                        const newTotal = Math.max(2, Math.min(parseInt(e.target.value) || 2, 48));
+                        setTotalInstallments(newTotal);
+                        if (installmentNumber > newTotal) setInstallmentNumber(newTotal);
+                      }}
+                      className="text-center"
+                    />
+                  </div>
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Serão criadas {totalInstallments - installmentNumber + 1} parcelas (da {installmentNumber}ª até a {totalInstallments}ª)
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
 
           {/* Date */}
           <div className="space-y-2">
