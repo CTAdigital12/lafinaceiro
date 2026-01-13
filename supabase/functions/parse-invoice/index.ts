@@ -22,6 +22,7 @@ interface ProcessedInvoiceItem {
   installment_current?: number;
   installment_total?: number;
   is_post_closing?: boolean;
+  installment_group_id?: string;
 }
 
 interface InvoiceMetadata {
@@ -131,6 +132,7 @@ function generateFutureInstallments(
       installment_current: installmentNumber,
       installment_total: item.installment_total,
       is_post_closing: false,
+      installment_group_id: item.installment_group_id, // Share the same group ID
     });
   }
 
@@ -427,6 +429,10 @@ IMPORTANTE:
       const transactionValue = Math.abs(rawItem.amount);
       calculatedTotal += transactionValue;
 
+      // Generate installment_group_id for installments
+      const hasInstallments = installmentInfo && installmentInfo.total > 1;
+      const installmentGroupId = hasInstallments ? crypto.randomUUID() : undefined;
+
       const processedItem: ProcessedInvoiceItem = {
         purchase_date: purchaseDate,
         posting_date: postingDate,
@@ -436,6 +442,7 @@ IMPORTANTE:
         installment_current: installmentInfo?.current,
         installment_total: installmentInfo?.total,
         is_post_closing: !isAccountMode && isPostClosing,
+        installment_group_id: installmentGroupId,
       };
 
       if (isPostClosing && !isAccountMode) {

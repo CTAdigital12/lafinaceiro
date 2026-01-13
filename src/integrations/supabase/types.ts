@@ -451,11 +451,14 @@ export type Database = {
           due_date: string | null
           id: string
           imported_at: string | null
+          installment_group_id: string | null
+          installment_number: number | null
           is_corporate_expense: boolean
           is_refund: boolean
           refunded_transaction_id: string | null
           reimbursement_status: string | null
           status: string
+          total_installments: number | null
           type: string
           updated_at: string
           user_id: string
@@ -471,11 +474,14 @@ export type Database = {
           due_date?: string | null
           id?: string
           imported_at?: string | null
+          installment_group_id?: string | null
+          installment_number?: number | null
           is_corporate_expense?: boolean
           is_refund?: boolean
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
           status?: string
+          total_installments?: number | null
           type: string
           updated_at?: string
           user_id: string
@@ -491,11 +497,14 @@ export type Database = {
           due_date?: string | null
           id?: string
           imported_at?: string | null
+          installment_group_id?: string | null
+          installment_number?: number | null
           is_corporate_expense?: boolean
           is_refund?: boolean
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
           status?: string
+          total_installments?: number | null
           type?: string
           updated_at?: string
           user_id?: string

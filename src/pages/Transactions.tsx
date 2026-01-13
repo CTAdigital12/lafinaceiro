@@ -22,6 +22,7 @@ import {
   Copy,
   Building,
   RotateCcw,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { TransactionFiltersModal, TransactionFilters } from "@/components/modals/TransactionFiltersModal";
 import { CategorySelector } from "@/components/CategorySelector";
+import { InstallmentDetailsSheet } from "@/components/InstallmentDetailsSheet";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -81,6 +83,7 @@ export default function Transactions() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBulkCategorySelector, setShowBulkCategorySelector] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
+  const [selectedInstallmentGroupId, setSelectedInstallmentGroupId] = useState<string | null>(null);
   const [filters, setFilters] = useState<TransactionFilters>({
     categoryIds: [],
     type: "all",
@@ -303,6 +306,17 @@ export default function Transactions() {
     setEditingTransaction(null);
     setDuplicatingTransaction(null);
     setIsModalOpen(true);
+  };
+
+  // Handle clicking on a transaction row
+  const handleTransactionClick = (transaction: Transaction) => {
+    // If it has an installment group, open the installment details sheet
+    if (transaction.installment_group_id) {
+      setSelectedInstallmentGroupId(transaction.installment_group_id);
+    } else {
+      // Otherwise, open edit modal
+      handleEdit(transaction);
+    }
   };
 
   const handleModalClose = (open: boolean) => {
@@ -648,8 +662,19 @@ export default function Transactions() {
                   </TableHeader>
                   <TableBody>
                     {filteredTransactions.map((transaction) => (
-                      <TableRow key={transaction.id} className="group">
-                        <TableCell>
+                      <TableRow 
+                        key={transaction.id} 
+                        className={cn(
+                          "group",
+                          transaction.installment_group_id && "cursor-pointer hover:bg-muted/50"
+                        )}
+                        onClick={() => {
+                          if (transaction.installment_group_id) {
+                            handleTransactionClick(transaction);
+                          }
+                        }}
+                      >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={selectedTransactions.includes(transaction.id)}
                             onCheckedChange={() => toggleTransaction(transaction.id)}
@@ -673,6 +698,22 @@ export default function Transactions() {
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             {transaction.description}
+                            {/* Installment Badge */}
+                            {transaction.total_installments && transaction.total_installments > 1 && (
+                              <Badge 
+                                variant="outline" 
+                                className="text-xs gap-1 bg-primary/10 text-primary border-primary/30 cursor-pointer hover:bg-primary/20"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (transaction.installment_group_id) {
+                                    setSelectedInstallmentGroupId(transaction.installment_group_id);
+                                  }
+                                }}
+                              >
+                                <Layers className="h-3 w-3" />
+                                {transaction.installment_number}/{transaction.total_installments}
+                              </Badge>
+                            )}
                             {transaction.is_refund && (
                               <Badge variant="outline" className="text-xs gap-1 bg-orange-500/10 text-orange-600 border-orange-500/30">
                                 <RotateCcw className="h-3 w-3" />
@@ -719,7 +760,7 @@ export default function Transactions() {
                             {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
                             <Button 
                               variant="ghost" 
@@ -894,6 +935,13 @@ export default function Transactions() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Installment Details Sheet */}
+      <InstallmentDetailsSheet
+        open={!!selectedInstallmentGroupId}
+        onOpenChange={(open) => !open && setSelectedInstallmentGroupId(null)}
+        groupId={selectedInstallmentGroupId}
+      />
 
       {/* Filters Modal */}
       <TransactionFiltersModal
