@@ -37,7 +37,7 @@ export default function Planning() {
   const [showChart, setShowChart] = useState(false);
 
   const { budgets, isLoading, totalPlanned, deleteBudget, copyFromPreviousMonth } = useBudgets(month, year);
-  const { transactions } = useTransactions(month, year);
+  const { transactions } = useTransactions(month, year, { loadedCount: 1000 });
 
   // Calculate spent per category (excluding corporate expenses)
   const spentByCategory = useMemo(() => {
