@@ -371,6 +371,8 @@ export function InvoiceReviewModal({
         account_id: string | null;
         status: "completed" | "pending";
         is_corporate_expense: boolean;
+        is_refund: boolean;
+        refunded_transaction_id: string | null;
       }> = [];
 
       let futureInstallmentsCount = 0;
@@ -390,6 +392,8 @@ export function InvoiceReviewModal({
           account_id: null,
           status: "completed",
           is_corporate_expense: item.is_corporate,
+          is_refund: false,
+          refunded_transaction_id: null,
         });
 
         // Add future installments if requested
@@ -412,6 +416,8 @@ export function InvoiceReviewModal({
               account_id: null,
               status: "pending",
               is_corporate_expense: future.is_corporate,
+              is_refund: false,
+              refunded_transaction_id: null,
             });
           }
         }

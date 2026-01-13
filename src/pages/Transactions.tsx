@@ -21,6 +21,7 @@ import {
   Tag,
   Copy,
   Building,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +71,7 @@ export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [duplicatingTransaction, setDuplicatingTransaction] = useState<Transaction | null>(null);
+  const [refundingTransaction, setRefundingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TransactionTab>("checking");
@@ -261,13 +263,19 @@ export default function Transactions() {
     updateTransaction.mutate({ id: transactionId, category_id: categoryId });
   };
 
-  // Calculate totals based on filtered transactions (respects all filters)
+  // Calculate totals based on filtered transactions (respects all filters and refunds)
   const tabTotalIncome = filteredTransactions
-    .filter((t) => t.type === "income")
+    .filter((t) => 
+      (t.type === "income" && !t.is_refund) || 
+      (t.type === "expense" && t.is_refund)
+    )
     .reduce((sum, t) => sum + Number(t.amount), 0);
   
   const tabTotalExpense = filteredTransactions
-    .filter((t) => t.type === "expense")
+    .filter((t) => 
+      (t.type === "expense" && !t.is_refund) ||
+      (t.type === "income" && t.is_refund)
+    )
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const toggleTransaction = (id: string) => {
@@ -279,12 +287,21 @@ export default function Transactions() {
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setDuplicatingTransaction(null);
+    setRefundingTransaction(null);
     setIsModalOpen(true);
   };
 
   const handleDuplicate = (transaction: Transaction) => {
     setDuplicatingTransaction(transaction);
     setEditingTransaction(null);
+    setRefundingTransaction(null);
+    setIsModalOpen(true);
+  };
+
+  const handleCreateRefund = (transaction: Transaction) => {
+    setRefundingTransaction(transaction);
+    setEditingTransaction(null);
+    setDuplicatingTransaction(null);
     setIsModalOpen(true);
   };
 
@@ -293,6 +310,7 @@ export default function Transactions() {
     if (!open) {
       setEditingTransaction(null);
       setDuplicatingTransaction(null);
+      setRefundingTransaction(null);
     }
   };
 
@@ -655,6 +673,12 @@ export default function Transactions() {
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             {transaction.description}
+                            {transaction.is_refund && (
+                              <Badge variant="outline" className="text-xs gap-1 bg-orange-500/10 text-orange-600 border-orange-500/30">
+                                <RotateCcw className="h-3 w-3" />
+                                Extorno
+                              </Badge>
+                            )}
                             {transaction.is_corporate_expense && (
                               <Badge variant="outline" className="text-xs gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30">
                                 <Building className="h-3 w-3" />
@@ -683,10 +707,15 @@ export default function Transactions() {
                           <span
                             className={cn(
                               "font-semibold",
-                              transaction.type === "income" ? "text-income" : "text-expense"
+                              transaction.is_refund
+                                ? (transaction.type === "expense" ? "text-income" : "text-expense")
+                                : (transaction.type === "income" ? "text-income" : "text-expense")
                             )}
                           >
-                            {transaction.type === "income" ? "+" : "-"} R${" "}
+                            {transaction.is_refund
+                              ? (transaction.type === "expense" ? "+" : "-")
+                              : (transaction.type === "income" ? "+" : "-")
+                            } R${" "}
                             {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </span>
                         </TableCell>
@@ -701,6 +730,17 @@ export default function Transactions() {
                             >
                               <Copy className="h-4 w-4" />
                             </Button>
+                            {!transaction.is_refund && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-orange-600 hover:text-orange-600"
+                                onClick={() => handleCreateRefund(transaction)}
+                                title="Criar extorno"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button 
                               variant="ghost" 
                               size="icon" 
@@ -830,6 +870,7 @@ export default function Transactions() {
         onOpenChange={handleModalClose} 
         transaction={editingTransaction}
         duplicateFrom={duplicatingTransaction}
+        refundFrom={refundingTransaction}
       />
 
       {/* Bulk Delete Confirmation Dialog */}

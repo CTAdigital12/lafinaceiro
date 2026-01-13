@@ -19,6 +19,8 @@ export interface Transaction {
   imported_at: string | null;
   status: "completed" | "pending";
   is_corporate_expense: boolean;
+  is_refund: boolean;
+  refunded_transaction_id: string | null;
   reimbursement_status: string | null;
   created_at: string;
   updated_at: string;
@@ -171,13 +173,21 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     },
   });
 
+  // Refund of expense counts as income, refund of income counts as expense
   const totalIncome = transactions
-    .filter((t) => t.type === "income")
+    .filter((t) => 
+      (t.type === "income" && !t.is_refund) || 
+      (t.type === "expense" && t.is_refund)
+    )
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   // Exclude corporate expenses from personal expense total
+  // Refund of income counts as expense (money going out)
   const totalExpense = transactions
-    .filter((t) => t.type === "expense" && !t.is_corporate_expense)
+    .filter((t) => 
+      (t.type === "expense" && !t.is_corporate_expense && !t.is_refund) ||
+      (t.type === "income" && t.is_refund)
+    )
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   return {

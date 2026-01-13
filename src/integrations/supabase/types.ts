@@ -452,6 +452,8 @@ export type Database = {
           id: string
           imported_at: string | null
           is_corporate_expense: boolean
+          is_refund: boolean
+          refunded_transaction_id: string | null
           reimbursement_status: string | null
           status: string
           type: string
@@ -470,6 +472,8 @@ export type Database = {
           id?: string
           imported_at?: string | null
           is_corporate_expense?: boolean
+          is_refund?: boolean
+          refunded_transaction_id?: string | null
           reimbursement_status?: string | null
           status?: string
           type: string
@@ -488,6 +492,8 @@ export type Database = {
           id?: string
           imported_at?: string | null
           is_corporate_expense?: boolean
+          is_refund?: boolean
+          refunded_transaction_id?: string | null
           reimbursement_status?: string | null
           status?: string
           type?: string
@@ -514,6 +520,13 @@ export type Database = {
             columns: ["credit_card_id"]
             isOneToOne: false
             referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_refunded_transaction_id_fkey"
+            columns: ["refunded_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
         ]
