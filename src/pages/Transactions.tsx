@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Plus,
   Search,
@@ -76,9 +76,23 @@ export default function Transactions() {
   const [refundingTransaction, setRefundingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TransactionTab>("checking");
   const [showAll, setShowAll] = useState(false);
   const [loadedCount, setLoadedCount] = useState(20);
+
+  // Debounce search query to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Reset loadedCount when search changes
+  useEffect(() => {
+    setLoadedCount(20);
+  }, [debouncedSearchQuery]);
   const [showCurrentInvoice, setShowCurrentInvoice] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showBulkCategorySelector, setShowBulkCategorySelector] = useState(false);
@@ -116,6 +130,7 @@ export default function Transactions() {
     pageSize, 
     filterByDueDate,
     creditCardFilter: activeTab === "credit" ? "only" : "exclude",
+    searchQuery: debouncedSearchQuery,
   });
   const { totalBalance } = useAccounts();
   
@@ -245,9 +260,8 @@ export default function Transactions() {
     return true;
   });
 
-  const filteredTransactions = filteredByAdvanced.filter((t) =>
-    t.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Search is now handled at database level, so just use advanced filters
+  const filteredTransactions = filteredByAdvanced;
 
   // Select all visible transactions
   const handleSelectAll = (checked: boolean) => {
