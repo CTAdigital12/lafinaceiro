@@ -194,9 +194,9 @@ export default function Transactions() {
     setLoadedCount(20);
   };
 
-  // Load more transactions
+  // Load all remaining transactions
   const handleLoadMore = () => {
-    setLoadedCount(prev => prev + 20);
+    setLoadedCount(totalCount);
   };
 
   const handleTabChange = (value: string) => {
