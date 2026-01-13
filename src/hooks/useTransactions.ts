@@ -22,6 +22,10 @@ export interface Transaction {
   is_refund: boolean;
   refunded_transaction_id: string | null;
   reimbursement_status: string | null;
+  // Installment fields
+  installment_group_id: string | null;
+  installment_number: number | null;
+  total_installments: number | null;
   created_at: string;
   updated_at: string;
   categories?: { id: string; name: string; icon: string; color: string } | null;

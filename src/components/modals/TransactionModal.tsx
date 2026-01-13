@@ -148,6 +148,9 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       is_corporate_expense: isCorporateExpense,
       is_refund: isRefund,
       refunded_transaction_id: refundedTransactionId,
+      installment_group_id: null,
+      installment_number: null,
+      total_installments: null,
     };
 
     // Save categorization rule if checkbox is checked and keyword is provided

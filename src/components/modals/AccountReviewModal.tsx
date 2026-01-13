@@ -329,6 +329,9 @@ export function AccountReviewModal({
             is_refund: false,
             refunded_transaction_id: null,
             reimbursement_status: item.is_corporate ? "pending" : null,
+            installment_group_id: null,
+            installment_number: null,
+            total_installments: null,
             silent: true,
           });
           successCount++;

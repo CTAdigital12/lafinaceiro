@@ -373,12 +373,19 @@ export function InvoiceReviewModal({
         is_corporate_expense: boolean;
         is_refund: boolean;
         refunded_transaction_id: string | null;
+        installment_group_id: string | null;
+        installment_number: number | null;
+        total_installments: number | null;
       }> = [];
 
       let futureInstallmentsCount = 0;
 
       for (const item of itemsToImport) {
         const categoryId = item.category_id && item.category_id.trim() !== "" ? item.category_id : null;
+        
+        // Generate installment_group_id for installments
+        const hasInstallments = item.installment_current && item.installment_total && item.installment_total > 1;
+        const installmentGroupId = hasInstallments ? crypto.randomUUID() : null;
         
         allTransactions.push({
           description: item.notes ? `${item.description} - ${item.notes}` : item.description,
@@ -394,6 +401,9 @@ export function InvoiceReviewModal({
           is_corporate_expense: item.is_corporate,
           is_refund: false,
           refunded_transaction_id: null,
+          installment_group_id: installmentGroupId,
+          installment_number: item.installment_current || null,
+          total_installments: item.installment_total || null,
         });
 
         // Add future installments if requested
@@ -401,8 +411,10 @@ export function InvoiceReviewModal({
           const futureItems = generateFutureInstallments(item);
           futureInstallmentsCount += futureItems.length;
           
-          for (const future of futureItems) {
+          for (let i = 0; i < futureItems.length; i++) {
+            const future = futureItems[i];
             const futureCategoryId = future.category_id && future.category_id.trim() !== "" ? future.category_id : null;
+            const futureInstallmentNumber = item.installment_current + i + 1;
             
             allTransactions.push({
               description: future.notes ? `${future.description} - ${future.notes}` : future.description,
@@ -418,6 +430,9 @@ export function InvoiceReviewModal({
               is_corporate_expense: future.is_corporate,
               is_refund: false,
               refunded_transaction_id: null,
+              installment_group_id: installmentGroupId,
+              installment_number: futureInstallmentNumber,
+              total_installments: item.installment_total,
             });
           }
         }
