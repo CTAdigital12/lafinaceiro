@@ -39,6 +39,7 @@ interface UseTransactionsOptions {
   pageSize?: number;
   filterByDueDate?: boolean;
   creditCardFilter?: "only" | "exclude" | null;
+  searchQuery?: string;
 }
 
 export function useTransactions(overrideMonth?: number, overrideYear?: number, options: UseTransactionsOptions = {}) {
@@ -47,7 +48,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { showAll = false, loadedCount = 20, pageSize = 20, filterByDueDate = false, creditCardFilter = null } = options;
+  const { showAll = false, loadedCount = 20, pageSize = 20, filterByDueDate = false, creditCardFilter = null, searchQuery = "" } = options;
 
   // Use override values if provided, otherwise use context
   const month = overrideMonth ?? contextMonth;
@@ -58,7 +59,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   // Query for transactions with "load more" support
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, loadedCount, filterByDueDate, creditCardFilter],
+    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, loadedCount, filterByDueDate, creditCardFilter, searchQuery],
     queryFn: async () => {
       let query = supabase
         .from("transactions")
@@ -85,6 +86,11 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         query = query.not("credit_card_id", "is", null);
       } else if (creditCardFilter === "exclude") {
         query = query.is("credit_card_id", null);
+      }
+
+      // Apply search filter on database level
+      if (searchQuery && searchQuery.trim() !== "") {
+        query = query.ilike("description", `%${searchQuery}%`);
       }
 
       // Use loadedCount to limit results (for "load more" functionality)
