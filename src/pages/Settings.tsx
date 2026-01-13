@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Save, Bell, Palette, Globe, Shield, User, Users } from "lucide-react";
+import { Save, Bell, Palette, Globe, Shield, User, Users, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { MembersSection } from "@/components/settings/MembersSection";
+import { InstallmentMigration } from "@/components/settings/InstallmentMigration";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Settings() {
@@ -51,6 +52,10 @@ export default function Settings() {
           <TabsTrigger value="members" className="gap-2">
             <Users className="h-4 w-4" />
             Membros
+          </TabsTrigger>
+          <TabsTrigger value="tools" className="gap-2">
+            <Wrench className="h-4 w-4" />
+            Ferramentas
           </TabsTrigger>
           <TabsTrigger value="account" className="gap-2">
             <User className="h-4 w-4" />
@@ -250,6 +255,17 @@ export default function Settings() {
               Convide pessoas para visualizar e gerenciar seus dados financeiros
             </p>
             <MembersSection />
+          </div>
+        </TabsContent>
+
+        {/* Tools Tab */}
+        <TabsContent value="tools" className="space-y-6">
+          <div className="bg-card rounded-xl border border-border p-6 shadow-card">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Ferramentas de Manutenção</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Utilitários para organizar e corrigir seus dados financeiros
+            </p>
+            <InstallmentMigration />
           </div>
         </TabsContent>
 
