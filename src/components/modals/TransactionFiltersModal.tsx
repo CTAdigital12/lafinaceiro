@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { X, Filter, Calendar, Check, ChevronsUpDown } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { X, Filter, Calendar, Check, ChevronsUpDown, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +26,8 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useCategories } from "@/hooks/useCategories";
+import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
+import { Input } from "@/components/ui/input";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCreditCards } from "@/hooks/useCreditCards";
 
@@ -102,8 +103,25 @@ export function TransactionFiltersModal({
   const [openCardPopover, setOpenCardPopover] = useState(false);
   const [openInstallmentPopover, setOpenInstallmentPopover] = useState(false);
   const [openCorporatePopover, setOpenCorporatePopover] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
 
   const allCategories = [...incomeCategories, ...expenseCategories];
+
+  // Filter categories by search text
+  const filteredCategories = useMemo(() => {
+    if (!categorySearch.trim()) return allCategories;
+    const searchLower = categorySearch.toLowerCase();
+    return allCategories.filter(cat =>
+      cat.name.toLowerCase().includes(searchLower) ||
+      cat.fullName?.toLowerCase().includes(searchLower) ||
+      cat.parentName?.toLowerCase().includes(searchLower)
+    );
+  }, [allCategories, categorySearch]);
+
+  // Group categories by parent
+  const groupedCategories = useMemo(() => {
+    return groupCategoriesByParent(filteredCategories);
+  }, [filteredCategories]);
 
   useEffect(() => {
     setLocalFilters(filters);
@@ -536,32 +554,66 @@ export function TransactionFiltersModal({
             <Label className="text-sm font-medium">
               Categorias ({localFilters.categoryIds.length} selecionadas)
             </Label>
-            <div className="max-h-48 overflow-y-auto border border-border rounded-lg p-3 space-y-2">
-              {allCategories.map((category) => (
-                <label
-                  key={category.id}
-                  className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded"
-                >
-                  <Checkbox
-                    checked={localFilters.categoryIds.includes(category.id)}
-                    onCheckedChange={(checked) =>
-                      handleCategoryToggle(category.id, !!checked)
-                    }
-                  />
-                  <span className="text-lg">{category.icon}</span>
-                  <span className="text-sm">{category.name}</span>
-                  <span
-                    className={cn(
-                      "ml-auto text-xs px-1.5 py-0.5 rounded",
-                      category.type === "income"
-                        ? "bg-income/10 text-income"
-                        : "bg-expense/10 text-expense"
-                    )}
-                  >
-                    {category.type === "income" ? "Receita" : "Despesa"}
-                  </span>
-                </label>
+
+            {/* Campo de busca */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar categoria..."
+                value={categorySearch}
+                onChange={(e) => setCategorySearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Lista agrupada hierarquicamente */}
+            <div className="max-h-48 overflow-y-auto border border-border rounded-lg p-3 space-y-3">
+              {groupedCategories.map((group, index) => (
+                <div key={group.parent?.id || `group-${index}`}>
+                  {/* Cabeçalho do grupo (categoria pai) */}
+                  {group.parent && (
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
+                      <span>{group.parent.icon}</span>
+                      <span>{group.parent.name}</span>
+                    </div>
+                  )}
+
+                  {/* Subcategorias com indentação */}
+                  <div className={cn("space-y-1", group.parent && "pl-4")}>
+                    {group.children.map((category) => (
+                      <label
+                        key={category.id}
+                        className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded"
+                      >
+                        <Checkbox
+                          checked={localFilters.categoryIds.includes(category.id)}
+                          onCheckedChange={(checked) =>
+                            handleCategoryToggle(category.id, !!checked)
+                          }
+                        />
+                        <span className="text-lg">{category.icon}</span>
+                        <span className="text-sm">{category.name}</span>
+                        <span
+                          className={cn(
+                            "ml-auto text-xs px-1.5 py-0.5 rounded",
+                            category.type === "income"
+                              ? "bg-income/10 text-income"
+                              : "bg-expense/10 text-expense"
+                          )}
+                        >
+                          {category.type === "income" ? "Receita" : "Despesa"}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ))}
+
+              {filteredCategories.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Nenhuma categoria encontrada.
+                </p>
+              )}
             </div>
           </div>
         </div>
