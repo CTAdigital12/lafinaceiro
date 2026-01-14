@@ -40,7 +40,7 @@ export function EditBudgetModal({ open, onOpenChange, budget, month, year }: Edi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Meta de Orçamento</DialogTitle>
           <DialogDescription>

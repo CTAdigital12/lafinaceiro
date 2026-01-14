@@ -215,7 +215,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Editar Transação" : isDuplicating ? "Duplicar Transação" : isCreatingRefund ? "Criar Extorno" : "Nova Transação"}
