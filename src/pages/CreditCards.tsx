@@ -213,25 +213,46 @@ export default function CreditCards() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {/* Fatura Banco */}
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg gradient-expense flex items-center justify-center">
               <CreditCard className="h-5 w-5 text-expense-foreground" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Fatura (Banco)</p>
+              <p className="text-xs text-muted-foreground">Fatura Banco</p>
               <p className="text-lg font-bold text-foreground">
                 R$ {totalInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
-              {reconciliation.totalTransactions > 0 && Math.abs(reconciliation.totalDifference) > 0.01 && (
+              <p className="text-xs text-muted-foreground">Valor informado</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Fatura Lançada */}
+        <div className="bg-card rounded-xl border border-border p-4 shadow-card">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-chart-2/10 flex items-center justify-center">
+              <Wallet className="h-5 w-5 text-chart-2" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Fatura Lançada</p>
+              <p className="text-lg font-bold text-chart-2">
+                R$ {reconciliation.totalTransactions.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+              {Math.abs(reconciliation.totalDifference) > 0.01 ? (
                 <p className="text-xs text-chart-4">
-                  Lanç: R$ {reconciliation.totalTransactions.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  Diferença: R$ {Math.abs(reconciliation.totalDifference).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
+              ) : (
+                <p className="text-xs text-income">Reconciliado ✓</p>
               )}
             </div>
           </div>
         </div>
+        
+        {/* Meu Custo */}
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -246,6 +267,8 @@ export default function CreditCards() {
             </div>
           </div>
         </div>
+        
+        {/* A Reembolsar */}
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
@@ -260,6 +283,8 @@ export default function CreditCards() {
             </div>
           </div>
         </div>
+        
+        {/* Limite Disponível */}
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg gradient-income flex items-center justify-center">
