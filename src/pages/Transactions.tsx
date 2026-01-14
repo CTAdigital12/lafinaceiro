@@ -23,6 +23,9 @@ import {
   Building,
   RotateCcw,
   Layers,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -106,6 +109,13 @@ export default function Transactions() {
     status: "all",
     dateRange: null,
   });
+  
+  // Sorting state
+  type SortField = "date" | "amount" | "description" | null;
+  type SortDirection = "asc" | "desc";
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  
   const pageSize = 20;
   
   const { month, year } = useDate();
@@ -260,8 +270,55 @@ export default function Transactions() {
     return true;
   });
 
+  // Handle sorting toggle
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Toggle direction or clear sort
+      if (sortDirection === "desc") {
+        setSortDirection("asc");
+      } else {
+        setSortField(null);
+        setSortDirection("desc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("desc");
+    }
+  };
+
+  // Get sort icon for header
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-3 w-3 opacity-50" />;
+    }
+    return sortDirection === "desc" 
+      ? <ArrowDown className="h-3 w-3" /> 
+      : <ArrowUp className="h-3 w-3" />;
+  };
+
+  // Apply sorting to filtered transactions
+  const sortedTransactions = [...filteredByAdvanced].sort((a, b) => {
+    if (!sortField) return 0;
+    
+    let comparison = 0;
+    
+    switch (sortField) {
+      case "date":
+        comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+        break;
+      case "amount":
+        comparison = Number(a.amount) - Number(b.amount);
+        break;
+      case "description":
+        comparison = a.description.localeCompare(b.description, "pt-BR");
+        break;
+    }
+    
+    return sortDirection === "asc" ? comparison : -comparison;
+  });
+
   // Search is now handled at database level, so just use advanced filters
-  const filteredTransactions = filteredByAdvanced;
+  const filteredTransactions = sortedTransactions;
 
   // Select all visible transactions
   const handleSelectAll = (checked: boolean) => {
@@ -667,14 +724,47 @@ export default function Transactions() {
                         />
                       </TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Data Compra</TableHead>
+                      <TableHead>
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 hover:text-primary transition-colors cursor-pointer",
+                            sortField === "date" && "text-primary font-semibold"
+                          )}
+                          onClick={() => handleSort("date")}
+                        >
+                          Data Compra
+                          {getSortIcon("date")}
+                        </button>
+                      </TableHead>
                       {activeTab === "credit" && (
                         <TableHead className="text-primary font-medium">Vencimento</TableHead>
                       )}
-                      <TableHead>Descrição</TableHead>
+                      <TableHead>
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 hover:text-primary transition-colors cursor-pointer",
+                            sortField === "description" && "text-primary font-semibold"
+                          )}
+                          onClick={() => handleSort("description")}
+                        >
+                          Descrição
+                          {getSortIcon("description")}
+                        </button>
+                      </TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>{activeTab === "credit" ? "Cartão" : "Conta"}</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-right">
+                        <button
+                          className={cn(
+                            "flex items-center gap-1 ml-auto hover:text-primary transition-colors cursor-pointer",
+                            sortField === "amount" && "text-primary font-semibold"
+                          )}
+                          onClick={() => handleSort("amount")}
+                        >
+                          Valor
+                          {getSortIcon("amount")}
+                        </button>
+                      </TableHead>
                       <TableHead className="w-20">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
