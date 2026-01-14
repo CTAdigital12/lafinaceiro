@@ -74,7 +74,10 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
       if (!showAll) {
         if (filterByDueDate) {
           // Filter by due_date for credit card invoices
-          query = query.gte("due_date", startDate).lte("due_date", endDate);
+          // Include transactions where:
+          // 1. due_date is within the period, OR
+          // 2. due_date is NULL and date is within the period (for refunds/adjustments without due_date)
+          query = query.or(`and(due_date.gte.${startDate},due_date.lte.${endDate}),and(due_date.is.null,date.gte.${startDate},date.lte.${endDate})`);
         } else {
           // Filter by transaction date
           query = query.gte("date", startDate).lte("date", endDate);
