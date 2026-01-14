@@ -27,7 +27,7 @@ export default function Dashboard() {
   const { transactions, totalIncome, totalExpense, isLoading: transactionsLoading } = useTransactions(
     undefined,
     undefined,
-    { showAll: false, loadedCount: 1000 }
+    { showAll: false, loadedCount: 1000, useHybridDateFilter: true }
   );
   const { totalInvoice, isLoading: cardsLoading } = useCreditCards();
   const { expenseCategories, incomeCategories, isLoading: categoriesLoading } = useCategories();
