@@ -62,13 +62,15 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ["credit-card-transactions-reconciliation", user?.id, month, year],
     queryFn: async () => {
+      // Include transactions where:
+      // 1. due_date is within the period, OR
+      // 2. due_date is NULL and date is within the period (for refunds/adjustments without due_date)
       const { data, error } = await supabase
         .from("transactions")
         .select("*, categories(name, icon)")
         .not("credit_card_id", "is", null)
         .eq("type", "expense")
-        .gte("due_date", periodStart)
-        .lte("due_date", periodEnd);
+        .or(`and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`);
 
       if (error) throw error;
       return (data || []).map(t => ({
