@@ -7,8 +7,9 @@ export interface CardReconciliation {
   creditCardId: string;
   creditCardName: string;
   bankInvoice: number; // current_invoice from credit_cards table
-  transactionsTotal: number; // Sum of completed transactions
+  transactionsTotal: number; // Sum of completed transactions (minus refunds)
   pendingTotal: number; // Sum of pending transactions
+  refundTotal: number; // Sum of refund transactions
   difference: number; // bankInvoice - transactionsTotal
   hasDiscrepancy: boolean;
   corporateTotal: number; // Sum of corporate expenses
@@ -21,6 +22,7 @@ export interface ReconciliationSummary {
   totalDifference: number;
   totalCorporate: number;
   totalPersonal: number;
+  totalRefunds: number;
   hasAnyDiscrepancy: boolean;
   cards: CardReconciliation[];
 }
@@ -57,15 +59,28 @@ export function useCreditCardReconciliation() {
       (t) => t.status === "pending"
     );
 
-    const transactionsTotal = completedTransactions.reduce(
+    // Separate normal transactions from refunds
+    const normalTransactions = completedTransactions.filter((t) => !t.is_refund);
+    const refundTransactions = completedTransactions.filter((t) => t.is_refund);
+
+    // Calculate totals - refunds should be subtracted
+    const normalTotal = normalTransactions.reduce(
       (sum, t) => sum + Number(t.amount),
       0
     );
+    const refundTotal = refundTransactions.reduce(
+      (sum, t) => sum + Number(t.amount),
+      0
+    );
+    const transactionsTotal = normalTotal - refundTotal;
+
     const pendingTotal = pendingTransactions.reduce(
       (sum, t) => sum + Number(t.amount),
       0
     );
-    const corporateTotal = completedTransactions
+
+    // Corporate expenses should also exclude refunds
+    const corporateTotal = normalTransactions
       .filter((t) => t.is_corporate_expense)
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
@@ -78,6 +93,7 @@ export function useCreditCardReconciliation() {
       bankInvoice,
       transactionsTotal,
       pendingTotal,
+      refundTotal,
       difference,
       hasDiscrepancy: Math.abs(difference) > 0.01, // Allow for floating point errors
       corporateTotal,
@@ -91,6 +107,7 @@ export function useCreditCardReconciliation() {
     totalDifference: cards.reduce((sum, c) => sum + c.difference, 0),
     totalCorporate: cards.reduce((sum, c) => sum + c.corporateTotal, 0),
     totalPersonal: cards.reduce((sum, c) => sum + c.personalTotal, 0),
+    totalRefunds: cards.reduce((sum, c) => sum + c.refundTotal, 0),
     hasAnyDiscrepancy: cards.some((c) => c.hasDiscrepancy),
     cards,
   };

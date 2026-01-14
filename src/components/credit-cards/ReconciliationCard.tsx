@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard } from "lucide-react";
+import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -66,8 +66,14 @@ function CardReconciliationItem({ card }: { card: CardReconciliation }) {
         )} 
       />
 
-      {(card.corporateTotal > 0 || card.pendingTotal > 0) && (
-        <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1">
+      {(card.corporateTotal > 0 || card.pendingTotal > 0 || card.refundTotal > 0) && (
+        <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1 flex-wrap">
+          {card.refundTotal > 0 && (
+            <div className="flex items-center gap-1">
+              <RotateCcw className="h-3 w-3" />
+              <span className="text-income">Estornos: -{formatCurrency(card.refundTotal)}</span>
+            </div>
+          )}
           {card.corporateTotal > 0 && (
             <div className="flex items-center gap-1">
               <Briefcase className="h-3 w-3" />
