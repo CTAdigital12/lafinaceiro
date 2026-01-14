@@ -40,6 +40,7 @@ interface UseTransactionsOptions {
   filterByDueDate?: boolean;
   creditCardFilter?: "only" | "exclude" | null;
   searchQuery?: string;
+  useHybridDateFilter?: boolean; // For Dashboard: date for regular transactions, due_date for credit card
 }
 
 export function useTransactions(overrideMonth?: number, overrideYear?: number, options: UseTransactionsOptions = {}) {
@@ -48,7 +49,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { showAll = false, loadedCount = 20, pageSize = 20, filterByDueDate = false, creditCardFilter = null, searchQuery = "" } = options;
+  const { showAll = false, loadedCount = 20, pageSize = 20, filterByDueDate = false, creditCardFilter = null, searchQuery = "", useHybridDateFilter = false } = options;
 
   // Use override values if provided, otherwise use context
   const month = overrideMonth ?? contextMonth;
@@ -72,7 +73,15 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
       // Apply date filter only if not showing all
       if (!showAll) {
-        if (filterByDueDate) {
+        if (useHybridDateFilter) {
+          // Hybrid filter for Dashboard:
+          // - Transactions WITHOUT credit card: filter by date
+          // - Transactions WITH credit card: filter by due_date
+          query = query.or(
+            `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate}),` +
+            `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`
+          );
+        } else if (filterByDueDate) {
           // Filter by due_date for credit card invoices
           // Include transactions where:
           // 1. due_date is within the period, OR
