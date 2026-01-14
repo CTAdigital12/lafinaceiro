@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart } from "lucide-react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart, Tag } from "lucide-react";
+import { Transaction } from "@/hooks/useTransactions";
+import { TransactionModal } from "@/components/modals/TransactionModal";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -39,6 +41,8 @@ export default function Planning() {
   const [showChart, setShowChart] = useState(false);
   const [addSubcategoryModalOpen, setAddSubcategoryModalOpen] = useState(false);
   const [selectedParentCategory, setSelectedParentCategory] = useState<{ id: string; name: string; icon: string; color: string } | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [transactionModalOpen, setTransactionModalOpen] = useState(false);
 
   const { categories } = useCategories();
 
@@ -109,6 +113,22 @@ export default function Planning() {
   const totalRemaining = totalPlanned - totalSpent;
   const totalPercentage = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
   const categoriesOverBudget = budgets.filter((b) => (spentByCategory[b.category_id || ""] || 0) > Number(b.planned_amount)).length;
+
+  // Uncategorized transactions
+  const uncategorizedTransactions = useMemo(() => {
+    return transactions.filter(
+      (t) => 
+        t.type === "expense" && 
+        !t.category_id && 
+        !t.is_corporate_expense && 
+        !t.is_refund && 
+        !t.is_reimbursable
+    );
+  }, [transactions]);
+
+  const uncategorizedTotal = useMemo(() => {
+    return uncategorizedTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
+  }, [uncategorizedTransactions]);
 
   const goToPreviousMonth = () => {
     if (month === 1) { setMonth(12); setYear(year - 1); }
@@ -400,6 +420,62 @@ export default function Planning() {
         </div>
       )}
 
+      {/* Uncategorized Expenses */}
+      {uncategorizedTransactions.length > 0 && (
+        <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+          <div className="p-4 border-b border-border bg-muted/30">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-chart-4/20 flex items-center justify-center">
+                <Tag className="h-5 w-5 text-chart-4" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Despesas sem categoria</h3>
+                <p className="text-sm text-muted-foreground">
+                  {uncategorizedTransactions.length} transação(ões) totalizando R$ {uncategorizedTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Data</TableHead>
+                <TableHead>Descrição</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {uncategorizedTransactions.map((transaction) => (
+                <TableRow key={transaction.id}>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                  </TableCell>
+                  <TableCell>{transaction.description}</TableCell>
+                  <TableCell className="text-right font-medium text-expense">
+                    R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingTransaction(transaction);
+                        setTransactionModalOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4 mr-1" />
+                      Categorizar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
       <NewBudgetModal open={isModalOpen} onOpenChange={setIsModalOpen} month={month} year={year} />
       <EditBudgetModal open={editModalOpen} onOpenChange={setEditModalOpen} budget={editingBudget} month={month} year={year} />
       <AddSubcategoryModal 
@@ -408,6 +484,14 @@ export default function Planning() {
         parentCategory={selectedParentCategory}
         month={month}
         year={year}
+      />
+      <TransactionModal
+        open={transactionModalOpen}
+        onOpenChange={(open) => {
+          setTransactionModalOpen(open);
+          if (!open) setEditingTransaction(null);
+        }}
+        transaction={editingTransaction}
       />
     </div>
   );
