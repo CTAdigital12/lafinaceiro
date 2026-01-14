@@ -18,6 +18,50 @@ export interface Category {
   fullName?: string;
 }
 
+export interface CategoryGroup {
+  parent: Category | null;
+  children: Category[];
+}
+
+// Helper function to group categories by parent for hierarchical display
+export function groupCategoriesByParent(categories: Category[]): CategoryGroup[] {
+  const parentCategories = categories.filter(c => !c.parent_id);
+  const childCategories = categories.filter(c => c.parent_id);
+  
+  const groups: CategoryGroup[] = [];
+  
+  // Add parent categories with their children
+  parentCategories.forEach(parent => {
+    const children = childCategories.filter(c => c.parent_id === parent.id);
+    if (children.length > 0) {
+      // Parent has children - add parent as group header with children
+      groups.push({
+        parent,
+        children,
+      });
+    } else {
+      // Parent has no children - add as standalone
+      groups.push({
+        parent: null,
+        children: [parent],
+      });
+    }
+  });
+  
+  // Add orphan children (with parent_id but parent doesn't exist) as standalone
+  const orphanChildren = childCategories.filter(
+    c => !parentCategories.some(p => p.id === c.parent_id)
+  );
+  if (orphanChildren.length > 0) {
+    groups.push({
+      parent: null,
+      children: orphanChildren,
+    });
+  }
+  
+  return groups;
+}
+
 export function useCategories() {
   const { user } = useAuth();
   const { toast } = useToast();

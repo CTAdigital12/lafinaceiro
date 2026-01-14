@@ -26,7 +26,7 @@ export default function Dashboard() {
       .filter((t) => t.type === "expense" && t.category_id === cat.id && !t.is_corporate_expense)
       .reduce((sum, t) => sum + Number(t.amount), 0);
     return {
-      name: cat.name,
+      name: cat.fullName || cat.name,
       value: total,
       color: cat.color,
     };
@@ -38,7 +38,7 @@ export default function Dashboard() {
       .filter((t) => t.type === "income" && t.category_id === cat.id)
       .reduce((sum, t) => sum + Number(t.amount), 0);
     return {
-      name: cat.name,
+      name: cat.fullName || cat.name,
       value: total,
       color: cat.color,
     };

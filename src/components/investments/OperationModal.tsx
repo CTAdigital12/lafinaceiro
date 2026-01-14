@@ -29,7 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InvestmentAsset, ASSET_TYPE_LABELS } from "@/hooks/useInvestments";
 import { useAccounts } from "@/hooks/useAccounts";
-import { useCategories } from "@/hooks/useCategories";
+import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 
 const formSchema = z.object({
   operationType: z.enum(["buy", "sell", "dividend"]),
@@ -418,7 +418,7 @@ export function OperationModal({
                             <SelectContent>
                               {expenseCategories.map((cat) => (
                                 <SelectItem key={cat.id} value={cat.id}>
-                                  {cat.icon} {cat.name}
+                                  {cat.icon} {cat.fullName || cat.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>

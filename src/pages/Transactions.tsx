@@ -56,13 +56,26 @@ import {
 import { cn } from "@/lib/utils";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
-import { useCategories } from "@/hooks/useCategories";
+import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { TransactionFiltersModal, TransactionFilters } from "@/components/modals/TransactionFiltersModal";
 import { CategorySelector } from "@/components/CategorySelector";
 import { InstallmentDetailsSheet } from "@/components/InstallmentDetailsSheet";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 // Format date string (YYYY-MM-DD) to Brazilian format without timezone issues
 function formatDateBR(dateString: string | null): string {
@@ -648,20 +661,39 @@ export default function Transactions() {
                   {showBulkCategorySelector ? (
                     <div className="flex items-center gap-2 bg-card rounded-lg border border-border p-2">
                       <Tag className="h-4 w-4 text-muted-foreground" />
-                      <select
-                        className="bg-transparent text-sm border-none focus:ring-0 outline-none"
-                        onChange={(e) => {
-                          if (e.target.value) handleBulkCategoryUpdate(e.target.value);
-                        }}
-                        defaultValue=""
-                      >
-                        <option value="" disabled>Selecionar categoria...</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.icon} {cat.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-8 min-w-[180px] justify-start text-sm">
+                            Selecionar categoria...
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[280px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Buscar categoria..." />
+                            <CommandList>
+                              <CommandEmpty>Nenhuma categoria encontrada.</CommandEmpty>
+                              {groupCategoriesByParent(categories).map((group, groupIndex) => (
+                                <CommandGroup 
+                                  key={groupIndex} 
+                                  heading={group.parent ? `${group.parent.icon} ${group.parent.name}` : undefined}
+                                >
+                                  {group.children.map((cat) => (
+                                    <CommandItem
+                                      key={cat.id}
+                                      value={cat.fullName || cat.name}
+                                      onSelect={() => handleBulkCategoryUpdate(cat.id)}
+                                      className={group.parent ? "pl-4" : ""}
+                                    >
+                                      <span className="mr-2">{cat.icon}</span>
+                                      {group.parent ? cat.name : (cat.fullName || cat.name)}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              ))}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <Button
                         variant="ghost"
                         size="icon"
