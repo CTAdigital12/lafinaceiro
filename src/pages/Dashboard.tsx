@@ -1,15 +1,29 @@
+import { useState } from "react";
 import { Wallet, TrendingUp, TrendingDown, CreditCard, Loader2 } from "lucide-react";
 import { SummaryCard } from "@/components/dashboard/SummaryCard";
 import { CategoryChart } from "@/components/dashboard/CategoryChart";
 import { BalanceChart } from "@/components/dashboard/BalanceChart";
+import { CategoryDetailSheet } from "@/components/dashboard/CategoryDetailSheet";
+import { AllCategoriesList } from "@/components/dashboard/AllCategoriesList";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useCategories } from "@/hooks/useCategories";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+interface CategoryData {
+  name: string;
+  value: number;
+  color: string;
+}
 
 export default function Dashboard() {
   const { totalBalance, isLoading: accountsLoading } = useAccounts();
-  // Use showAll: false but with high loadedCount to get all transactions for the month
   const { transactions, totalIncome, totalExpense, isLoading: transactionsLoading } = useTransactions(
     undefined,
     undefined,
@@ -17,6 +31,12 @@ export default function Dashboard() {
   );
   const { totalInvoice, isLoading: cardsLoading } = useCreditCards();
   const { expenseCategories, incomeCategories, isLoading: categoriesLoading } = useCategories();
+
+  const [selectedCategory, setSelectedCategory] = useState<CategoryData | null>(null);
+  const [categoryType, setCategoryType] = useState<"expense" | "income">("expense");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [allCategoriesDialogOpen, setAllCategoriesDialogOpen] = useState(false);
+  const [allCategoriesType, setAllCategoriesType] = useState<"expense" | "income">("expense");
 
   const isLoading = accountsLoading || transactionsLoading || cardsLoading || categoriesLoading;
 
@@ -28,7 +48,8 @@ export default function Dashboard() {
     return {
       name: cat.fullName || cat.name,
       value: total,
-      color: cat.color,
+      color: cat.color || "hsl(var(--chart-1))",
+      id: cat.id,
     };
   }).filter((c) => c.value > 0);
 
@@ -40,18 +61,43 @@ export default function Dashboard() {
     return {
       name: cat.fullName || cat.name,
       value: total,
-      color: cat.color,
+      color: cat.color || "hsl(var(--chart-2))",
+      id: cat.id,
     };
   }).filter((c) => c.value > 0);
 
   // Default data for empty states
   const defaultExpenseData = expensesByCategory.length > 0 ? expensesByCategory : [
-    { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)" },
+    { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)", id: "" },
   ];
 
   const defaultIncomeData = incomeByCategory.length > 0 ? incomeByCategory : [
-    { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)" },
+    { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)", id: "" },
   ];
+
+  // Get transactions for selected category
+  const getTransactionsForCategory = (categoryName: string, type: "expense" | "income") => {
+    const categories = type === "expense" ? expenseCategories : incomeCategories;
+    const category = categories.find(c => (c.fullName || c.name) === categoryName);
+    
+    if (!category) return [];
+    
+    return transactions
+      .filter(t => t.category_id === category.id && t.type === type)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
+
+  const handleCategoryClick = (category: CategoryData, type: "expense" | "income") => {
+    if (category.name === "Sem dados") return;
+    setSelectedCategory(category);
+    setCategoryType(type);
+    setSheetOpen(true);
+  };
+
+  const handleViewAllClick = (type: "expense" | "income") => {
+    setAllCategoriesType(type);
+    setAllCategoriesDialogOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -60,6 +106,10 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  const categoryTransactions = selectedCategory 
+    ? getTransactionsForCategory(selectedCategory.name, categoryType)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -103,12 +153,53 @@ export default function Dashboard() {
 
       {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <CategoryChart title="Despesas por Categoria" data={defaultExpenseData} />
-        <CategoryChart title="Receitas por Categoria" data={defaultIncomeData} />
+        <CategoryChart 
+          title="Despesas por Categoria" 
+          data={defaultExpenseData} 
+          onCategoryClick={(cat) => handleCategoryClick(cat, "expense")}
+          onViewAllClick={() => handleViewAllClick("expense")}
+        />
+        <CategoryChart 
+          title="Receitas por Categoria" 
+          data={defaultIncomeData}
+          onCategoryClick={(cat) => handleCategoryClick(cat, "income")}
+          onViewAllClick={() => handleViewAllClick("income")}
+        />
       </div>
 
       {/* Balance Chart */}
       <BalanceChart />
+
+      {/* Category Detail Sheet */}
+      {selectedCategory && (
+        <CategoryDetailSheet
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          categoryName={selectedCategory.name}
+          categoryColor={selectedCategory.color}
+          totalAmount={selectedCategory.value}
+          transactions={categoryTransactions}
+        />
+      )}
+
+      {/* All Categories Dialog */}
+      <Dialog open={allCategoriesDialogOpen} onOpenChange={setAllCategoriesDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {allCategoriesType === "expense" ? "Todas as Despesas" : "Todas as Receitas"}
+            </DialogTitle>
+          </DialogHeader>
+          <AllCategoriesList
+            data={allCategoriesType === "expense" ? expensesByCategory : incomeByCategory}
+            total={allCategoriesType === "expense" ? totalExpense : totalIncome}
+            onCategoryClick={(cat) => {
+              setAllCategoriesDialogOpen(false);
+              handleCategoryClick(cat, allCategoriesType);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
