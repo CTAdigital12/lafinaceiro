@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBudgets } from "@/hooks/useBudgets";
-import { useCategories } from "@/hooks/useCategories";
+import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { Loader2, Check, ChevronsUpDown } from "lucide-react";
 import {
   Popover,
@@ -77,7 +77,7 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
                   {categoryId ? (
                     <span className="flex items-center gap-2">
                       {expenseCategories.find(c => c.id === categoryId)?.icon}
-                      {expenseCategories.find(c => c.id === categoryId)?.name}
+                      {expenseCategories.find(c => c.id === categoryId)?.fullName || expenseCategories.find(c => c.id === categoryId)?.name}
                     </span>
                   ) : (
                     "Selecione uma categoria"
@@ -90,24 +90,30 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
                   <CommandInput placeholder="Buscar categoria..." />
                   <CommandList>
                     <CommandEmpty>Nenhuma categoria encontrada.</CommandEmpty>
-                    <CommandGroup>
-                      {expenseCategories.map((category) => (
-                        <CommandItem
-                          key={category.id}
-                          value={category.name}
-                          onSelect={() => {
-                            setCategoryId(category.id);
-                            setOpenCategoryPopover(false);
-                          }}
-                        >
-                          <Check
-                            className={cn("mr-2 h-4 w-4", categoryId === category.id ? "opacity-100" : "opacity-0")}
-                          />
-                          <span className="mr-2">{category.icon}</span>
-                          {category.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
+                    {groupCategoriesByParent(expenseCategories).map((group, groupIndex) => (
+                      <CommandGroup 
+                        key={groupIndex} 
+                        heading={group.parent ? `${group.parent.icon} ${group.parent.name}` : undefined}
+                      >
+                        {group.children.map((category) => (
+                          <CommandItem
+                            key={category.id}
+                            value={category.fullName || category.name}
+                            onSelect={() => {
+                              setCategoryId(category.id);
+                              setOpenCategoryPopover(false);
+                            }}
+                            className={group.parent ? "pl-4" : ""}
+                          >
+                            <Check
+                              className={cn("mr-2 h-4 w-4", categoryId === category.id ? "opacity-100" : "opacity-0")}
+                            />
+                            <span className="mr-2">{category.icon}</span>
+                            {group.parent ? category.name : (category.fullName || category.name)}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    ))}
                   </CommandList>
                 </Command>
               </PopoverContent>

@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { useCategories } from "@/hooks/useCategories";
+import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -468,13 +468,17 @@ export function AccountReviewModal({
               
               // Filter categories based on search
               const filteredCategories = relevantCategories.filter((cat) =>
-                cat.name.toLowerCase().includes(categorySearch.toLowerCase())
+                (cat.name.toLowerCase().includes(categorySearch.toLowerCase()) ||
+                 (cat.fullName && cat.fullName.toLowerCase().includes(categorySearch.toLowerCase())))
               );
               
               // Check if search matches any existing category
               const searchMatchesExisting = relevantCategories.some(
                 (cat) => cat.name.toLowerCase() === categorySearch.toLowerCase()
               );
+              
+              // Group filtered categories by parent
+              const groupedCategories = groupCategoriesByParent(filteredCategories);
 
               return (
                 <div
@@ -556,7 +560,7 @@ export function AccountReviewModal({
                               {category ? (
                                 <span className="flex items-center gap-2 truncate">
                                   <span>{category.icon}</span>
-                                  <span>{category.name}</span>
+                                  <span>{category.fullName || category.name}</span>
                                 </span>
                               ) : (
                                 "Selecione uma categoria..."
@@ -602,20 +606,28 @@ export function AccountReviewModal({
                                       <Check className="ml-auto h-4 w-4" />
                                     )}
                                   </CommandItem>
-                                  {filteredCategories.map((cat) => (
-                                    <CommandItem
-                                      key={cat.id}
-                                      value={cat.name}
-                                      onSelect={() => handleCategoryChange(index, cat.id)}
-                                    >
-                                      <span className="mr-2">{cat.icon}</span>
-                                      {cat.name}
-                                      {item.category_id === cat.id && (
-                                        <Check className="ml-auto h-4 w-4" />
-                                      )}
-                                    </CommandItem>
-                                  ))}
                                 </CommandGroup>
+                                {groupedCategories.map((group, groupIndex) => (
+                                  <CommandGroup 
+                                    key={groupIndex} 
+                                    heading={group.parent ? `${group.parent.icon} ${group.parent.name}` : undefined}
+                                  >
+                                    {group.children.map((cat) => (
+                                      <CommandItem
+                                        key={cat.id}
+                                        value={cat.fullName || cat.name}
+                                        onSelect={() => handleCategoryChange(index, cat.id)}
+                                        className={group.parent ? "pl-4" : ""}
+                                      >
+                                        <span className="mr-2">{cat.icon}</span>
+                                        {group.parent ? cat.name : (cat.fullName || cat.name)}
+                                        {item.category_id === cat.id && (
+                                          <Check className="ml-auto h-4 w-4" />
+                                        )}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                ))}
                                 {categorySearch.trim() && !searchMatchesExisting && filteredCategories.length > 0 && (
                                   <>
                                     <CommandSeparator />

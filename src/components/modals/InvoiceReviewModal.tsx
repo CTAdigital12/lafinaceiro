@@ -43,7 +43,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
-import { useCategories } from "@/hooks/useCategories";
+import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCreditCards } from "@/hooks/useCreditCards";
@@ -740,22 +740,33 @@ export function InvoiceReviewModal({
                                       <Check className="ml-auto h-4 w-4" />
                                     )}
                                   </CommandItem>
-                                  {expenseCategories
-                                    .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
-                                    .map((cat) => (
+                                </CommandGroup>
+                                {groupCategoriesByParent(
+                                  expenseCategories.filter(cat => 
+                                    cat.name.toLowerCase().includes(categorySearch.toLowerCase()) ||
+                                    (cat.fullName && cat.fullName.toLowerCase().includes(categorySearch.toLowerCase()))
+                                  )
+                                ).map((group, groupIndex) => (
+                                  <CommandGroup 
+                                    key={groupIndex} 
+                                    heading={group.parent ? `${group.parent.icon} ${group.parent.name}` : undefined}
+                                  >
+                                    {group.children.map((cat) => (
                                       <CommandItem
                                         key={cat.id}
-                                        value={cat.name}
+                                        value={cat.fullName || cat.name}
                                         onSelect={() => handleCategoryChange(index, cat.id)}
+                                        className={group.parent ? "pl-4" : ""}
                                       >
                                         <span className="mr-2">{cat.icon}</span>
-                                        {cat.name}
+                                        {group.parent ? cat.name : (cat.fullName || cat.name)}
                                         {item.category_id === cat.id && (
                                           <Check className="ml-auto h-4 w-4" />
                                         )}
                                       </CommandItem>
                                     ))}
-                                </CommandGroup>
+                                  </CommandGroup>
+                                ))}
                                 {categorySearch.trim() && !expenseCategories.some(c => c.name.toLowerCase() === categorySearch.toLowerCase()) && expenseCategories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length > 0 && (
                                   <>
                                     <CommandSeparator />

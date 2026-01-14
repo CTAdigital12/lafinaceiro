@@ -241,7 +241,7 @@ export default function CategorizationRules() {
                       {category ? (
                         <div className="flex items-center gap-2">
                           <span>{category.icon}</span>
-                          <span>{category.name}</span>
+                          <span>{category.fullName || category.name}</span>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">Sem categoria</span>
@@ -434,7 +434,7 @@ export default function CategorizationRules() {
                           {category && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                               <span>{category.icon}</span>
-                              <span>{category.name}</span>
+                              <span>{category.fullName || category.name}</span>
                             </p>
                           )}
                         </div>
