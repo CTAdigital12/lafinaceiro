@@ -114,10 +114,26 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       0
     );
 
-    // Corporate expenses should also exclude refunds
-    const corporateTotal = normalTransactions
+    // Separate refunds by type (personal vs corporate)
+    const corporateRefunds = refundTransactions
       .filter((t) => t.is_corporate_expense)
       .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const personalRefunds = refundTransactions
+      .filter((t) => !t.is_corporate_expense)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    // Corporate = normal corporate transactions - corporate refunds
+    const corporateNormal = normalTransactions
+      .filter((t) => t.is_corporate_expense)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const corporateTotal = corporateNormal - corporateRefunds;
+
+    // Personal = normal personal transactions - personal refunds
+    const personalNormal = normalTransactions
+      .filter((t) => !t.is_corporate_expense)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const personalTotal = personalNormal - personalRefunds;
 
     const bankInvoice = Number(card.current_invoice);
     const difference = bankInvoice - transactionsTotal;
@@ -132,7 +148,7 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       difference,
       hasDiscrepancy: Math.abs(difference) > 0.01, // Allow for floating point errors
       corporateTotal,
-      personalTotal: transactionsTotal - corporateTotal,
+      personalTotal,
     };
   });
 
