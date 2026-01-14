@@ -1,24 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCategories } from "@/hooks/useCategories";
 import { useBudgets } from "@/hooks/useBudgets";
 import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-const emojiOptions = [
-  "🏠", "🚗", "🍔", "🎬", "💊", "📚", "✈️", "🛒", "💡", "📱",
-  "👕", "🎁", "🏋️", "🐕", "👶", "💼", "🎓", "🎵", "🎮", "💅",
-  "🔧", "📦", "💰", "🏥", "🚌", "☕", "🍕", "🎭", "🎨", "⚽",
-];
-
-const colorOptions = [
-  "#EF4444", "#F97316", "#F59E0B", "#EAB308", "#84CC16", "#22C55E",
-  "#10B981", "#14B8A6", "#06B6D4", "#0EA5E9", "#3B82F6", "#6366F1",
-  "#8B5CF6", "#A855F7", "#D946EF", "#EC4899", "#F43F5E",
-];
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface AddSubcategoryModalProps {
   open: boolean;
@@ -26,6 +14,7 @@ interface AddSubcategoryModalProps {
   parentCategory: { id: string; name: string; icon: string; color: string } | null;
   month: number;
   year: number;
+  existingBudgetCategoryIds: string[];
 }
 
 export function AddSubcategoryModal({ 
@@ -33,156 +22,146 @@ export function AddSubcategoryModal({
   onOpenChange, 
   parentCategory,
   month,
-  year 
+  year,
+  existingBudgetCategoryIds 
 }: AddSubcategoryModalProps) {
-  const { createCategory } = useCategories();
+  const { categories } = useCategories();
   const { createBudget } = useBudgets(month, year);
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState("📦");
-  const [color, setColor] = useState("#3B82F6");
-  const [plannedAmount, setPlannedAmount] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!parentCategory || !name.trim()) return;
+  // Filter subcategories that belong to this parent and don't have a budget yet
+  const availableSubcategories = useMemo(() => {
+    return categories.filter(
+      (c) => 
+        c.parent_id === parentCategory?.id && 
+        !existingBudgetCategoryIds.includes(c.id)
+    );
+  }, [categories, parentCategory?.id, existingBudgetCategoryIds]);
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const setAmount = (id: string, value: string) => {
+    setAmounts((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (selectedIds.length === 0) return;
 
     setIsSubmitting(true);
     try {
-      // Create the subcategory
-      const newCategory = await createCategory.mutateAsync({
-        name: name.trim(),
-        icon,
-        color,
-        type: "expense",
-        parent_id: parentCategory.id,
-      });
-
-      // If a planned amount was provided, create a budget for it
-      if (plannedAmount && parseFloat(plannedAmount) > 0) {
+      for (const categoryId of selectedIds) {
+        const amount = parseFloat(amounts[categoryId] || "0");
         await createBudget.mutateAsync({
-          category_id: newCategory.id,
+          category_id: categoryId,
           month,
           year,
-          planned_amount: parseFloat(plannedAmount),
+          planned_amount: amount > 0 ? amount : 0,
         });
       }
 
       // Reset and close
-      setName("");
-      setIcon("📦");
-      setColor(parentCategory.color || "#3B82F6");
-      setPlannedAmount("");
+      setSelectedIds([]);
+      setAmounts({});
       onOpenChange(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Reset form when modal opens with new parent
   const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && parentCategory) {
-      setColor(parentCategory.color || "#3B82F6");
-    }
     if (!newOpen) {
-      setName("");
-      setIcon("📦");
-      setPlannedAmount("");
+      setSelectedIds([]);
+      setAmounts({});
     }
     onOpenChange(newOpen);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>{parentCategory?.icon}</span>
-            Nova Subcategoria
+            Adicionar Subcategoria ao Planejamento
           </DialogTitle>
           <DialogDescription>
-            Adicionar subcategoria em "{parentCategory?.name}"
+            Selecione subcategorias de "{parentCategory?.name}" para adicionar ao planejamento
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Nome da Subcategoria</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Aluguel, Energia, Água..."
-              required
-            />
-          </div>
 
-          <div className="space-y-2">
-            <Label>Ícone</Label>
-            <div className="flex flex-wrap gap-2">
-              {emojiOptions.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => setIcon(emoji)}
-                  className={cn(
-                    "w-9 h-9 rounded-lg text-lg flex items-center justify-center transition-all",
-                    icon === emoji
-                      ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2"
-                      : "bg-muted hover:bg-muted/80"
-                  )}
+        <ScrollArea className="max-h-[300px] pr-4">
+          <div className="space-y-3">
+            {availableSubcategories.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-4">
+                Todas as subcategorias desta categoria já estão no planejamento ou não existem subcategorias cadastradas.
+              </p>
+            ) : (
+              availableSubcategories.map((subcategory) => (
+                <div 
+                  key={subcategory.id} 
+                  className="flex items-center gap-3 p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors"
                 >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+                  <Checkbox
+                    id={subcategory.id}
+                    checked={selectedIds.includes(subcategory.id)}
+                    onCheckedChange={() => toggleSelection(subcategory.id)}
+                  />
+                  <div
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-base"
+                    style={{ backgroundColor: `${subcategory.color}20` }}
+                  >
+                    {subcategory.icon || "📦"}
+                  </div>
+                  <label 
+                    htmlFor={subcategory.id}
+                    className="flex-1 text-sm font-medium cursor-pointer"
+                  >
+                    {subcategory.name}
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="R$ 0,00"
+                    className="w-28 text-right"
+                    value={amounts[subcategory.id] || ""}
+                    onChange={(e) => setAmount(subcategory.id, e.target.value)}
+                  />
+                </div>
+              ))
+            )}
           </div>
+        </ScrollArea>
 
-          <div className="space-y-2">
-            <Label>Cor</Label>
-            <div className="flex flex-wrap gap-2">
-              {colorOptions.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={cn(
-                    "w-8 h-8 rounded-full transition-all",
-                    color === c ? "ring-2 ring-offset-2 ring-primary" : ""
-                  )}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="amount">Meta de Orçamento (R$) - Opcional</Label>
-            <Input
-              id="amount"
-              type="number"
-              step="0.01"
-              placeholder="0,00"
-              value={plannedAmount}
-              onChange={(e) => setPlannedAmount(e.target.value)}
-            />
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" className="flex-1" disabled={isSubmitting || !name.trim()}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                "Criar Subcategoria"
-              )}
-            </Button>
-          </div>
-        </form>
+        <div className="flex gap-3 pt-4">
+          <Button 
+            type="button" 
+            variant="outline" 
+            className="flex-1" 
+            onClick={() => onOpenChange(false)}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            className="flex-1" 
+            disabled={isSubmitting || selectedIds.length === 0}
+            onClick={handleSubmit}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Adicionando...
+              </>
+            ) : (
+              `Adicionar ${selectedIds.length > 0 ? `(${selectedIds.length})` : ""}`
+            )}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

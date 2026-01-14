@@ -49,6 +49,11 @@ export default function Planning() {
   const { budgets, isLoading, totalPlanned, deleteBudget, copyFromPreviousMonth } = useBudgets(month, year);
   const { transactions } = useTransactions(month, year, { loadedCount: 1000, useHybridDateFilter: true });
 
+  // IDs of categories that already have a budget this month
+  const existingBudgetCategoryIds = useMemo(() => {
+    return budgets.map(b => b.category_id).filter(Boolean) as string[];
+  }, [budgets]);
+
   // Calculate spent per category (excluding corporate expenses, refunds, and reimbursable expenses)
   const spentByCategory = useMemo(() => {
     return transactions
@@ -484,6 +489,7 @@ export default function Planning() {
         parentCategory={selectedParentCategory}
         month={month}
         year={year}
+        existingBudgetCategoryIds={existingBudgetCategoryIds}
       />
       <TransactionModal
         open={transactionModalOpen}
