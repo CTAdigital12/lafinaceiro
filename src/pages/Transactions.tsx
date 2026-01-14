@@ -110,6 +110,7 @@ export default function Transactions() {
     status: "all",
     dateRange: null,
     installmentFilter: "all",
+    corporateFilter: "all",
   });
   
   // Sorting state
@@ -154,7 +155,8 @@ export default function Transactions() {
     (filters.creditCardId ? 1 : 0) +
     (filters.status !== "all" ? 1 : 0) +
     (filters.dateRange ? 1 : 0) +
-    (filters.installmentFilter !== "all" ? 1 : 0);
+    (filters.installmentFilter !== "all" ? 1 : 0) +
+    (filters.corporateFilter !== "all" ? 1 : 0);
 
   // Bulk delete handler
   const handleBulkDelete = async () => {
@@ -290,6 +292,16 @@ export default function Transactions() {
       }
     } else if (filters.installmentFilter === "no_installments") {
       if (t.total_installments && t.total_installments > 1) {
+        return false;
+      }
+    }
+    // Filter by corporate expenses
+    if (filters.corporateFilter === "only_corporate") {
+      if (!t.is_corporate_expense) {
+        return false;
+      }
+    } else if (filters.corporateFilter === "no_corporate") {
+      if (t.is_corporate_expense) {
         return false;
       }
     }
@@ -616,6 +628,7 @@ export default function Transactions() {
                     status: "all",
                     dateRange: null,
                     installmentFilter: "all",
+                    corporateFilter: "all",
                   })}
                 >
                   Limpar todos
