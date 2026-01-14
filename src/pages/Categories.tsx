@@ -403,7 +403,7 @@ export default function Categories() {
               Nova Categoria
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {parentId ? "Nova Subcategoria" : "Nova Categoria"}
@@ -469,7 +469,7 @@ export default function Categories() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingCategory} onOpenChange={(open) => { if (!open) { setEditingCategory(null); resetForm(); } }}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Categoria</DialogTitle>
           </DialogHeader>

@@ -113,7 +113,7 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar Cartão de Crédito" : "Novo Cartão de Crédito"}</DialogTitle>
           <DialogDescription>

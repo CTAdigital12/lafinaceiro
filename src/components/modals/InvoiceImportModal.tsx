@@ -243,7 +243,7 @@ export function InvoiceImportModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar Fatura</DialogTitle>
           <DialogDescription>
