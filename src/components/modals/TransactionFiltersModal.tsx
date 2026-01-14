@@ -37,6 +37,7 @@ export interface TransactionFilters {
   creditCardId: string | null;
   status: "all" | "completed" | "pending";
   dateRange: { from: Date | null; to: Date | null } | null;
+  installmentFilter: "all" | "only_installments" | "no_installments";
 }
 
 interface TransactionFiltersModalProps {
@@ -54,6 +55,7 @@ const defaultFilters: TransactionFilters = {
   creditCardId: null,
   status: "all",
   dateRange: null,
+  installmentFilter: "all",
 };
 
 const typeOptions = [
@@ -66,6 +68,12 @@ const statusOptions = [
   { value: "all", label: "Todos" },
   { value: "completed", label: "Concluída" },
   { value: "pending", label: "Pendente" },
+];
+
+const installmentOptions = [
+  { value: "all", label: "Todas" },
+  { value: "only_installments", label: "Apenas parceladas" },
+  { value: "no_installments", label: "Apenas à vista" },
 ];
 
 export function TransactionFiltersModal({
@@ -84,6 +92,7 @@ export function TransactionFiltersModal({
   const [openStatusPopover, setOpenStatusPopover] = useState(false);
   const [openAccountPopover, setOpenAccountPopover] = useState(false);
   const [openCardPopover, setOpenCardPopover] = useState(false);
+  const [openInstallmentPopover, setOpenInstallmentPopover] = useState(false);
 
   const allCategories = [...incomeCategories, ...expenseCategories];
 
@@ -117,7 +126,8 @@ export function TransactionFiltersModal({
     (localFilters.accountId ? 1 : 0) +
     (localFilters.creditCardId ? 1 : 0) +
     (localFilters.status !== "all" ? 1 : 0) +
-    (localFilters.dateRange ? 1 : 0);
+    (localFilters.dateRange ? 1 : 0) +
+    (localFilters.installmentFilter !== "all" ? 1 : 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -210,6 +220,49 @@ export function TransactionFiltersModal({
                         >
                           <Check
                             className={cn("mr-2 h-4 w-4", localFilters.status === option.value ? "opacity-100" : "opacity-0")}
+                          />
+                          {option.label}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Filtro de Parcelamentos */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Parcelamentos</Label>
+            <Popover open={openInstallmentPopover} onOpenChange={setOpenInstallmentPopover}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openInstallmentPopover}
+                  className="w-full justify-between"
+                >
+                  {installmentOptions.find(o => o.value === localFilters.installmentFilter)?.label || "Todas"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
+                    <CommandGroup>
+                      {installmentOptions.map((option) => (
+                        <CommandItem
+                          key={option.value}
+                          value={option.label}
+                          onSelect={() => {
+                            setLocalFilters((prev) => ({ ...prev, installmentFilter: option.value as "all" | "only_installments" | "no_installments" }));
+                            setOpenInstallmentPopover(false);
+                          }}
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", localFilters.installmentFilter === option.value ? "opacity-100" : "opacity-0")}
                           />
                           {option.label}
                         </CommandItem>

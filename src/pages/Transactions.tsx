@@ -109,6 +109,7 @@ export default function Transactions() {
     creditCardId: null,
     status: "all",
     dateRange: null,
+    installmentFilter: "all",
   });
   
   // Sorting state
@@ -152,7 +153,8 @@ export default function Transactions() {
     (filters.accountId ? 1 : 0) +
     (filters.creditCardId ? 1 : 0) +
     (filters.status !== "all" ? 1 : 0) +
-    (filters.dateRange ? 1 : 0);
+    (filters.dateRange ? 1 : 0) +
+    (filters.installmentFilter !== "all" ? 1 : 0);
 
   // Bulk delete handler
   const handleBulkDelete = async () => {
@@ -278,6 +280,16 @@ export default function Transactions() {
         return false;
       }
       if (filters.dateRange.to && transactionDate > filters.dateRange.to) {
+        return false;
+      }
+    }
+    // Filter by installments
+    if (filters.installmentFilter === "only_installments") {
+      if (!t.total_installments || t.total_installments <= 1) {
+        return false;
+      }
+    } else if (filters.installmentFilter === "no_installments") {
+      if (t.total_installments && t.total_installments > 1) {
         return false;
       }
     }
@@ -603,6 +615,7 @@ export default function Transactions() {
                     creditCardId: null,
                     status: "all",
                     dateRange: null,
+                    installmentFilter: "all",
                   })}
                 >
                   Limpar todos
