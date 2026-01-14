@@ -159,8 +159,22 @@ export default function CreditCards() {
   // Store credit card info separately for review modal to avoid losing it when import modal closes
   const [reviewCardId, setReviewCardId] = useState<string>("");
   const [reviewCardName, setReviewCardName] = useState<string>("");
+  
+  // Period state for reconciliation
+  const now = new Date();
+  const [reconciliationMonth, setReconciliationMonth] = useState(now.getMonth() + 1);
+  const [reconciliationYear, setReconciliationYear] = useState(now.getFullYear());
+  
   const { creditCards, isLoading, totalInvoice, totalLimit, totalAvailable, deleteCreditCard } = useCreditCards();
-  const { reconciliation, isLoading: isReconciliationLoading } = useCreditCardReconciliation();
+  const { reconciliation, isLoading: isReconciliationLoading, transactions } = useCreditCardReconciliation({
+    month: reconciliationMonth,
+    year: reconciliationYear,
+  });
+
+  const handlePeriodChange = (month: number, year: number) => {
+    setReconciliationMonth(month);
+    setReconciliationYear(year);
+  };
 
   const handleEdit = (card: CreditCardType) => {
     setEditingCard(card);
@@ -262,7 +276,14 @@ export default function CreditCards() {
       </div>
 
       {/* Reconciliation Card */}
-      <ReconciliationCard reconciliation={reconciliation} isLoading={isReconciliationLoading} />
+      <ReconciliationCard 
+        reconciliation={reconciliation} 
+        isLoading={isReconciliationLoading}
+        transactions={transactions}
+        month={reconciliationMonth}
+        year={reconciliationYear}
+        onPeriodChange={handlePeriodChange}
+      />
 
       {/* Credit Cards Grid */}
       {isLoading ? (

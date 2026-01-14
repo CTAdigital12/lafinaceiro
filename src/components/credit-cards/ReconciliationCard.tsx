@@ -1,41 +1,62 @@
-import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { format, subMonths, addMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { ReconciliationSummary, CardReconciliation } from "@/hooks/useCreditCardReconciliation";
+import { ReconciliationSummary, CardReconciliation, ReconciliationTransaction } from "@/hooks/useCreditCardReconciliation";
+import { ReconciliationDetailModal } from "./ReconciliationDetailModal";
 
 interface ReconciliationCardProps {
   reconciliation: ReconciliationSummary;
   isLoading?: boolean;
+  transactions?: (ReconciliationTransaction & { category?: { name: string; icon: string } | null })[];
+  month: number;
+  year: number;
+  onPeriodChange: (month: number, year: number) => void;
 }
 
 function formatCurrency(value: number) {
   return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 }
 
-function CardReconciliationItem({ card }: { card: CardReconciliation }) {
+function CardReconciliationItem({ 
+  card, 
+  onViewDetails 
+}: { 
+  card: CardReconciliation;
+  onViewDetails: () => void;
+}) {
   const matchPercent = card.bankInvoice > 0 
     ? Math.min(100, (card.transactionsTotal / card.bankInvoice) * 100) 
     : card.transactionsTotal === 0 ? 100 : 0;
 
   return (
-    <div className="p-3 border rounded-lg space-y-2">
+    <div 
+      className="p-3 border rounded-lg space-y-2 hover:border-primary/50 transition-colors cursor-pointer"
+      onClick={onViewDetails}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CreditCard className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium text-sm">{card.creditCardName}</span>
         </div>
-        {card.hasDiscrepancy ? (
-          <Badge variant="secondary" className="bg-chart-4/10 text-chart-4 text-xs">
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            Divergência
-          </Badge>
-        ) : (
-          <Badge variant="secondary" className="bg-income/10 text-income text-xs">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Conciliado
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {card.hasDiscrepancy ? (
+            <Badge variant="secondary" className="bg-chart-4/10 text-chart-4 text-xs">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Divergência
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="bg-income/10 text-income text-xs">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Conciliado
+            </Badge>
+          )}
+          <FileText className="h-4 w-4 text-muted-foreground" />
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-xs">
@@ -91,7 +112,27 @@ function CardReconciliationItem({ card }: { card: CardReconciliation }) {
   );
 }
 
-export function ReconciliationCard({ reconciliation, isLoading }: ReconciliationCardProps) {
+export function ReconciliationCard({ 
+  reconciliation, 
+  isLoading, 
+  transactions = [],
+  month,
+  year,
+  onPeriodChange,
+}: ReconciliationCardProps) {
+  const [selectedCard, setSelectedCard] = useState<CardReconciliation | null>(null);
+
+  const currentDate = new Date(year, month - 1);
+
+  const handlePrevMonth = () => {
+    const prev = subMonths(currentDate, 1);
+    onPeriodChange(prev.getMonth() + 1, prev.getFullYear());
+  };
+
+  const handleNextMonth = () => {
+    const next = addMonths(currentDate, 1);
+    onPeriodChange(next.getMonth() + 1, next.getFullYear());
+  };
   if (isLoading) {
     return (
       <div className="bg-card rounded-xl border border-border p-6 shadow-card animate-pulse">
@@ -108,37 +149,64 @@ export function ReconciliationCard({ reconciliation, isLoading }: Reconciliation
   }
 
   return (
-    <div className="bg-card rounded-xl border border-border p-6 shadow-card space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            "h-10 w-10 rounded-lg flex items-center justify-center",
-            reconciliation.hasAnyDiscrepancy ? "bg-chart-4/10" : "bg-income/10"
-          )}>
-            <Scale className={cn(
-              "h-5 w-5",
-              reconciliation.hasAnyDiscrepancy ? "text-chart-4" : "text-income"
-            )} />
+    <>
+      <div className="bg-card rounded-xl border border-border p-6 shadow-card space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "h-10 w-10 rounded-lg flex items-center justify-center",
+              reconciliation.hasAnyDiscrepancy ? "bg-chart-4/10" : "bg-income/10"
+            )}>
+              <Scale className={cn(
+                "h-5 w-5",
+                reconciliation.hasAnyDiscrepancy ? "text-chart-4" : "text-income"
+              )} />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Conciliação de Faturas</h3>
+              <p className="text-sm text-muted-foreground">
+                Comparativo entre banco e lançamentos registrados
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold text-foreground">Conciliação de Faturas</h3>
-            <p className="text-sm text-muted-foreground">
-              Comparativo entre banco e lançamentos registrados
-            </p>
+          
+          <div className="flex items-center gap-2">
+            {/* Period Selector */}
+            <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handlePrevMonth}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-3 font-medium text-sm min-w-[100px] text-center capitalize">
+                {format(currentDate, "MMM yyyy", { locale: ptBR })}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleNextMonth}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {reconciliation.hasAnyDiscrepancy ? (
+              <Badge className="bg-chart-4/10 text-chart-4 border-chart-4/20">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                Há divergências
+              </Badge>
+            ) : (
+              <Badge className="bg-income/10 text-income border-income/20">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Tudo conciliado
+              </Badge>
+            )}
           </div>
         </div>
-        {reconciliation.hasAnyDiscrepancy ? (
-          <Badge className="bg-chart-4/10 text-chart-4 border-chart-4/20">
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            Há divergências
-          </Badge>
-        ) : (
-          <Badge className="bg-income/10 text-income border-income/20">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Tudo conciliado
-          </Badge>
-        )}
-      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -166,19 +234,23 @@ export function ReconciliationCard({ reconciliation, isLoading }: Reconciliation
         </div>
       </div>
 
-      {/* Card Details */}
-      {reconciliation.cards.filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0).length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-muted-foreground">Por Cartão</h4>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {reconciliation.cards
-              .filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0)
-              .map((card) => (
-                <CardReconciliationItem key={card.creditCardId} card={card} />
-              ))}
+        {/* Card Details */}
+        {reconciliation.cards.filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0).length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-muted-foreground">Por Cartão (clique para detalhes)</h4>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {reconciliation.cards
+                .filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0)
+                .map((card) => (
+                  <CardReconciliationItem 
+                    key={card.creditCardId} 
+                    card={card} 
+                    onViewDetails={() => setSelectedCard(card)}
+                  />
+                ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {reconciliation.hasAnyDiscrepancy && Math.abs(reconciliation.totalDifference) > 0.01 && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-sm">
@@ -194,7 +266,22 @@ export function ReconciliationCard({ reconciliation, isLoading }: Reconciliation
             </p>
           </div>
         </div>
+        )}
+      </div>
+
+      {/* Detail Modal */}
+      {selectedCard && (
+        <ReconciliationDetailModal
+          open={!!selectedCard}
+          onOpenChange={(open) => !open && setSelectedCard(null)}
+          cardId={selectedCard.creditCardId}
+          cardName={selectedCard.creditCardName}
+          bankInvoice={selectedCard.bankInvoice}
+          transactionsTotal={selectedCard.transactionsTotal}
+          difference={selectedCard.difference}
+          transactions={transactions}
+        />
       )}
-    </div>
+    </>
   );
 }
