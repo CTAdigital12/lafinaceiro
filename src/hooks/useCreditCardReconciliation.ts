@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCreditCards } from "./useCreditCards";
+import { startOfMonth, endOfMonth, format } from "date-fns";
 
 export interface CardReconciliation {
   creditCardId: string;
@@ -27,21 +28,53 @@ export interface ReconciliationSummary {
   cards: CardReconciliation[];
 }
 
-export function useCreditCardReconciliation() {
+export interface ReconciliationTransaction {
+  id: string;
+  description: string;
+  amount: number;
+  date: string;
+  due_date: string | null;
+  status: string;
+  is_refund: boolean;
+  is_corporate_expense: boolean;
+  credit_card_id: string;
+  category_id: string | null;
+}
+
+interface UseCreditCardReconciliationOptions {
+  month?: number;
+  year?: number;
+}
+
+export function useCreditCardReconciliation(options?: UseCreditCardReconciliationOptions) {
   const { user } = useAuth();
   const { creditCards } = useCreditCards();
 
+  // Default to current month if not specified
+  const now = new Date();
+  const month = options?.month ?? now.getMonth() + 1;
+  const year = options?.year ?? now.getFullYear();
+
+  // Calculate date range based on month/year
+  const periodStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+  const periodEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["credit-card-transactions-reconciliation", user?.id],
+    queryKey: ["credit-card-transactions-reconciliation", user?.id, month, year],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("*")
+        .select("*, categories(name, icon)")
         .not("credit_card_id", "is", null)
-        .eq("type", "expense");
+        .eq("type", "expense")
+        .gte("due_date", periodStart)
+        .lte("due_date", periodEnd);
 
       if (error) throw error;
-      return data || [];
+      return (data || []).map(t => ({
+        ...t,
+        category: t.categories,
+      })) as (ReconciliationTransaction & { category?: { name: string; icon: string } | null })[];
     },
     enabled: !!user && creditCards.length > 0,
   });
@@ -116,5 +149,8 @@ export function useCreditCardReconciliation() {
     reconciliation: summary,
     isLoading,
     cards,
+    transactions,
+    month,
+    year,
   };
 }
