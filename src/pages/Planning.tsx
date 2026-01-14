@@ -13,9 +13,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useBudgets, Budget } from "@/hooks/useBudgets";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useCategories } from "@/hooks/useCategories";
 import { NewBudgetModal } from "@/components/modals/NewBudgetModal";
 import { EditBudgetModal } from "@/components/modals/EditBudgetModal";
 import { BudgetEvolutionChart } from "@/components/dashboard/BudgetEvolutionChart";
+import { AddSubcategoryModal } from "@/components/modals/AddSubcategoryModal";
 
 const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -35,6 +37,10 @@ export default function Planning() {
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [showChart, setShowChart] = useState(false);
+  const [addSubcategoryModalOpen, setAddSubcategoryModalOpen] = useState(false);
+  const [selectedParentCategory, setSelectedParentCategory] = useState<{ id: string; name: string; icon: string; color: string } | null>(null);
+
+  const { categories } = useCategories();
 
   const { budgets, isLoading, totalPlanned, deleteBudget, copyFromPreviousMonth } = useBudgets(month, year);
   const { transactions } = useTransactions(month, year, { loadedCount: 1000, useHybridDateFilter: true });
@@ -131,6 +137,19 @@ export default function Planning() {
     setEditModalOpen(true);
   };
 
+  const handleAddSubcategory = (budget: HierarchicalBudget) => {
+    const category = budget.categories;
+    if (category) {
+      setSelectedParentCategory({
+        id: category.id,
+        name: category.name,
+        icon: category.icon || "📦",
+        color: category.color || "#3B82F6",
+      });
+      setAddSubcategoryModalOpen(true);
+    }
+  };
+
   const renderBudgetRow = (budget: HierarchicalBudget, isChild: boolean = false) => {
     const planned = budget.isParent ? budget.totalPlanned : Number(budget.planned_amount);
     const spent = budget.isParent ? budget.totalSpent : (spentByCategory[budget.category_id || ""] || 0);
@@ -220,6 +239,17 @@ export default function Planning() {
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-1">
+            {!isChild && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-muted-foreground hover:text-primary"
+                onClick={() => handleAddSubcategory(budget)}
+                title="Adicionar subcategoria"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
             <Button 
               variant="ghost" 
               size="icon" 
@@ -372,6 +402,13 @@ export default function Planning() {
 
       <NewBudgetModal open={isModalOpen} onOpenChange={setIsModalOpen} month={month} year={year} />
       <EditBudgetModal open={editModalOpen} onOpenChange={setEditModalOpen} budget={editingBudget} month={month} year={year} />
+      <AddSubcategoryModal 
+        open={addSubcategoryModalOpen} 
+        onOpenChange={setAddSubcategoryModalOpen} 
+        parentCategory={selectedParentCategory}
+        month={month}
+        year={year}
+      />
     </div>
   );
 }
