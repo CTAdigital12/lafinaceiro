@@ -184,6 +184,30 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       }
     } else {
       // Normal single transaction creation/update
+      // Calculate due_date for credit card transactions
+      const calculateDueDate = (): string | null => {
+        if (paymentMethod !== "credit_card" || !creditCardId) return null;
+        
+        const selectedCard = creditCards.find(c => c.id === creditCardId);
+        if (!selectedCard) return null;
+        
+        const purchaseDay = date.getDate();
+        let dueMonth = date.getMonth();
+        let dueYear = date.getFullYear();
+        
+        // If purchase was after closing date, it goes to next month's invoice
+        if (purchaseDay > selectedCard.closing_date) {
+          dueMonth += 1;
+          if (dueMonth > 11) {
+            dueMonth = 0;
+            dueYear += 1;
+          }
+        }
+        
+        const dueDate = new Date(dueYear, dueMonth, selectedCard.due_date);
+        return format(dueDate, "yyyy-MM-dd");
+      };
+
       const transactionData = {
         description,
         amount: parseFloat(amount),
@@ -192,6 +216,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         account_id: paymentMethod === "account" ? (accountId || null) : null,
         credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
         date: format(date, "yyyy-MM-dd"),
+        due_date: calculateDueDate(),
         status,
         is_corporate_expense: isCorporateExpense,
         is_refund: isRefund,
