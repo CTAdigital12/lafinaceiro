@@ -441,6 +441,7 @@ export default function CorporateExpenses() {
                   />
                 </TableHead>
                 <TableHead>Data</TableHead>
+                <TableHead>Vencimento</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Cartão</TableHead>
@@ -462,6 +463,9 @@ export default function CorporateExpenses() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {format(parseISO(transaction.date), "dd/MM/yyyy")}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {transaction.due_date ? format(parseISO(transaction.due_date), "dd/MM/yyyy") : "-"}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
