@@ -202,7 +202,12 @@ export default function Transactions() {
         t.categories?.name || "",
         t.credit_card_id ? t.credit_cards?.name : t.accounts?.name || "",
         t.type === "income" ? "Receita" : "Despesa",
-        Number(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
+        (() => {
+          let value = Number(t.amount);
+          if (t.type === "expense" && !t.is_refund) value = -value;
+          if (t.type === "income" && t.is_refund) value = -value;
+          return value.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+        })(),
         t.status === "completed" ? "Concluída" : "Pendente",
       ].join(";"))
     ].join("\n");
