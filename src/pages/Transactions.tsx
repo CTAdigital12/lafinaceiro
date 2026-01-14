@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
 import {
   Plus,
   Search,
@@ -186,39 +187,47 @@ export default function Transactions() {
     });
   };
 
-  // Export transactions to CSV
+  // Export transactions to XLSX
   const handleExport = () => {
     const transactionsToExport = selectedTransactions.length > 0
       ? filteredTransactions.filter(t => selectedTransactions.includes(t.id))
       : filteredTransactions;
 
-    const headers = ["Data", "Vencimento", "Descrição", "Categoria", "Conta/Cartão", "Tipo", "Valor", "Status"];
-    const csvContent = [
-      headers.join(";"),
-      ...transactionsToExport.map(t => [
-        formatDateBR(t.date),
-        formatDateBR(t.due_date),
-        `"${t.description.replace(/"/g, '""')}"`,
-        t.categories?.name || "",
-        t.credit_card_id ? t.credit_cards?.name : t.accounts?.name || "",
-        t.type === "income" ? "Receita" : "Despesa",
-        (() => {
-          let value = Number(t.amount);
-          if (t.type === "expense" && !t.is_refund) value = -value;
-          if (t.type === "income" && t.is_refund) value = -value;
-          return value.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-        })(),
-        t.status === "completed" ? "Concluída" : "Pendente",
-      ].join(";"))
-    ].join("\n");
+    const data = transactionsToExport.map(t => {
+      let value = Number(t.amount);
+      if (t.type === "expense" && !t.is_refund) value = -value;
+      if (t.type === "income" && t.is_refund) value = -value;
+      
+      return {
+        "Data": formatDateBR(t.date),
+        "Vencimento": formatDateBR(t.due_date),
+        "Descrição": t.description,
+        "Categoria": t.categories?.name || "",
+        "Conta/Cartão": t.credit_card_id ? t.credit_cards?.name : t.accounts?.name || "",
+        "Tipo": t.type === "income" ? "Receita" : "Despesa",
+        "Valor": value,
+        "Status": t.status === "completed" ? "Concluída" : "Pendente",
+      };
+    });
 
-    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `transacoes_${year}-${String(month).padStart(2, "0")}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Transações");
+    
+    // Auto-size columns
+    const colWidths = [
+      { wch: 12 }, // Data
+      { wch: 12 }, // Vencimento
+      { wch: 40 }, // Descrição
+      { wch: 20 }, // Categoria
+      { wch: 20 }, // Conta/Cartão
+      { wch: 10 }, // Tipo
+      { wch: 15 }, // Valor
+      { wch: 12 }, // Status
+    ];
+    worksheet["!cols"] = colWidths;
+
+    XLSX.writeFile(workbook, `transacoes_${year}-${String(month).padStart(2, "0")}.xlsx`);
     
     toast({ title: `${transactionsToExport.length} transações exportadas!` });
   };
