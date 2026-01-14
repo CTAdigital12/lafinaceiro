@@ -84,7 +84,19 @@ export default function Dashboard() {
     
     return transactions
       .filter(t => t.category_id === category.id && t.type === type)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .map(t => ({
+        ...t,
+        category_id: t.category_id || undefined,
+      }));
+  };
+
+  // Get sorted categories for navigation
+  const sortedExpenseCategories = [...expensesByCategory].sort((a, b) => b.value - a.value);
+  const sortedIncomeCategories = [...incomeByCategory].sort((a, b) => b.value - a.value);
+
+  const handleCategoryChange = (category: CategoryData) => {
+    setSelectedCategory(category);
   };
 
   const handleCategoryClick = (category: CategoryData, type: "expense" | "income") => {
@@ -179,6 +191,9 @@ export default function Dashboard() {
           categoryColor={selectedCategory.color}
           totalAmount={selectedCategory.value}
           transactions={categoryTransactions}
+          allCategories={categoryType === "expense" ? sortedExpenseCategories : sortedIncomeCategories}
+          onCategoryChange={handleCategoryChange}
+          categoryType={categoryType}
         />
       )}
 

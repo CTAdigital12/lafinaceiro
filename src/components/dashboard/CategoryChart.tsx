@@ -60,9 +60,10 @@ export function CategoryChart({ title, data, onCategoryClick, onViewAllClick }: 
     return null;
   };
 
-  const handlePieClick = (data: any, index: number) => {
+  const handlePieClick = (entry: any, index: number) => {
     if (onCategoryClick && hasData) {
-      onCategoryClick(sortedData[index]);
+      // Use entry directly - Recharts passes the actual data item
+      onCategoryClick(entry);
     }
   };
 
