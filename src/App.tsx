@@ -14,6 +14,7 @@ import Categories from "./pages/Categories";
 import Planning from "./pages/Planning";
 import Reports from "./pages/Reports";
 import CorporateExpenses from "./pages/CorporateExpenses";
+import Reimbursements from "./pages/Reimbursements";
 import Investments from "./pages/Investments";
 import CategorizationRules from "./pages/CategorizationRules";
 import Settings from "./pages/Settings";
@@ -48,6 +49,7 @@ const App = () => (
                       <Route path="/planning" element={<Planning />} />
                       <Route path="/reports" element={<Reports />} />
                       <Route path="/corporate-expenses" element={<CorporateExpenses />} />
+                      <Route path="/reimbursements" element={<Reimbursements />} />
                       <Route path="/investments" element={<Investments />} />
                       <Route path="/categorization-rules" element={<CategorizationRules />} />
                       <Route path="/settings" element={<Settings />} />

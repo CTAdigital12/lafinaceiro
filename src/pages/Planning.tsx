@@ -39,10 +39,10 @@ export default function Planning() {
   const { budgets, isLoading, totalPlanned, deleteBudget, copyFromPreviousMonth } = useBudgets(month, year);
   const { transactions } = useTransactions(month, year, { loadedCount: 1000, useHybridDateFilter: true });
 
-  // Calculate spent per category (excluding corporate expenses)
+  // Calculate spent per category (excluding corporate expenses and refunds)
   const spentByCategory = useMemo(() => {
     return transactions
-      .filter((t) => t.type === "expense" && !t.is_corporate_expense)
+      .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund)
       .reduce((acc, t) => {
         const catId = t.category_id || "uncategorized";
         acc[catId] = (acc[catId] || 0) + Number(t.amount);
