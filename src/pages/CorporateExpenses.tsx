@@ -60,6 +60,7 @@ interface CorporateTransaction {
   description: string;
   amount: number;
   date: string;
+  due_date: string | null;
   credit_card_id: string | null;
   category_id: string | null;
   status: string;
@@ -96,6 +97,7 @@ export default function CorporateExpenses() {
           description,
           amount,
           date,
+          due_date,
           credit_card_id,
           category_id,
           status,
@@ -104,8 +106,10 @@ export default function CorporateExpenses() {
           credit_cards (name, last_digits)
         `)
         .eq("is_corporate_expense", true)
-        .gte("date", startDate)
-        .lte("date", endDate)
+        .or(
+          `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate}),` +
+          `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`
+        )
         .order("date", { ascending: false });
 
       if (error) throw error;
