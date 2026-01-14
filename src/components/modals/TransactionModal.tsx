@@ -72,7 +72,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [installmentNumber, setInstallmentNumber] = useState(1);
   const [totalInstallments, setTotalInstallments] = useState(2);
   
-  const { incomeCategories, expenseCategories } = useCategories();
+  const { incomeCategories, expenseCategories, categories: allCategories } = useCategories();
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
   const { createTransaction, updateTransaction } = useTransactions();
@@ -82,6 +82,34 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const isDuplicating = !!duplicateFrom;
   const isCreatingRefund = !!refundFrom;
   const categories = type === "income" ? incomeCategories : expenseCategories;
+  
+  // Find selected category with full info
+  const selectedCategory = allCategories.find(c => c.id === categoryId);
+  
+  // Group categories by parent for hierarchical display
+  const groupedCategories = (() => {
+    const parentCategories = categories.filter(c => !c.parent_id);
+    const childCategories = categories.filter(c => c.parent_id);
+    
+    const groups: { parent: typeof categories[0] | null; children: typeof categories }[] = [];
+    
+    parentCategories.forEach(parent => {
+      const children = childCategories.filter(c => c.parent_id === parent.id);
+      if (children.length > 0) {
+        groups.push({ parent, children });
+      } else {
+        groups.push({ parent: null, children: [parent] });
+      }
+    });
+    
+    const groupedChildIds = groups.flatMap(g => g.children.map(c => c.id));
+    const orphans = childCategories.filter(c => !groupedChildIds.includes(c.id));
+    if (orphans.length > 0) {
+      groups.push({ parent: null, children: orphans });
+    }
+    
+    return groups;
+  })();
 
   // Source data for editing, duplicating, or creating refund
   const sourceData = transaction || duplicateFrom || refundFrom;
@@ -313,10 +341,16 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                   aria-expanded={openCategoryPopover}
                   className="w-full justify-between"
                 >
-                  {categoryId ? (
+                {selectedCategory ? (
                     <span className="flex items-center gap-2">
-                      {categories.find(c => c.id === categoryId)?.icon}
-                      {categories.find(c => c.id === categoryId)?.name}
+                      {selectedCategory.parentName && (
+                        <>
+                          <span className="text-muted-foreground">{selectedCategory.parentIcon || selectedCategory.parentName}</span>
+                          <span className="text-muted-foreground">&gt;</span>
+                        </>
+                      )}
+                      {selectedCategory.icon}
+                      {selectedCategory.name}
                     </span>
                   ) : (
                     "Selecione uma categoria"
@@ -329,24 +363,34 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                   <CommandInput placeholder="Buscar categoria..." />
                   <CommandList>
                     <CommandEmpty>Nenhuma categoria encontrada.</CommandEmpty>
-                    <CommandGroup>
-                      {categories.map((cat) => (
-                        <CommandItem
-                          key={cat.id}
-                          value={cat.name}
-                          onSelect={() => {
-                            setCategoryId(cat.id);
-                            setOpenCategoryPopover(false);
-                          }}
-                        >
-                          <Check
-                            className={cn("mr-2 h-4 w-4", categoryId === cat.id ? "opacity-100" : "opacity-0")}
-                          />
-                          <span className="mr-2">{cat.icon}</span>
-                          {cat.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
+                    {groupedCategories.map((group, index) => (
+                      <CommandGroup 
+                        key={group.parent?.id || `group-${index}`}
+                        heading={group.parent ? (
+                          <span className="flex items-center gap-1">
+                            {group.parent.icon} {group.parent.name}
+                          </span>
+                        ) : undefined}
+                      >
+                        {group.children.map((cat) => (
+                          <CommandItem
+                            key={cat.id}
+                            value={cat.fullName || cat.name}
+                            onSelect={() => {
+                              setCategoryId(cat.id);
+                              setOpenCategoryPopover(false);
+                            }}
+                            className={cn(group.parent && "pl-4")}
+                          >
+                            <Check
+                              className={cn("mr-2 h-4 w-4", categoryId === cat.id ? "opacity-100" : "opacity-0")}
+                            />
+                            <span className="mr-2">{cat.icon}</span>
+                            {cat.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    ))}
                   </CommandList>
                 </Command>
               </PopoverContent>

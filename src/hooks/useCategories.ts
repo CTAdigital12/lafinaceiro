@@ -12,6 +12,10 @@ export interface Category {
   type: "income" | "expense";
   parent_id: string | null;
   created_at: string;
+  // Computed fields for hierarchy display
+  parentName?: string | null;
+  parentIcon?: string | null;
+  fullName?: string;
 }
 
 export function useCategories() {
@@ -28,7 +32,30 @@ export function useCategories() {
         .order("name");
 
       if (error) throw error;
-      return data as Category[];
+      
+      // Build parent lookup map
+      const categoriesMap = new Map<string, Category>();
+      (data as Category[]).forEach(cat => categoriesMap.set(cat.id, cat));
+      
+      // Enrich categories with parent info and full name
+      const enrichedCategories = (data as Category[]).map(cat => {
+        const parent = cat.parent_id ? categoriesMap.get(cat.parent_id) : null;
+        return {
+          ...cat,
+          parentName: parent?.name || null,
+          parentIcon: parent?.icon || null,
+          fullName: parent ? `${parent.name} > ${cat.name}` : cat.name,
+        };
+      });
+      
+      // Sort: parent categories first, then by name
+      return enrichedCategories.sort((a, b) => {
+        // Categories without parent come first
+        if (!a.parent_id && b.parent_id) return -1;
+        if (a.parent_id && !b.parent_id) return 1;
+        // Then sort by fullName for proper grouping
+        return a.fullName.localeCompare(b.fullName, "pt-BR");
+      });
     },
     enabled: !!user,
   });
