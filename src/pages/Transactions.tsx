@@ -788,7 +788,8 @@ export default function Transactions() {
                         key={transaction.id} 
                         className={cn(
                           "group",
-                          transaction.installment_group_id && "cursor-pointer hover:bg-muted/50"
+                          transaction.installment_group_id && "cursor-pointer hover:bg-muted/50",
+                          transaction.total_installments && transaction.total_installments > 1 && "bg-primary/5 border-l-2 border-l-primary"
                         )}
                         onClick={() => {
                           if (transaction.installment_group_id) {
@@ -803,11 +804,17 @@ export default function Transactions() {
                           />
                         </TableCell>
                         <TableCell>
-                          {transaction.status === "completed" ? (
-                            <CheckCircle2 className="h-4 w-4 text-income" />
-                          ) : (
-                            <Circle className="h-4 w-4 text-muted-foreground" />
-                          )}
+                          <div className="flex items-center gap-1">
+                            {transaction.status === "completed" ? (
+                              <CheckCircle2 className="h-4 w-4 text-income" />
+                            ) : (
+                              <Circle className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            {/* Installment indicator in status column */}
+                            {transaction.total_installments && transaction.total_installments > 1 && (
+                              <Layers className="h-4 w-4 text-primary" />
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {formatDateBR(transaction.date)}
