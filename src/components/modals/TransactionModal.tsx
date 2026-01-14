@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, parseISO, addMonths } from "date-fns";
-import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers } from "lucide-react";
+import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +59,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [status, setStatus] = useState<"completed" | "pending">("completed");
   const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_card">("account");
   const [isCorporateExpense, setIsCorporateExpense] = useState(false);
+  const [isReimbursable, setIsReimbursable] = useState(false);
   const [isRefund, setIsRefund] = useState(false);
   const [refundedTransactionId, setRefundedTransactionId] = useState<string | null>(null);
   const [saveRule, setSaveRule] = useState(false);
@@ -128,6 +129,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setStatus("completed");
       setPaymentMethod(refundFrom.credit_card_id ? "credit_card" : "account");
       setIsCorporateExpense(refundFrom.is_corporate_expense || false);
+      setIsReimbursable(false);
       setIsRefund(true);
       setRefundedTransactionId(refundFrom.id);
       setSaveRule(false);
@@ -144,6 +146,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setStatus(sourceData.status as "completed" | "pending");
       setPaymentMethod(sourceData.credit_card_id ? "credit_card" : "account");
       setIsCorporateExpense(sourceData.is_corporate_expense || false);
+      setIsReimbursable(sourceData.is_reimbursable || false);
       setIsRefund(sourceData.is_refund || false);
       setRefundedTransactionId(sourceData.refunded_transaction_id || null);
       setSaveRule(false);
@@ -159,6 +162,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setStatus("completed");
       setPaymentMethod("account");
       setIsCorporateExpense(false);
+      setIsReimbursable(false);
       setIsRefund(false);
       setRefundedTransactionId(null);
       setSaveRule(false);
@@ -201,6 +205,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           due_date: format(installmentDate, "yyyy-MM-dd"),
           status: i === installmentNumber ? status : "pending",
           is_corporate_expense: isCorporateExpense,
+          is_reimbursable: isReimbursable,
           is_refund: false,
           refunded_transaction_id: null,
           installment_group_id: groupId,
@@ -247,6 +252,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         due_date: calculateDueDate(),
         status,
         is_corporate_expense: isCorporateExpense,
+        is_reimbursable: isReimbursable,
         is_refund: isRefund,
         refunded_transaction_id: refundedTransactionId,
         installment_group_id: null,
@@ -677,6 +683,28 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                 id="corporate-expense"
                 checked={isCorporateExpense}
                 onCheckedChange={setIsCorporateExpense}
+              />
+            </div>
+          )}
+
+          {/* Reimbursable Expense - Only show for expenses */}
+          {type === "expense" && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <ReceiptText className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <Label htmlFor="reimbursable-expense" className="text-sm font-medium cursor-pointer">
+                    Despesa Reembolsável
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Será listada em Reembolsos Diversos</p>
+                </div>
+              </div>
+              <Switch
+                id="reimbursable-expense"
+                checked={isReimbursable}
+                onCheckedChange={setIsReimbursable}
               />
             </div>
           )}

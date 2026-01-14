@@ -20,6 +20,7 @@ export interface Transaction {
   status: "completed" | "pending";
   is_corporate_expense: boolean;
   is_refund: boolean;
+  is_reimbursable: boolean;
   refunded_transaction_id: string | null;
   reimbursement_status: string | null;
   // Installment fields
@@ -203,11 +204,11 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  // Exclude corporate expenses from personal expense total
+  // Exclude corporate expenses and reimbursable expenses from personal expense total
   // Refund of income counts as expense (money going out)
   const totalExpense = transactions
     .filter((t) => 
-      (t.type === "expense" && !t.is_corporate_expense && !t.is_refund) ||
+      (t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable) ||
       (t.type === "income" && t.is_refund)
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);

@@ -371,6 +371,7 @@ export function InvoiceReviewModal({
         account_id: string | null;
         status: "completed" | "pending";
         is_corporate_expense: boolean;
+        is_reimbursable: boolean;
         is_refund: boolean;
         refunded_transaction_id: string | null;
         installment_group_id: string | null;
@@ -399,6 +400,7 @@ export function InvoiceReviewModal({
           account_id: null,
           status: "completed",
           is_corporate_expense: item.is_corporate,
+          is_reimbursable: false,
           is_refund: false,
           refunded_transaction_id: null,
           installment_group_id: installmentGroupId,
@@ -428,6 +430,7 @@ export function InvoiceReviewModal({
               account_id: null,
               status: "pending",
               is_corporate_expense: future.is_corporate,
+              is_reimbursable: false,
               is_refund: false,
               refunded_transaction_id: null,
               installment_group_id: installmentGroupId,
