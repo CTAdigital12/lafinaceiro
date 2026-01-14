@@ -14,8 +14,10 @@ import {
   X,
   Clock,
   Send,
-  CheckCircle2
+  CheckCircle2,
+  Search
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -81,6 +83,7 @@ export default function CorporateExpenses() {
   const [selectedCardId, setSelectedCardId] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [reimbursementFilter, setReimbursementFilter] = useState<string>("all");
 
@@ -118,14 +121,17 @@ export default function CorporateExpenses() {
     enabled: !!user,
   });
 
-  // Filter by card and reimbursement status
+  // Filter by card, reimbursement status, and search query
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
       const cardMatch = selectedCardId === "all" || t.credit_card_id === selectedCardId;
       const reimbursementMatch = reimbursementFilter === "all" || t.reimbursement_status === reimbursementFilter;
-      return cardMatch && reimbursementMatch;
+      const searchMatch = searchQuery === "" || 
+        t.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.categories?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+      return cardMatch && reimbursementMatch && searchMatch;
     });
-  }, [transactions, selectedCardId, reimbursementFilter]);
+  }, [transactions, selectedCardId, reimbursementFilter, searchQuery]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -311,7 +317,17 @@ export default function CorporateExpenses() {
           </Button>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar descrição..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 w-[200px]"
+            />
+          </div>
+
           <Select value={selectedCardId} onValueChange={setSelectedCardId}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Todos os cartões" />
