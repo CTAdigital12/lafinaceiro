@@ -64,6 +64,7 @@ interface ReimbursementTransaction {
   credit_card_id: string | null;
   category_id: string | null;
   status: string;
+  is_reimbursable: boolean;
   reimbursement_status: ReimbursementStatus;
   categories?: { name: string; icon: string; color: string } | null;
   credit_cards?: { name: string; last_digits: string } | null;
@@ -99,12 +100,12 @@ export default function Reimbursements() {
           credit_card_id,
           category_id,
           status,
+          is_reimbursable,
           reimbursement_status,
           categories (name, icon, color),
           credit_cards (name, last_digits)
         `)
-        .eq("is_refund", true)
-        .eq("is_corporate_expense", false)
+        .eq("is_reimbursable", true)
         .or(
           `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate}),` +
           `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`

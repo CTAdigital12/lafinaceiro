@@ -455,6 +455,7 @@ export type Database = {
           installment_number: number | null
           is_corporate_expense: boolean
           is_refund: boolean
+          is_reimbursable: boolean
           refunded_transaction_id: string | null
           reimbursement_status: string | null
           status: string
@@ -478,6 +479,7 @@ export type Database = {
           installment_number?: number | null
           is_corporate_expense?: boolean
           is_refund?: boolean
+          is_reimbursable?: boolean
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
           status?: string
@@ -501,6 +503,7 @@ export type Database = {
           installment_number?: number | null
           is_corporate_expense?: boolean
           is_refund?: boolean
+          is_reimbursable?: boolean
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
           status?: string
