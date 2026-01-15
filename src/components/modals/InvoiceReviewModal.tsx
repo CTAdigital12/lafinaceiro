@@ -387,6 +387,7 @@ export function InvoiceReviewModal({
         is_corporate_expense: boolean;
         is_reimbursable: boolean;
         is_refund: boolean;
+        is_card_payment: boolean;
         refunded_transaction_id: string | null;
         installment_group_id: string | null;
         installment_number: number | null;
@@ -416,6 +417,7 @@ export function InvoiceReviewModal({
           is_corporate_expense: item.is_corporate,
           is_reimbursable: false,
           is_refund: false,
+          is_card_payment: false,
           refunded_transaction_id: null,
           installment_group_id: installmentGroupId,
           installment_number: item.installment_current || null,
@@ -446,6 +448,7 @@ export function InvoiceReviewModal({
               is_corporate_expense: future.is_corporate,
               is_reimbursable: false,
               is_refund: false,
+              is_card_payment: false,
               refunded_transaction_id: null,
               installment_group_id: installmentGroupId,
               installment_number: futureInstallmentNumber,

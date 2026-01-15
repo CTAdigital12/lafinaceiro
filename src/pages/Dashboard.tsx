@@ -104,8 +104,8 @@ export default function Dashboard() {
     );
   };
 
-  // Helper to calculate net total for a set of category IDs
-  const calculateNetTotal = (categoryIds: string[]) => {
+  // Helper to calculate totals for a set of category IDs
+  const calculateCategoryTotals = (categoryIds: string[]) => {
     const expenses = transactions
       .filter(t => filterTransactionsByView(t) && categoryIds.includes(t.category_id!))
       .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -114,7 +114,11 @@ export default function Dashboard() {
       .filter(t => filterRefundsByView(t) && categoryIds.includes(t.category_id!))
       .reduce((sum, t) => sum + Number(t.amount), 0);
     
-    return expenses - refunds;
+    return {
+      grossValue: expenses,
+      refundValue: refunds,
+      netValue: expenses - refunds,
+    };
   };
 
   // Calculate total expenses based on current filter (expenses - refunds)
@@ -140,13 +144,15 @@ export default function Dashboard() {
       const childrenIds = childCategories.filter(c => c.parent_id === parent.id).map(c => c.id);
       const allCategoryIds = [parent.id, ...childrenIds];
       
-      // Calculate net total (expenses - refunds)
-      const netTotal = calculateNetTotal(allCategoryIds);
+      // Calculate totals (expenses, refunds, net)
+      const totals = calculateCategoryTotals(allCategoryIds);
       
       return {
         id: parent.id,
         name: parent.name,
-        value: netTotal,
+        value: totals.netValue,
+        grossValue: totals.grossValue,
+        refundValue: totals.refundValue,
         color: parent.color || "hsl(var(--chart-1))",
         icon: parent.icon,
       };
@@ -155,11 +161,13 @@ export default function Dashboard() {
     // Add orphan subcategories (subcategories whose parent doesn't exist)
     const orphanCategories = childCategories.filter(c => !parentCategories.some(p => p.id === c.parent_id));
     const orphanExpenses = orphanCategories.map(cat => {
-      const netTotal = calculateNetTotal([cat.id]);
+      const totals = calculateCategoryTotals([cat.id]);
       return {
         id: cat.id,
         name: cat.name,
-        value: netTotal,
+        value: totals.netValue,
+        grossValue: totals.grossValue,
+        refundValue: totals.refundValue,
         color: cat.color || "hsl(var(--chart-1))",
         icon: cat.icon,
       };
@@ -203,12 +211,12 @@ export default function Dashboard() {
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       // Net total (expenses - refunds)
-      const netTotal = calculateNetTotal([sub.id]);
+      const totals = calculateCategoryTotals([sub.id]);
       
       return {
         id: sub.id,
         name: sub.name,
-        value: netTotal,
+        value: totals.netValue,
         color: sub.color || "hsl(var(--chart-3))",
         icon: sub.icon,
         transactions: allTransactions,

@@ -114,6 +114,7 @@ export function ParentCategoryDetailSheet({
       is_corporate_expense: false,
       is_reimbursable: false,
       is_refund: false,
+      is_card_payment: false,
       reimbursement_status: null,
       user_id: "",
       created_at: "",
