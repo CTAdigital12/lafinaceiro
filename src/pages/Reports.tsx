@@ -1,6 +1,8 @@
 import { Download, Calendar, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RefundReport } from "@/components/reports/RefundReport";
 import { cn } from "@/lib/utils";
 
 interface ExpenseCategory {
@@ -48,135 +50,151 @@ export default function Reports() {
           <h1 className="text-2xl font-bold text-foreground">Relatórios</h1>
           <p className="text-muted-foreground">Análise detalhada das suas finanças</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2">
-            <Calendar className="h-4 w-4" />
-            Janeiro 2024
-          </Button>
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            Exportar
-          </Button>
-        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Pie Chart */}
-        <div className="bg-card rounded-xl border border-border p-5 shadow-card animate-slide-up">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Despesas por Categoria</h3>
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={expenseData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={80}
-                  outerRadius={140}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {expenseData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 text-center">
-            <p className="text-sm text-muted-foreground">Total de Despesas</p>
-            <p className="text-2xl font-bold text-expense">
-              R$ {totalExpenses.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-        </div>
+      {/* Tabs for different reports */}
+      <Tabs defaultValue="expenses" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="expenses">Despesas</TabsTrigger>
+          <TabsTrigger value="refunds">Reembolsos</TabsTrigger>
+        </TabsList>
 
-        {/* Category List */}
-        <div className="bg-card rounded-xl border border-border p-5 shadow-card animate-slide-up">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Ranking de Despesas</h3>
-          <div className="space-y-3">
-            {expenseData
-              .sort((a, b) => b.value - a.value)
-              .map((category, index) => (
-                <div
-                  key={category.name}
-                  className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-sm font-bold text-muted-foreground">
-                    {index + 1}
-                  </div>
-                  <div
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: category.color }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">{category.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${category.percentage}%`,
-                            backgroundColor: category.color,
-                          }}
-                        />
+        <TabsContent value="expenses" className="space-y-6">
+          {/* Header actions for expenses tab */}
+          <div className="flex items-center gap-3 justify-end">
+            <Button variant="outline" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              Janeiro 2024
+            </Button>
+            <Button variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              Exportar
+            </Button>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Pie Chart */}
+            <div className="bg-card rounded-xl border border-border p-5 shadow-card animate-slide-up">
+              <h3 className="text-lg font-semibold text-foreground mb-4">Despesas por Categoria</h3>
+              <div className="h-[400px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={expenseData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80}
+                      outerRadius={140}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {expenseData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 text-center">
+                <p className="text-sm text-muted-foreground">Total de Despesas</p>
+                <p className="text-2xl font-bold text-expense">
+                  R$ {totalExpenses.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+
+            {/* Category List */}
+            <div className="bg-card rounded-xl border border-border p-5 shadow-card animate-slide-up">
+              <h3 className="text-lg font-semibold text-foreground mb-4">Ranking de Despesas</h3>
+              <div className="space-y-3">
+                {expenseData
+                  .sort((a, b) => b.value - a.value)
+                  .map((category, index) => (
+                    <div
+                      key={category.name}
+                      className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                    >
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-sm font-bold text-muted-foreground">
+                        {index + 1}
                       </div>
-                      <span className="text-xs font-medium text-muted-foreground w-12 text-right">
-                        {category.percentage}%
-                      </span>
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: category.color }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">{category.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${category.percentage}%`,
+                                backgroundColor: category.color,
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium text-muted-foreground w-12 text-right">
+                            {category.percentage}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-foreground">
+                          R$ {category.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-foreground">
-                      R$ {category.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                  ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Summary Stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="bg-card rounded-xl border border-border p-5 shadow-card">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl gradient-expense flex items-center justify-center">
-              <TrendingDown className="h-6 w-6 text-expense-foreground" />
+          {/* Summary Stats */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="bg-card rounded-xl border border-border p-5 shadow-card">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl gradient-expense flex items-center justify-center">
+                  <TrendingDown className="h-6 w-6 text-expense-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Maior Despesa</p>
+                  <p className="text-lg font-bold text-foreground">Moradia</p>
+                  <p className="text-sm text-expense">R$ 1.500,00</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Maior Despesa</p>
-              <p className="text-lg font-bold text-foreground">Moradia</p>
-              <p className="text-sm text-expense">R$ 1.500,00</p>
+            <div className="bg-card rounded-xl border border-border p-5 shadow-card">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
+                  <span className="text-2xl">📊</span>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Média por Categoria</p>
+                  <p className="text-lg font-bold text-foreground">
+                    R$ {(totalExpenses / expenseData.length).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-5 shadow-card">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
+                  <span className="text-2xl">📈</span>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total de Categorias</p>
+                  <p className="text-lg font-bold text-foreground">{expenseData.length} categorias</p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="bg-card rounded-xl border border-border p-5 shadow-card">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
-              <span className="text-2xl">📊</span>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Média por Categoria</p>
-              <p className="text-lg font-bold text-foreground">
-                R$ {(totalExpenses / expenseData.length).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card rounded-xl border border-border p-5 shadow-card">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
-              <span className="text-2xl">📈</span>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total de Categorias</p>
-              <p className="text-lg font-bold text-foreground">{expenseData.length} categorias</p>
-            </div>
-          </div>
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="refunds">
+          <RefundReport />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
