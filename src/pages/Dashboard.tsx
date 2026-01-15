@@ -7,7 +7,7 @@ import { CategoryDetailSheet } from "@/components/dashboard/CategoryDetailSheet"
 import { ParentCategoryDetailSheet } from "@/components/dashboard/ParentCategoryDetailSheet";
 import { AllCategoriesList } from "@/components/dashboard/AllCategoriesList";
 import { useAccounts } from "@/hooks/useAccounts";
-import { useTransactions } from "@/hooks/useTransactions";
+import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useCategories } from "@/hooks/useCategories";
 import {
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface CategoryData {
   name: string;
@@ -49,9 +50,11 @@ interface SubcategoryData {
   }[];
 }
 
+type ExpenseViewFilter = "personal" | "corporate" | "reimbursable";
+
 export default function Dashboard() {
   const { totalBalance, isLoading: accountsLoading } = useAccounts();
-  const { transactions, totalIncome, totalExpense, isLoading: transactionsLoading } = useTransactions(
+  const { transactions, totalIncome, isLoading: transactionsLoading } = useTransactions(
     undefined,
     undefined,
     { showAll: false, loadedCount: 1000, useHybridDateFilter: true }
@@ -66,8 +69,31 @@ export default function Dashboard() {
   const [incomeSheetOpen, setIncomeSheetOpen] = useState(false);
   const [allCategoriesDialogOpen, setAllCategoriesDialogOpen] = useState(false);
   const [allCategoriesType, setAllCategoriesType] = useState<"expense" | "income">("expense");
+  const [expenseFilters, setExpenseFilters] = useState<ExpenseViewFilter[]>(["personal"]);
 
   const isLoading = accountsLoading || transactionsLoading || cardsLoading || categoriesLoading;
+
+  // Filter function based on expense view filters
+  const filterTransactionsByView = (t: Transaction) => {
+    if (t.type !== "expense") return false;
+    
+    const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
+    const isCorporate = t.is_corporate_expense;
+    const isReimbursable = t.is_reimbursable;
+    
+    return (
+      (expenseFilters.includes("personal") && isPersonal) ||
+      (expenseFilters.includes("corporate") && isCorporate) ||
+      (expenseFilters.includes("reimbursable") && isReimbursable)
+    );
+  };
+
+  // Calculate total expenses based on current filter
+  const filteredTotalExpense = useMemo(() => {
+    return transactions
+      .filter(filterTransactionsByView)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+  }, [transactions, expenseFilters]);
 
   // Calculate expenses grouped by parent category
   const expensesByParentCategory = useMemo(() => {
@@ -77,13 +103,13 @@ export default function Dashboard() {
     const result = parentCategories.map(parent => {
       // Direct transactions in parent category
       const parentTotal = transactions
-        .filter(t => t.type === "expense" && t.category_id === parent.id && !t.is_corporate_expense)
+        .filter(t => filterTransactionsByView(t) && t.category_id === parent.id)
         .reduce((sum, t) => sum + Number(t.amount), 0);
       
       // Transactions from subcategories
       const childrenIds = childCategories.filter(c => c.parent_id === parent.id).map(c => c.id);
       const childrenTotal = transactions
-        .filter(t => t.type === "expense" && childrenIds.includes(t.category_id!) && !t.is_corporate_expense)
+        .filter(t => filterTransactionsByView(t) && childrenIds.includes(t.category_id!))
         .reduce((sum, t) => sum + Number(t.amount), 0);
       
       return {
@@ -99,7 +125,7 @@ export default function Dashboard() {
     const orphanCategories = childCategories.filter(c => !parentCategories.some(p => p.id === c.parent_id));
     const orphanExpenses = orphanCategories.map(cat => {
       const total = transactions
-        .filter(t => t.type === "expense" && t.category_id === cat.id && !t.is_corporate_expense)
+        .filter(t => filterTransactionsByView(t) && t.category_id === cat.id)
         .reduce((sum, t) => sum + Number(t.amount), 0);
       return {
         id: cat.id,
@@ -111,7 +137,7 @@ export default function Dashboard() {
     }).filter(c => c.value > 0);
 
     return [...result, ...orphanExpenses].sort((a, b) => b.value - a.value);
-  }, [expenseCategories, transactions]);
+  }, [expenseCategories, transactions, expenseFilters]);
 
   // Get subcategories data for a parent category
   const getSubcategoriesData = (parentId: string): SubcategoryData[] => {
@@ -119,7 +145,7 @@ export default function Dashboard() {
     
     return subcategories.map(sub => {
       const subTransactions = transactions
-        .filter(t => t.type === "expense" && t.category_id === sub.id && !t.is_corporate_expense)
+        .filter(t => filterTransactionsByView(t) && t.category_id === sub.id)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .map(t => ({
           id: t.id,
@@ -146,7 +172,7 @@ export default function Dashboard() {
   // Get direct transactions for a parent category (transactions directly in parent, not in subcategories)
   const getDirectTransactions = (parentId: string) => {
     return transactions
-      .filter(t => t.type === "expense" && t.category_id === parentId && !t.is_corporate_expense)
+      .filter(t => filterTransactionsByView(t) && t.category_id === parentId)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .map(t => ({
         id: t.id,
@@ -240,12 +266,53 @@ export default function Dashboard() {
     ? getTransactionsForCategory(selectedCategory.name, "income")
     : [];
 
+  const handleFilterChange = (value: string[]) => {
+    if (value.length > 0) {
+      setExpenseFilters(value as ExpenseViewFilter[]);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Visão geral das suas finanças</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground">Visão geral das suas finanças</p>
+        </div>
+        
+        {/* Expense View Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Visualizar:</span>
+          <ToggleGroup 
+            type="multiple" 
+            value={expenseFilters} 
+            onValueChange={handleFilterChange}
+            className="justify-start"
+          >
+            <ToggleGroupItem 
+              value="personal" 
+              aria-label="Meus gastos"
+              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              Meus gastos
+            </ToggleGroupItem>
+            <ToggleGroupItem 
+              value="corporate" 
+              aria-label="Empresa"
+              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              Empresa
+            </ToggleGroupItem>
+            <ToggleGroupItem 
+              value="reimbursable" 
+              aria-label="Reembolsáveis"
+              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              Reembolsáveis
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -266,7 +333,7 @@ export default function Dashboard() {
         />
         <SummaryCard
           title="Despesas"
-          value={`R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+          value={`R$ ${filteredTotalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           subtitle="Este mês"
           icon={TrendingDown}
           variant="expense"
@@ -338,7 +405,7 @@ export default function Dashboard() {
           </DialogHeader>
           <AllCategoriesList
             data={allCategoriesType === "expense" ? expensesByParentCategory : incomeByCategory}
-            total={allCategoriesType === "expense" ? totalExpense : totalIncome}
+            total={allCategoriesType === "expense" ? filteredTotalExpense : totalIncome}
             onCategoryClick={(cat) => {
               setAllCategoriesDialogOpen(false);
               if (allCategoriesType === "expense") {
