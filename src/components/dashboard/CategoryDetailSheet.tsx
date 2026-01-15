@@ -16,18 +16,13 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CategorySelector } from "@/components/CategorySelector";
-import { useTransactions } from "@/hooks/useTransactions";
+import { TransactionModal } from "@/components/modals/TransactionModal";
+import { Transaction } from "@/hooks/useTransactions";
 
-interface Transaction {
+interface TransactionDisplay {
   id: string;
   description: string;
   amount: number;
@@ -49,7 +44,7 @@ interface CategoryDetailSheetProps {
   categoryName: string;
   categoryColor: string;
   totalAmount: number;
-  transactions: Transaction[];
+  transactions: TransactionDisplay[];
   allCategories?: CategoryData[];
   onCategoryChange?: (category: CategoryData) => void;
   categoryType?: "expense" | "income";
@@ -67,8 +62,8 @@ export function CategoryDetailSheet({
   categoryType = "expense",
 }: CategoryDetailSheetProps) {
   const isMobile = useIsMobile();
-  const { updateTransaction } = useTransactions();
-  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const currentIndex = allCategories.findIndex(cat => cat.name === categoryName);
   const canGoPrev = currentIndex > 0;
@@ -86,15 +81,39 @@ export function CategoryDetailSheet({
     }
   };
 
-  const handleCategoryUpdate = async (transactionId: string, newCategoryId: string) => {
-    try {
-      await updateTransaction.mutateAsync({
-        id: transactionId,
-        category_id: newCategoryId,
-      });
-      setEditingTransactionId(null);
-    } catch (error) {
-      console.error("Erro ao atualizar categoria:", error);
+  const handleEditTransaction = (transaction: TransactionDisplay) => {
+    // Convert to full Transaction type for the modal
+    setEditingTransaction({
+      id: transaction.id,
+      description: transaction.description,
+      amount: transaction.amount,
+      date: transaction.date,
+      type: transaction.type as "income" | "expense",
+      category_id: transaction.category_id || null,
+      account_id: null,
+      credit_card_id: null,
+      status: "completed",
+      is_corporate_expense: false,
+      is_reimbursable: false,
+      is_refund: false,
+      reimbursement_status: null,
+      user_id: "",
+      created_at: "",
+      updated_at: "",
+      due_date: null,
+      installment_number: null,
+      total_installments: null,
+      installment_group_id: null,
+      refunded_transaction_id: null,
+      imported_at: null,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = (open: boolean) => {
+    setIsModalOpen(open);
+    if (!open) {
+      setEditingTransaction(null);
     }
   };
 
@@ -148,7 +167,8 @@ export function CategoryDetailSheet({
           {transactions.map((transaction) => (
             <div 
               key={transaction.id}
-              className="flex items-center justify-between py-3 border-b border-border last:border-0 gap-2"
+              className="flex items-center justify-between py-3 border-b border-border last:border-0 gap-2 cursor-pointer hover:bg-muted/50 rounded-lg px-2 -mx-2 transition-colors"
+              onClick={() => handleEditTransaction(transaction)}
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">
@@ -166,24 +186,17 @@ export function CategoryDetailSheet({
                   {transaction.type === "income" ? "+" : "-"} R$ {transaction.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
                 
-                <Popover 
-                  open={editingTransactionId === transaction.id}
-                  onOpenChange={(open) => setEditingTransactionId(open ? transaction.id : null)}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-7 w-7"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEditTransaction(transaction);
+                  }}
                 >
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
-                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[280px] p-3" align="end">
-                    <p className="text-sm font-medium mb-2">Alterar categoria</p>
-                    <CategorySelector
-                      type={categoryType}
-                      value={transaction.category_id || ""}
-                      onSelect={(categoryId) => handleCategoryUpdate(transaction.id, categoryId)}
-                    />
-                  </PopoverContent>
-                </Popover>
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
               </div>
             </div>
           ))}
@@ -195,6 +208,12 @@ export function CategoryDetailSheet({
           )}
         </div>
       </ScrollArea>
+
+      <TransactionModal
+        open={isModalOpen}
+        onOpenChange={handleModalClose}
+        transaction={editingTransaction}
+      />
     </>
   );
 
