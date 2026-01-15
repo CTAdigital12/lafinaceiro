@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart, Tag, Info } from "lucide-react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart, Tag, Info, ChevronsUpDown } from "lucide-react";
 import { Transaction } from "@/hooks/useTransactions";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { Button } from "@/components/ui/button";
@@ -198,6 +198,23 @@ export default function Planning() {
       }
       return newSet;
     });
+  };
+
+  const parentCategoriesWithChildren = useMemo(() => {
+    return hierarchicalBudgets.filter(b => b.children.length > 0).map(b => b.categories?.id).filter(Boolean) as string[];
+  }, [hierarchicalBudgets]);
+
+  const allCollapsed = parentCategoriesWithChildren.length > 0 && 
+    parentCategoriesWithChildren.every(id => collapsedCategories.has(id));
+
+  const toggleAllCategories = () => {
+    if (allCollapsed) {
+      // Expand all
+      setCollapsedCategories(new Set());
+    } else {
+      // Collapse all
+      setCollapsedCategories(new Set(parentCategoriesWithChildren));
+    }
   };
 
   const handleEditBudget = (budget: Budget) => {
@@ -448,6 +465,19 @@ export default function Planning() {
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+          {parentCategoriesWithChildren.length > 0 && (
+            <div className="flex justify-end p-2 border-b border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2 text-muted-foreground hover:text-foreground"
+                onClick={toggleAllCategories}
+              >
+                <ChevronsUpDown className="h-4 w-4" />
+                {allCollapsed ? "Expandir Todas" : "Colapsar Todas"}
+              </Button>
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
