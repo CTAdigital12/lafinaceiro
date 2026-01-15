@@ -149,9 +149,15 @@ export default function Planning() {
     return parentBudgets.sort((a, b) => 
       (a.categories?.name || "").localeCompare(b.categories?.name || "")
     );
-  }, [budgets, spentByCategory]);
+  }, [budgets, spentByCategory, categories]);
 
-  const totalSpent = Object.values(spentByCategory).reduce((sum, val) => sum + val, 0);
+  // Calculate total spent from transactions directly (not from spentByCategory which has duplicates)
+  const totalSpent = useMemo(() => {
+    return transactions
+      .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+  }, [transactions]);
+  
   const totalRemaining = totalPlanned - totalSpent;
   const totalPercentage = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
   const categoriesOverBudget = budgets.filter((b) => (spentByCategory[b.category_id || ""] || 0) > Number(b.planned_amount)).length;
