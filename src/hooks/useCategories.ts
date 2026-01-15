@@ -156,10 +156,36 @@ export function useCategories() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
-      toast({ title: "Categoria excluída!" });
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao excluir categoria", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const moveTransactionsToCategory = useMutation({
+    mutationFn: async ({
+      fromCategoryIds,
+      toCategoryId,
+    }: {
+      fromCategoryIds: string[];
+      toCategoryId: string;
+    }) => {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ category_id: toCategoryId })
+        .in("category_id", fromCategoryIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao mover transações",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -174,5 +200,6 @@ export function useCategories() {
     createCategory,
     updateCategory,
     deleteCategory,
+    moveTransactionsToCategory,
   };
 }
