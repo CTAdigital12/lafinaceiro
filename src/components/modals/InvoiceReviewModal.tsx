@@ -98,6 +98,7 @@ export function InvoiceReviewModal({
   const [openCategoryPopoverIndex, setOpenCategoryPopoverIndex] = useState<number | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [showPostClosingWarning, setShowPostClosingWarning] = useState(true);
+  const [newCategoryParentId, setNewCategoryParentId] = useState<string | null>(null);
 
   const colorOptions = [
     "#EF4444", "#F97316", "#F59E0B", "#22C55E", 
@@ -228,6 +229,14 @@ export function InvoiceReviewModal({
     );
   };
 
+  const handleDescriptionChange = (index: number, description: string) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, description } : item
+      )
+    );
+  };
+
   const toggleNotes = (index: number) => {
     setExpandedNotes((prev) => {
       const newSet = new Set(prev);
@@ -240,7 +249,7 @@ export function InvoiceReviewModal({
     });
   };
 
-  const handleCreateCategory = async (index: number, name: string) => {
+  const handleCreateCategory = async (index: number, name: string, parentId?: string | null) => {
     if (!name.trim()) return;
     
     setIsCreatingCategory(true);
@@ -250,12 +259,14 @@ export function InvoiceReviewModal({
         icon: "📦",
         color: colorOptions[Math.floor(Math.random() * colorOptions.length)],
         type: "expense",
+        parent_id: parentId || null,
       });
       
       handleCategoryChange(index, newCategory.id);
       setCategorySearch("");
+      setNewCategoryParentId(null);
       toast({
-        title: `Categoria "${name}" criada!`,
+        title: parentId ? `Subcategoria "${name}" criada!` : `Categoria "${name}" criada!`,
         description: "A categoria foi criada e aplicada à transação.",
       });
     } catch (error) {
@@ -268,6 +279,9 @@ export function InvoiceReviewModal({
       setIsCreatingCategory(false);
     }
   };
+
+  // Get parent categories (no parent_id) for subcategory creation
+  const parentCategories = expenseCategories.filter(c => !c.parent_id);
 
   const extractKeyword = (description: string): string => {
     const cleaned = description
@@ -657,7 +671,12 @@ export function InvoiceReviewModal({
                               <TooltipContent>Compra pós-fechamento (próxima fatura)</TooltipContent>
                             </Tooltip>
                           )}
-                          <p className="text-sm font-medium truncate">{item.description}</p>
+                          <Input
+                            value={item.description}
+                            onChange={(e) => handleDescriptionChange(index, e.target.value)}
+                            className="h-7 text-sm font-medium flex-1 min-w-[200px]"
+                            placeholder="Descrição"
+                          />
                           {hasInstallments && (
                             <Badge variant="outline" className="text-xs flex-shrink-0">
                               <Copy className="h-3 w-3 mr-1" />

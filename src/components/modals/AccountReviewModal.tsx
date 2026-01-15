@@ -247,6 +247,14 @@ export function AccountReviewModal({
     );
   };
 
+  const handleDescriptionChange = (index: number, description: string) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, description } : item
+      )
+    );
+  };
+
   const handleCreateCategory = async (index: number, type: "income" | "expense", name: string) => {
     if (!name.trim()) return;
     
@@ -509,7 +517,12 @@ export function AccountReviewModal({
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm font-medium mt-0.5">{item.description}</p>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => handleDescriptionChange(index, e.target.value)}
+                        className="h-7 text-sm font-medium mt-1"
+                        placeholder="Descrição"
+                      />
                     </div>
                     <p className={cn(
                       "text-sm font-semibold whitespace-nowrap",
