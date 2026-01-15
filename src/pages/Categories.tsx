@@ -15,17 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { DeleteCategoryModal } from "@/components/modals/DeleteCategoryModal";
 import { Plus, ChevronRight, Pencil, Trash2, CornerDownRight, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -57,7 +47,7 @@ const emojiOptions = [
 interface DraggableSubcategoryProps {
   category: Category;
   onEdit: (category: Category) => void;
-  onDelete: (id: string) => void;
+  onDelete: (category: Category) => void;
 }
 
 function DraggableSubcategory({ category, onEdit, onDelete }: DraggableSubcategoryProps) {
@@ -106,27 +96,14 @@ function DraggableSubcategory({ category, onEdit, onDelete }: DraggableSubcatego
         >
           <Pencil className="h-4 w-4" />
         </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir subcategoria?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta ação não pode ser desfeita.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={() => onDelete(category.id)}>
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          onClick={() => onDelete(category)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
@@ -138,7 +115,7 @@ interface DroppableParentCategoryProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   onEdit: (category: Category) => void;
-  onDelete: (id: string) => void;
+  onDelete: (category: Category) => void;
   onAddSubcategory: (category: Category) => void;
 }
 
@@ -214,27 +191,14 @@ function DroppableParentCategory({
           >
             <Plus className="h-4 w-4" />
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Excluir categoria?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta ação não pode ser desfeita. Todas as subcategorias também serão excluídas.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={() => onDelete(category.id)}>
-                  Excluir
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            onClick={() => onDelete(category)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -253,9 +217,10 @@ function DroppableParentCategory({
 }
 
 export default function Categories() {
-  const { categories, expenseCategories, isLoading, createCategory, updateCategory, deleteCategory } = useCategories();
+  const { categories, expenseCategories, isLoading, createCategory, updateCategory } = useCategories();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const [newName, setNewName] = useState("");
   const [newIcon, setNewIcon] = useState("📦");
   const [newColor, setNewColor] = useState("#3B82F6");
@@ -357,8 +322,8 @@ export default function Categories() {
     setEditingCategory(null);
   };
 
-  const handleDeleteCategory = async (id: string) => {
-    await deleteCategory.mutateAsync(id);
+  const handleDeleteCategory = (category: Category) => {
+    setCategoryToDelete(category);
   };
 
   const resetForm = () => {
@@ -575,6 +540,14 @@ export default function Categories() {
           )}
         </DragOverlay>
       </DndContext>
+
+      {/* Delete Category Modal */}
+      <DeleteCategoryModal
+        category={categoryToDelete}
+        isOpen={!!categoryToDelete}
+        onClose={() => setCategoryToDelete(null)}
+        onConfirm={() => setCategoryToDelete(null)}
+      />
     </div>
   );
 }
