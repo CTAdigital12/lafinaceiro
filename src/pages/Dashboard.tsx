@@ -73,9 +73,9 @@ export default function Dashboard() {
 
   const isLoading = accountsLoading || transactionsLoading || cardsLoading || categoriesLoading;
 
-  // Filter function based on expense view filters
+  // Filter function based on expense view filters (for regular expenses, not refunds)
   const filterTransactionsByView = (t: Transaction) => {
-    if (t.type !== "expense") return false;
+    if (t.type !== "expense" || t.is_refund) return false;
     
     const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
     const isCorporate = t.is_corporate_expense;
@@ -88,34 +88,65 @@ export default function Dashboard() {
     );
   };
 
-  // Calculate total expenses based on current filter
+  // Filter function for refunds of expenses (to subtract from category totals)
+  const filterRefundsByView = (t: Transaction) => {
+    // Refunds are expense type with is_refund = true, they should reduce the original category
+    if (t.type !== "expense" || !t.is_refund) return false;
+    
+    const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
+    const isCorporate = t.is_corporate_expense;
+    const isReimbursable = t.is_reimbursable;
+    
+    return (
+      (expenseFilters.includes("personal") && isPersonal) ||
+      (expenseFilters.includes("corporate") && isCorporate) ||
+      (expenseFilters.includes("reimbursable") && isReimbursable)
+    );
+  };
+
+  // Helper to calculate net total for a set of category IDs
+  const calculateNetTotal = (categoryIds: string[]) => {
+    const expenses = transactions
+      .filter(t => filterTransactionsByView(t) && categoryIds.includes(t.category_id!))
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    
+    const refunds = transactions
+      .filter(t => filterRefundsByView(t) && categoryIds.includes(t.category_id!))
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    
+    return expenses - refunds;
+  };
+
+  // Calculate total expenses based on current filter (expenses - refunds)
   const filteredTotalExpense = useMemo(() => {
-    return transactions
+    const expenses = transactions
       .filter(filterTransactionsByView)
       .reduce((sum, t) => sum + Number(t.amount), 0);
+    
+    const refunds = transactions
+      .filter(filterRefundsByView)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    
+    return expenses - refunds;
   }, [transactions, expenseFilters]);
 
-  // Calculate expenses grouped by parent category
+  // Calculate expenses grouped by parent category (with refunds subtracted)
   const expensesByParentCategory = useMemo(() => {
     const parentCategories = expenseCategories.filter(c => !c.parent_id);
     const childCategories = expenseCategories.filter(c => c.parent_id);
     
     const result = parentCategories.map(parent => {
-      // Direct transactions in parent category
-      const parentTotal = transactions
-        .filter(t => filterTransactionsByView(t) && t.category_id === parent.id)
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      
-      // Transactions from subcategories
+      // Get all category IDs (parent + children)
       const childrenIds = childCategories.filter(c => c.parent_id === parent.id).map(c => c.id);
-      const childrenTotal = transactions
-        .filter(t => filterTransactionsByView(t) && childrenIds.includes(t.category_id!))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+      const allCategoryIds = [parent.id, ...childrenIds];
+      
+      // Calculate net total (expenses - refunds)
+      const netTotal = calculateNetTotal(allCategoryIds);
       
       return {
         id: parent.id,
         name: parent.name,
-        value: parentTotal + childrenTotal,
+        value: netTotal,
         color: parent.color || "hsl(var(--chart-1))",
         icon: parent.icon,
       };
@@ -124,13 +155,11 @@ export default function Dashboard() {
     // Add orphan subcategories (subcategories whose parent doesn't exist)
     const orphanCategories = childCategories.filter(c => !parentCategories.some(p => p.id === c.parent_id));
     const orphanExpenses = orphanCategories.map(cat => {
-      const total = transactions
-        .filter(t => filterTransactionsByView(t) && t.category_id === cat.id)
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+      const netTotal = calculateNetTotal([cat.id]);
       return {
         id: cat.id,
         name: cat.name,
-        value: total,
+        value: netTotal,
         color: cat.color || "hsl(var(--chart-1))",
         icon: cat.icon,
       };
@@ -139,14 +168,14 @@ export default function Dashboard() {
     return [...result, ...orphanExpenses].sort((a, b) => b.value - a.value);
   }, [expenseCategories, transactions, expenseFilters]);
 
-  // Get subcategories data for a parent category
+  // Get subcategories data for a parent category (with refunds included as negative)
   const getSubcategoriesData = (parentId: string): SubcategoryData[] => {
     const subcategories = expenseCategories.filter(c => c.parent_id === parentId);
     
     return subcategories.map(sub => {
-      const subTransactions = transactions
+      // Get regular expense transactions
+      const expenseTransactions = transactions
         .filter(t => filterTransactionsByView(t) && t.category_id === sub.id)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .map(t => ({
           id: t.id,
           description: t.description,
@@ -154,26 +183,44 @@ export default function Dashboard() {
           date: t.date,
           type: t.type,
           category_id: t.category_id || undefined,
+          is_refund: false,
         }));
       
-      const total = subTransactions.reduce((sum, t) => sum + t.amount, 0);
+      // Get refund transactions (shown as negative)
+      const refundTransactions = transactions
+        .filter(t => filterRefundsByView(t) && t.category_id === sub.id)
+        .map(t => ({
+          id: t.id,
+          description: `[Reembolso] ${t.description}`,
+          amount: -Number(t.amount), // Negative to show as reduction
+          date: t.date,
+          type: t.type,
+          category_id: t.category_id || undefined,
+          is_refund: true,
+        }));
+      
+      const allTransactions = [...expenseTransactions, ...refundTransactions]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      // Net total (expenses - refunds)
+      const netTotal = calculateNetTotal([sub.id]);
       
       return {
         id: sub.id,
         name: sub.name,
-        value: total,
+        value: netTotal,
         color: sub.color || "hsl(var(--chart-3))",
         icon: sub.icon,
-        transactions: subTransactions,
+        transactions: allTransactions,
       };
     }).filter(s => s.value > 0).sort((a, b) => b.value - a.value);
   };
 
   // Get direct transactions for a parent category (transactions directly in parent, not in subcategories)
   const getDirectTransactions = (parentId: string) => {
-    return transactions
+    // Get regular expense transactions
+    const expenseTransactions = transactions
       .filter(t => filterTransactionsByView(t) && t.category_id === parentId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .map(t => ({
         id: t.id,
         description: t.description,
@@ -182,12 +229,27 @@ export default function Dashboard() {
         type: t.type,
         category_id: t.category_id || undefined,
       }));
+    
+    // Get refund transactions (shown as negative)
+    const refundTransactions = transactions
+      .filter(t => filterRefundsByView(t) && t.category_id === parentId)
+      .map(t => ({
+        id: t.id,
+        description: `[Reembolso] ${t.description}`,
+        amount: -Number(t.amount), // Negative to show as reduction
+        date: t.date,
+        type: t.type,
+        category_id: t.category_id || undefined,
+      }));
+    
+    return [...expenseTransactions, ...refundTransactions]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
-  // Calculate income by category (keep original behavior for income)
+  // Calculate income by category (exclude expense refunds - they are now deducted from expense categories)
   const incomeByCategory = incomeCategories.map((cat) => {
     const total = transactions
-      .filter((t) => t.type === "income" && t.category_id === cat.id)
+      .filter((t) => t.type === "income" && t.category_id === cat.id && !t.is_refund)
       .reduce((sum, t) => sum + Number(t.amount), 0);
     return {
       name: cat.fullName || cat.name,
