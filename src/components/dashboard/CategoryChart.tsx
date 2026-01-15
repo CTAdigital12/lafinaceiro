@@ -7,6 +7,8 @@ interface CategoryData {
   name: string;
   value: number;
   color: string;
+  grossValue?: number; // Original expense value before refunds
+  refundValue?: number; // Amount refunded
 }
 
 interface CategoryChartProps {
@@ -47,12 +49,28 @@ export function CategoryChart({ title, data, onCategoryClick, onViewAllClick }: 
     if (active && payload && payload.length) {
       const item = payload[0].payload;
       const percentage = ((item.value / total) * 100).toFixed(1);
+      const hasRefund = item.refundValue && item.refundValue > 0;
+      
       return (
         <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
           <p className="font-medium text-foreground text-sm">{item.name}</p>
-          <p className="text-sm text-muted-foreground">
-            R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
+          {hasRefund ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                R$ {item.grossValue?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                <span className="text-emerald-600 ml-1">
+                  - R$ {item.refundValue?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} reembolso
+                </span>
+              </p>
+              <p className="text-sm font-medium text-foreground">
+                = R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">{percentage}%</p>
         </div>
       );

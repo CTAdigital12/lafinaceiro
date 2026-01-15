@@ -21,6 +21,7 @@ export interface Transaction {
   is_corporate_expense: boolean;
   is_refund: boolean;
   is_reimbursable: boolean;
+  is_card_payment: boolean | null;
   refunded_transaction_id: string | null;
   reimbursement_status: string | null;
   // Installment fields
@@ -196,22 +197,36 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     },
   });
 
-  // Refund of expense counts as income, refund of income counts as expense
+  // Calculate total income (only actual income, not expense refunds)
+  // Expense refunds are now subtracted from expense categories, not added to income
   const totalIncome = transactions
+    .filter((t) => t.type === "income" && !t.is_refund)
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // Calculate total expenses (excluding corporate, reimbursable, card payments, and refunds)
+  // Expense refunds are subtracted separately in category calculations
+  const expenseTotal = transactions
     .filter((t) => 
-      (t.type === "income" && !t.is_refund) || 
-      (t.type === "expense" && t.is_refund)
+      t.type === "expense" && 
+      !t.is_corporate_expense && 
+      !t.is_refund && 
+      !t.is_reimbursable && 
+      !t.is_card_payment
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  // Exclude corporate expenses and reimbursable expenses from personal expense total
-  // Refund of income counts as expense (money going out)
-  const totalExpense = transactions
+  // Calculate refunds of expenses (to subtract from total)
+  const expenseRefunds = transactions
     .filter((t) => 
-      (t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable) ||
-      (t.type === "income" && t.is_refund)
+      t.type === "expense" && 
+      t.is_refund && 
+      !t.is_corporate_expense && 
+      !t.is_reimbursable
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // Net expense = expenses - refunds
+  const totalExpense = expenseTotal - expenseRefunds;
 
   return {
     transactions,

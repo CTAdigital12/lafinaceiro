@@ -336,6 +336,7 @@ export function AccountReviewModal({
             is_corporate_expense: item.is_corporate,
             is_reimbursable: false,
             is_refund: false,
+            is_card_payment: false,
             refunded_transaction_id: null,
             reimbursement_status: item.is_corporate ? "pending" : null,
             installment_group_id: null,
