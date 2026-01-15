@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Wallet, TrendingUp, TrendingDown, CreditCard, Loader2 } from "lucide-react";
 import { SummaryCard } from "@/components/dashboard/SummaryCard";
 import { CategoryChart } from "@/components/dashboard/CategoryChart";
 import { BalanceChart } from "@/components/dashboard/BalanceChart";
 import { CategoryDetailSheet } from "@/components/dashboard/CategoryDetailSheet";
+import { ParentCategoryDetailSheet } from "@/components/dashboard/ParentCategoryDetailSheet";
 import { AllCategoriesList } from "@/components/dashboard/AllCategoriesList";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -20,6 +21,32 @@ interface CategoryData {
   name: string;
   value: number;
   color: string;
+  id?: string;
+  icon?: string | null;
+}
+
+interface ParentCategoryData {
+  id: string;
+  name: string;
+  value: number;
+  color: string;
+  icon?: string | null;
+}
+
+interface SubcategoryData {
+  id: string;
+  name: string;
+  value: number;
+  color: string;
+  icon?: string | null;
+  transactions: {
+    id: string;
+    description: string;
+    amount: number;
+    date: string;
+    type: string;
+    category_id?: string;
+  }[];
 }
 
 export default function Dashboard() {
@@ -32,28 +59,106 @@ export default function Dashboard() {
   const { totalInvoice, isLoading: cardsLoading } = useCreditCards();
   const { expenseCategories, incomeCategories, isLoading: categoriesLoading } = useCategories();
 
+  const [selectedParentCategory, setSelectedParentCategory] = useState<ParentCategoryData | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryData | null>(null);
   const [categoryType, setCategoryType] = useState<"expense" | "income">("expense");
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [expenseSheetOpen, setExpenseSheetOpen] = useState(false);
+  const [incomeSheetOpen, setIncomeSheetOpen] = useState(false);
   const [allCategoriesDialogOpen, setAllCategoriesDialogOpen] = useState(false);
   const [allCategoriesType, setAllCategoriesType] = useState<"expense" | "income">("expense");
 
   const isLoading = accountsLoading || transactionsLoading || cardsLoading || categoriesLoading;
 
-  // Calculate expenses by category (excluding corporate expenses)
-  const expensesByCategory = expenseCategories.map((cat) => {
-    const total = transactions
-      .filter((t) => t.type === "expense" && t.category_id === cat.id && !t.is_corporate_expense)
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-    return {
-      name: cat.fullName || cat.name,
-      value: total,
-      color: cat.color || "hsl(var(--chart-1))",
-      id: cat.id,
-    };
-  }).filter((c) => c.value > 0);
+  // Calculate expenses grouped by parent category
+  const expensesByParentCategory = useMemo(() => {
+    const parentCategories = expenseCategories.filter(c => !c.parent_id);
+    const childCategories = expenseCategories.filter(c => c.parent_id);
+    
+    const result = parentCategories.map(parent => {
+      // Direct transactions in parent category
+      const parentTotal = transactions
+        .filter(t => t.type === "expense" && t.category_id === parent.id && !t.is_corporate_expense)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      
+      // Transactions from subcategories
+      const childrenIds = childCategories.filter(c => c.parent_id === parent.id).map(c => c.id);
+      const childrenTotal = transactions
+        .filter(t => t.type === "expense" && childrenIds.includes(t.category_id!) && !t.is_corporate_expense)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      
+      return {
+        id: parent.id,
+        name: parent.name,
+        value: parentTotal + childrenTotal,
+        color: parent.color || "hsl(var(--chart-1))",
+        icon: parent.icon,
+      };
+    }).filter(c => c.value > 0);
 
-  // Calculate income by category
+    // Add orphan subcategories (subcategories whose parent doesn't exist)
+    const orphanCategories = childCategories.filter(c => !parentCategories.some(p => p.id === c.parent_id));
+    const orphanExpenses = orphanCategories.map(cat => {
+      const total = transactions
+        .filter(t => t.type === "expense" && t.category_id === cat.id && !t.is_corporate_expense)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      return {
+        id: cat.id,
+        name: cat.name,
+        value: total,
+        color: cat.color || "hsl(var(--chart-1))",
+        icon: cat.icon,
+      };
+    }).filter(c => c.value > 0);
+
+    return [...result, ...orphanExpenses].sort((a, b) => b.value - a.value);
+  }, [expenseCategories, transactions]);
+
+  // Get subcategories data for a parent category
+  const getSubcategoriesData = (parentId: string): SubcategoryData[] => {
+    const subcategories = expenseCategories.filter(c => c.parent_id === parentId);
+    
+    return subcategories.map(sub => {
+      const subTransactions = transactions
+        .filter(t => t.type === "expense" && t.category_id === sub.id && !t.is_corporate_expense)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .map(t => ({
+          id: t.id,
+          description: t.description,
+          amount: Number(t.amount),
+          date: t.date,
+          type: t.type,
+          category_id: t.category_id || undefined,
+        }));
+      
+      const total = subTransactions.reduce((sum, t) => sum + t.amount, 0);
+      
+      return {
+        id: sub.id,
+        name: sub.name,
+        value: total,
+        color: sub.color || "hsl(var(--chart-3))",
+        icon: sub.icon,
+        transactions: subTransactions,
+      };
+    }).filter(s => s.value > 0).sort((a, b) => b.value - a.value);
+  };
+
+  // Get direct transactions for a parent category (transactions directly in parent, not in subcategories)
+  const getDirectTransactions = (parentId: string) => {
+    return transactions
+      .filter(t => t.type === "expense" && t.category_id === parentId && !t.is_corporate_expense)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .map(t => ({
+        id: t.id,
+        description: t.description,
+        amount: Number(t.amount),
+        date: t.date,
+        type: t.type,
+        category_id: t.category_id || undefined,
+      }));
+  };
+
+  // Calculate income by category (keep original behavior for income)
   const incomeByCategory = incomeCategories.map((cat) => {
     const total = transactions
       .filter((t) => t.type === "income" && t.category_id === cat.id)
@@ -67,15 +172,15 @@ export default function Dashboard() {
   }).filter((c) => c.value > 0);
 
   // Default data for empty states
-  const defaultExpenseData = expensesByCategory.length > 0 ? expensesByCategory : [
-    { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)", id: "" },
+  const defaultExpenseData = expensesByParentCategory.length > 0 ? expensesByParentCategory : [
+    { id: "", name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)", icon: null },
   ];
 
   const defaultIncomeData = incomeByCategory.length > 0 ? incomeByCategory : [
     { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)", id: "" },
   ];
 
-  // Get transactions for selected category
+  // Get transactions for selected income category
   const getTransactionsForCategory = (categoryName: string, type: "expense" | "income") => {
     const categories = type === "expense" ? expenseCategories : incomeCategories;
     const category = categories.find(c => (c.fullName || c.name) === categoryName);
@@ -92,18 +197,30 @@ export default function Dashboard() {
   };
 
   // Get sorted categories for navigation
-  const sortedExpenseCategories = [...expensesByCategory].sort((a, b) => b.value - a.value);
   const sortedIncomeCategories = [...incomeByCategory].sort((a, b) => b.value - a.value);
+
+  const handleExpenseCategoryClick = (category: CategoryData) => {
+    if (category.name === "Sem dados") return;
+    const parentCat = expensesByParentCategory.find(c => c.name === category.name);
+    if (parentCat) {
+      setSelectedParentCategory(parentCat);
+      setExpenseSheetOpen(true);
+    }
+  };
+
+  const handleIncomeCategoryClick = (category: CategoryData) => {
+    if (category.name === "Sem dados") return;
+    setSelectedCategory(category);
+    setCategoryType("income");
+    setIncomeSheetOpen(true);
+  };
 
   const handleCategoryChange = (category: CategoryData) => {
     setSelectedCategory(category);
   };
 
-  const handleCategoryClick = (category: CategoryData, type: "expense" | "income") => {
-    if (category.name === "Sem dados") return;
-    setSelectedCategory(category);
-    setCategoryType(type);
-    setSheetOpen(true);
+  const handleParentCategoryChange = (category: ParentCategoryData) => {
+    setSelectedParentCategory(category);
   };
 
   const handleViewAllClick = (type: "expense" | "income") => {
@@ -119,8 +236,8 @@ export default function Dashboard() {
     );
   }
 
-  const categoryTransactions = selectedCategory 
-    ? getTransactionsForCategory(selectedCategory.name, categoryType)
+  const incomeTransactions = selectedCategory 
+    ? getTransactionsForCategory(selectedCategory.name, "income")
     : [];
 
   return (
@@ -168,13 +285,13 @@ export default function Dashboard() {
         <CategoryChart 
           title="Despesas por Categoria" 
           data={defaultExpenseData} 
-          onCategoryClick={(cat) => handleCategoryClick(cat, "expense")}
+          onCategoryClick={handleExpenseCategoryClick}
           onViewAllClick={() => handleViewAllClick("expense")}
         />
         <CategoryChart 
           title="Receitas por Categoria" 
           data={defaultIncomeData}
-          onCategoryClick={(cat) => handleCategoryClick(cat, "income")}
+          onCategoryClick={handleIncomeCategoryClick}
           onViewAllClick={() => handleViewAllClick("income")}
         />
       </div>
@@ -182,18 +299,32 @@ export default function Dashboard() {
       {/* Balance Chart */}
       <BalanceChart />
 
-      {/* Category Detail Sheet */}
+      {/* Parent Category Detail Sheet for Expenses */}
+      {selectedParentCategory && (
+        <ParentCategoryDetailSheet
+          open={expenseSheetOpen}
+          onOpenChange={setExpenseSheetOpen}
+          parentCategory={selectedParentCategory}
+          subcategories={getSubcategoriesData(selectedParentCategory.id)}
+          directTransactions={getDirectTransactions(selectedParentCategory.id)}
+          allParentCategories={expensesByParentCategory}
+          onParentCategoryChange={handleParentCategoryChange}
+          categoryType="expense"
+        />
+      )}
+
+      {/* Category Detail Sheet for Income */}
       {selectedCategory && (
         <CategoryDetailSheet
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
+          open={incomeSheetOpen}
+          onOpenChange={setIncomeSheetOpen}
           categoryName={selectedCategory.name}
           categoryColor={selectedCategory.color}
           totalAmount={selectedCategory.value}
-          transactions={categoryTransactions}
-          allCategories={categoryType === "expense" ? sortedExpenseCategories : sortedIncomeCategories}
+          transactions={incomeTransactions}
+          allCategories={sortedIncomeCategories}
           onCategoryChange={handleCategoryChange}
-          categoryType={categoryType}
+          categoryType="income"
         />
       )}
 
@@ -206,11 +337,15 @@ export default function Dashboard() {
             </DialogTitle>
           </DialogHeader>
           <AllCategoriesList
-            data={allCategoriesType === "expense" ? expensesByCategory : incomeByCategory}
+            data={allCategoriesType === "expense" ? expensesByParentCategory : incomeByCategory}
             total={allCategoriesType === "expense" ? totalExpense : totalIncome}
             onCategoryClick={(cat) => {
               setAllCategoriesDialogOpen(false);
-              handleCategoryClick(cat, allCategoriesType);
+              if (allCategoriesType === "expense") {
+                handleExpenseCategoryClick(cat);
+              } else {
+                handleIncomeCategoryClick(cat);
+              }
             }}
           />
         </DialogContent>
