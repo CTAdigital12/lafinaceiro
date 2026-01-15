@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart, Tag } from "lucide-react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart, Tag, Info } from "lucide-react";
 import { Transaction } from "@/hooks/useTransactions";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,8 @@ interface HierarchicalBudget extends Budget {
   totalPlanned: number;
   totalSpent: number;
   isParent: boolean;
+  unbudgetedSubcategorySpent: number; // Amount spent in subcategories without their own budget
+  subcategoriesWithoutBudget: string[]; // Names of subcategories with spending but no budget
 }
 
 export default function Planning() {
@@ -79,6 +81,7 @@ export default function Planning() {
   const hierarchicalBudgets = useMemo(() => {
     const parentBudgets: HierarchicalBudget[] = [];
     const childBudgetsMap: Record<string, HierarchicalBudget[]> = {};
+    const budgetedCategoryIds = new Set(budgets.map(b => b.category_id).filter(Boolean));
 
     budgets.forEach((budget) => {
       const parentId = budget.categories?.parent_id;
@@ -90,6 +93,8 @@ export default function Planning() {
         totalPlanned: Number(budget.planned_amount),
         totalSpent: spent,
         isParent: false,
+        unbudgetedSubcategorySpent: 0,
+        subcategoriesWithoutBudget: [],
       };
 
       if (parentId) {
@@ -105,22 +110,38 @@ export default function Planning() {
 
     parentBudgets.forEach((parent) => {
       const categoryId = parent.categories?.id;
-      if (categoryId && childBudgetsMap[categoryId]) {
-        parent.children = childBudgetsMap[categoryId].sort((a, b) => 
-          (a.categories?.name || "").localeCompare(b.categories?.name || "")
+      if (categoryId) {
+        // Find all subcategories of this parent
+        const allSubcategories = categories.filter(c => c.parent_id === categoryId);
+        
+        // Find subcategories WITHOUT their own budget but WITH spending
+        const subcatsWithoutBudget = allSubcategories.filter(sub => 
+          !budgetedCategoryIds.has(sub.id) && (spentByCategory[sub.id] || 0) > 0
         );
         
-        // Sum of children's planned amounts
-        const childrenPlanned = parent.children.reduce((sum, child) => sum + child.totalPlanned, 0);
+        // Calculate spending in unbudgeted subcategories
+        const unbudgetedSpent = subcatsWithoutBudget.reduce(
+          (sum, sub) => sum + (spentByCategory[sub.id] || 0), 
+          0
+        );
         
-        // If parent has children with budgets, use sum of children's planned amounts
-        // Otherwise, use the parent's own planned amount
-        parent.totalPlanned = childrenPlanned > 0 ? childrenPlanned : Number(parent.planned_amount);
+        parent.unbudgetedSubcategorySpent = unbudgetedSpent;
+        parent.subcategoriesWithoutBudget = subcatsWithoutBudget.map(s => s.name);
+        
+        if (childBudgetsMap[categoryId]) {
+          parent.children = childBudgetsMap[categoryId].sort((a, b) => 
+            (a.categories?.name || "").localeCompare(b.categories?.name || "")
+          );
+          
+          // Sum of children's planned amounts
+          const childrenPlanned = parent.children.reduce((sum, child) => sum + child.totalPlanned, 0);
+          
+          // If parent has children with budgets, use sum of children's planned amounts
+          // Otherwise, use the parent's own planned amount
+          parent.totalPlanned = childrenPlanned > 0 ? childrenPlanned : Number(parent.planned_amount);
+        }
         
         // Spent comes from spentByCategory which already includes subcategories
-        parent.totalSpent = spentByCategory[categoryId] || 0;
-      } else if (categoryId) {
-        // Parent without children with budgets - spent includes all subcategory spending
         parent.totalSpent = spentByCategory[categoryId] || 0;
       }
     });
@@ -200,6 +221,7 @@ export default function Planning() {
     const categoryId = budget.categories?.id || "";
     const isCollapsed = collapsedCategories.has(categoryId);
     const hasChildren = budget.children.length > 0;
+    const hasUnbudgetedSubcategories = budget.unbudgetedSubcategorySpent > 0;
 
     return (
       <TableRow key={budget.id} className={cn(isChild && "bg-muted/30")}>
@@ -231,9 +253,19 @@ export default function Planning() {
                 </div>
               </>
             )}
-            <span className={cn("font-medium", isChild && "text-sm")}>
-              {budget.categories?.name || "Categoria"}
-            </span>
+            <div className="flex flex-col">
+              <span className={cn("font-medium", isChild && "text-sm")}>
+                {budget.categories?.name || "Categoria"}
+              </span>
+              {hasUnbudgetedSubcategories && (
+                <div className="flex items-center gap-1 text-xs text-chart-4">
+                  <Info className="h-3 w-3" />
+                  <span>
+                    R$ {budget.unbudgetedSubcategorySpent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em: {budget.subcategoriesWithoutBudget.join(", ")}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </TableCell>
         <TableCell className="text-right font-medium">
