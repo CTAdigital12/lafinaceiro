@@ -55,26 +55,35 @@ export function DeleteCategoryModal({
       setIsLoading(true);
       setTargetCategoryId("");
       
-      const subcatIds = getSubcategoryIds(category.id);
-      setSubcategoryIds(subcatIds);
+      const fetchData = async () => {
+        // Fetch subcategories directly from Supabase to avoid dependency on expenseCategories
+        const { data: subcats } = await supabase
+          .from("categories")
+          .select("id")
+          .eq("parent_id", category.id);
+        
+        const subcatIds = subcats?.map(s => s.id) || [];
+        setSubcategoryIds(subcatIds);
+        
+        // Count transactions
+        const categoryIds = [category.id, ...subcatIds];
+        const { count, error } = await supabase
+          .from("transactions")
+          .select("*", { count: "exact", head: true })
+          .in("category_id", categoryIds);
+        
+        if (error) {
+          console.error("Error fetching transaction count:", error);
+          setTransactionCount(0);
+        } else {
+          setTransactionCount(count || 0);
+        }
+        setIsLoading(false);
+      };
       
-      const categoryIds = [category.id, ...subcatIds];
-      
-      supabase
-        .from("transactions")
-        .select("*", { count: "exact", head: true })
-        .in("category_id", categoryIds)
-        .then(({ count, error }) => {
-          if (error) {
-            console.error("Error fetching transaction count:", error);
-            setTransactionCount(0);
-          } else {
-            setTransactionCount(count || 0);
-          }
-          setIsLoading(false);
-        });
+      fetchData();
     }
-  }, [isOpen, category, expenseCategories]);
+  }, [isOpen, category?.id]);
 
   // Filter out the category being deleted and its subcategories from available targets
   const availableCategories = expenseCategories.filter((c) => {
