@@ -19,6 +19,14 @@ export interface CreditCard {
   updated_at: string;
 }
 
+interface PayInvoiceParams {
+  creditCardId: string;
+  creditCardName: string;
+  accountId: string;
+  amount: number;
+  date: string;
+}
+
 export function useCreditCards() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -93,6 +101,75 @@ export function useCreditCards() {
     },
   });
 
+  const payInvoice = useMutation({
+    mutationFn: async ({ creditCardId, creditCardName, accountId, amount, date }: PayInvoiceParams) => {
+      // 1. Create transaction in account (marked as card payment - won't appear in expense charts)
+      const { error: txError } = await supabase.from("transactions").insert({
+        user_id: user?.id,
+        description: `Pagamento de fatura - ${creditCardName}`,
+        amount,
+        type: "expense",
+        date,
+        account_id: accountId,
+        credit_card_id: null,
+        category_id: null,
+        status: "completed",
+        is_corporate_expense: false,
+        is_reimbursable: false,
+        is_refund: false,
+        is_card_payment: true, // This marks it as card payment - excluded from reports
+      });
+
+      if (txError) throw txError;
+
+      // 2. Update account balance
+      const { data: account, error: accFetchError } = await supabase
+        .from("accounts")
+        .select("current_balance")
+        .eq("id", accountId)
+        .single();
+
+      if (accFetchError) throw accFetchError;
+
+      const newBalance = Number(account.current_balance) - amount;
+      const { error: accUpdateError } = await supabase
+        .from("accounts")
+        .update({ current_balance: newBalance })
+        .eq("id", accountId);
+
+      if (accUpdateError) throw accUpdateError;
+
+      // 3. Get current credit card invoice and update it
+      const { data: card, error: cardFetchError } = await supabase
+        .from("credit_cards")
+        .select("current_invoice")
+        .eq("id", creditCardId)
+        .single();
+
+      if (cardFetchError) throw cardFetchError;
+
+      const newInvoice = Math.max(0, Number(card.current_invoice) - amount);
+      const { error: cardUpdateError } = await supabase
+        .from("credit_cards")
+        .update({ 
+          current_invoice: newInvoice,
+          status: newInvoice === 0 ? "paid" : "open"
+        })
+        .eq("id", creditCardId);
+
+      if (cardUpdateError) throw cardUpdateError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["credit_cards"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast({ title: "Fatura paga com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao pagar fatura", description: error.message, variant: "destructive" });
+    },
+  });
+
   const totalInvoice = creditCards.reduce((sum, card) => sum + Number(card.current_invoice), 0);
   const totalLimit = creditCards.reduce((sum, card) => sum + Number(card.credit_limit), 0);
   const totalAvailable = totalLimit - totalInvoice;
@@ -106,5 +183,6 @@ export function useCreditCards() {
     createCreditCard,
     updateCreditCard,
     deleteCreditCard,
+    payInvoice,
   };
 }

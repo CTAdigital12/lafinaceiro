@@ -453,6 +453,7 @@ export type Database = {
           imported_at: string | null
           installment_group_id: string | null
           installment_number: number | null
+          is_card_payment: boolean | null
           is_corporate_expense: boolean
           is_refund: boolean
           is_reimbursable: boolean
@@ -477,6 +478,7 @@ export type Database = {
           imported_at?: string | null
           installment_group_id?: string | null
           installment_number?: number | null
+          is_card_payment?: boolean | null
           is_corporate_expense?: boolean
           is_refund?: boolean
           is_reimbursable?: boolean
@@ -501,6 +503,7 @@ export type Database = {
           imported_at?: string | null
           installment_group_id?: string | null
           installment_number?: number | null
+          is_card_payment?: boolean | null
           is_corporate_expense?: boolean
           is_refund?: boolean
           is_reimbursable?: boolean
