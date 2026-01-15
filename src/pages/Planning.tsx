@@ -55,15 +55,25 @@ export default function Planning() {
   }, [budgets]);
 
   // Calculate spent per category (excluding corporate expenses, refunds, and reimbursable expenses)
+  // Also aggregates subcategory spending into parent categories
   const spentByCategory = useMemo(() => {
-    return transactions
+    const result: Record<string, number> = {};
+    
+    transactions
       .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable)
-      .reduce((acc, t) => {
+      .forEach((t) => {
         const catId = t.category_id || "uncategorized";
-        acc[catId] = (acc[catId] || 0) + Number(t.amount);
-        return acc;
-      }, {} as Record<string, number>);
-  }, [transactions]);
+        result[catId] = (result[catId] || 0) + Number(t.amount);
+        
+        // If the category is a subcategory, also add to the parent's total
+        const category = categories.find(c => c.id === catId);
+        if (category?.parent_id) {
+          result[category.parent_id] = (result[category.parent_id] || 0) + Number(t.amount);
+        }
+      });
+      
+    return result;
+  }, [transactions, categories]);
 
   // Build hierarchical structure
   const hierarchicalBudgets = useMemo(() => {
@@ -100,12 +110,18 @@ export default function Planning() {
           (a.categories?.name || "").localeCompare(b.categories?.name || "")
         );
         
-        // Parent category shows ONLY the sum of children, not its own budget + children
+        // Sum of children's planned amounts
         const childrenPlanned = parent.children.reduce((sum, child) => sum + child.totalPlanned, 0);
-        const childrenSpent = parent.children.reduce((sum, child) => sum + child.totalSpent, 0);
         
-        parent.totalPlanned = childrenPlanned;
-        parent.totalSpent = childrenSpent;
+        // If parent has children with budgets, use sum of children's planned amounts
+        // Otherwise, use the parent's own planned amount
+        parent.totalPlanned = childrenPlanned > 0 ? childrenPlanned : Number(parent.planned_amount);
+        
+        // Spent comes from spentByCategory which already includes subcategories
+        parent.totalSpent = spentByCategory[categoryId] || 0;
+      } else if (categoryId) {
+        // Parent without children with budgets - spent includes all subcategory spending
+        parent.totalSpent = spentByCategory[categoryId] || 0;
       }
     });
 
