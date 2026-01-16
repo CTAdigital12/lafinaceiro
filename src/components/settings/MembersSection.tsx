@@ -6,6 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Mail, 
   UserPlus, 
@@ -24,6 +34,8 @@ export function MembersSection() {
   const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [deleteInvitationId, setDeleteInvitationId] = useState<string | null>(null);
+  const [revokeAccessId, setRevokeAccessId] = useState<string | null>(null);
   
   const { 
     sentInvitations, 
@@ -168,7 +180,7 @@ export function MembersSection() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-expense"
-                    onClick={() => deleteInvitation.mutate(invitation.id)}
+                    onClick={() => setDeleteInvitationId(invitation.id)}
                     disabled={deleteInvitation.isPending}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -224,7 +236,7 @@ export function MembersSection() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-expense"
-                    onClick={() => revokeAccess.mutate(member.id)}
+                    onClick={() => setRevokeAccessId(member.id)}
                     disabled={revokeAccess.isPending}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -235,6 +247,54 @@ export function MembersSection() {
           </div>
         )}
       </div>
+
+      {/* Delete Invitation Confirmation */}
+      <AlertDialog open={!!deleteInvitationId} onOpenChange={(open) => !open && setDeleteInvitationId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar convite?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja cancelar este convite? A pessoa não poderá mais aceitar o convite.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteInvitationId) deleteInvitation.mutate(deleteInvitationId);
+                setDeleteInvitationId(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Cancelar Convite
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Revoke Access Confirmation */}
+      <AlertDialog open={!!revokeAccessId} onOpenChange={(open) => !open && setRevokeAccessId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revogar acesso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja revogar o acesso deste membro? Ele perderá acesso aos seus dados financeiros imediatamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (revokeAccessId) revokeAccess.mutate(revokeAccessId);
+                setRevokeAccessId(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Revogar Acesso
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

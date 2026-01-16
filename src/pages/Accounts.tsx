@@ -1,5 +1,15 @@
 import { useState } from "react";
 import { Plus, Building2, Wallet, PiggyBank, TrendingUp, MoreVertical, Loader2, Upload } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -100,6 +110,7 @@ export default function Accounts() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [importedItems, setImportedItems] = useState<AccountImportedItem[]>([]);
+  const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
   const { accounts, isLoading, totalBalance, deleteAccount } = useAccounts();
 
   const handleEdit = (account: Account) => {
@@ -188,7 +199,7 @@ export default function Accounts() {
               key={account.id} 
               account={account} 
               onEdit={handleEdit}
-              onDelete={(id) => deleteAccount.mutate(id)}
+              onDelete={(id) => setDeleteAccountId(id)}
               onImport={handleImport}
             />
           ))}
@@ -220,6 +231,30 @@ export default function Accounts() {
           />
         </>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteAccountId} onOpenChange={(open) => !open && setDeleteAccountId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta conta? Todas as transações associadas permanecerão, mas ficarão sem conta vinculada. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteAccountId) deleteAccount.mutate(deleteAccountId);
+                setDeleteAccountId(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
