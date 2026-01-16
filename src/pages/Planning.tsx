@@ -73,7 +73,7 @@ export default function Planning() {
     const result: Record<string, number> = {};
     
     transactions
-      .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable)
+      .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable && !t.is_card_payment)
       .forEach((t) => {
         const catId = t.category_id || "uncategorized";
         result[catId] = (result[catId] || 0) + Number(t.amount);
@@ -165,7 +165,7 @@ export default function Planning() {
   // Calculate total spent from transactions directly (not from spentByCategory which has duplicates)
   const totalSpent = useMemo(() => {
     return transactions
-      .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable)
+      .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable && !t.is_card_payment)
       .reduce((sum, t) => sum + Number(t.amount), 0);
   }, [transactions]);
   
@@ -181,7 +181,8 @@ export default function Planning() {
         !t.category_id && 
         !t.is_corporate_expense && 
         !t.is_refund && 
-        !t.is_reimbursable
+        !t.is_reimbursable &&
+        !t.is_card_payment
     );
   }, [transactions]);
 
