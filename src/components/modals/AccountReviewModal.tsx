@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { AccountImportedItem } from "./AccountImportModal";
 
+// Patterns to detect credit card payment transactions
+const CARD_PAYMENT_PATTERNS = [
+  'FATURA PAGA',
+  'PAG FATURA',
+  'PAGAMENTO FATURA',
+  'FATURA CARTAO',
+  'FATURA CARTÃO',
+  'PAG CARTAO',
+  'PAG CARTÃO',
+  'PGTO FATURA',
+  'VISA FATURA',
+  'MASTERCARD FATURA',
+  'ELO FATURA',
+  'AMEX FATURA',
+  'HIPERCARD FATURA',
+];
+
+const isCardPaymentDescription = (description: string): boolean => {
+  const upperDesc = description.toUpperCase();
+  return CARD_PAYMENT_PATTERNS.some(pattern => upperDesc.includes(pattern));
+};
+
 interface ReviewItem extends AccountImportedItem {
   category_id: string | null;
   original_category_id: string | null;
@@ -47,6 +69,7 @@ interface ReviewItem extends AccountImportedItem {
   is_corporate: boolean;
   remember_corporate: boolean;
   corporate_keyword: string;
+  is_card_payment: boolean;
 }
 
 interface AccountReviewModalProps {
@@ -141,6 +164,7 @@ export function AccountReviewModal({
             is_corporate: isCorporate,
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
+            is_card_payment: isCardPaymentDescription(item.description),
           };
         });
         
@@ -162,6 +186,7 @@ export function AccountReviewModal({
             is_corporate: isCorporate,
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
+            is_card_payment: isCardPaymentDescription(item.description),
           };
         });
         setReviewItems(itemsWithCategories);
@@ -336,7 +361,7 @@ export function AccountReviewModal({
             is_corporate_expense: item.is_corporate,
             is_reimbursable: false,
             is_refund: false,
-            is_card_payment: false,
+            is_card_payment: item.is_card_payment,
             refunded_transaction_id: null,
             reimbursement_status: item.is_corporate ? "pending" : null,
             installment_group_id: null,
@@ -515,6 +540,12 @@ export function AccountReviewModal({
                           <Badge variant="outline" className="text-xs flex-shrink-0 text-primary border-primary">
                             <Briefcase className="h-3 w-3 mr-1" />
                             Reembolso
+                          </Badge>
+                        )}
+                        {item.is_card_payment && !item.isDuplicate && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0 bg-purple-500/10 text-purple-600 border-purple-500/30">
+                            <CreditCard className="h-3 w-3 mr-1" />
+                            Pag. Fatura
                           </Badge>
                         )}
                       </div>
