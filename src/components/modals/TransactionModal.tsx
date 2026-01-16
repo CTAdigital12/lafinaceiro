@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, parseISO, addMonths } from "date-fns";
-import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText } from "lucide-react";
+import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [isCorporateExpense, setIsCorporateExpense] = useState(false);
   const [isReimbursable, setIsReimbursable] = useState(false);
   const [isRefund, setIsRefund] = useState(false);
+  const [isCardPayment, setIsCardPayment] = useState(false);
   const [refundedTransactionId, setRefundedTransactionId] = useState<string | null>(null);
   const [saveRule, setSaveRule] = useState(false);
   const [ruleKeyword, setRuleKeyword] = useState("");
@@ -131,6 +132,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsCorporateExpense(refundFrom.is_corporate_expense || false);
       setIsReimbursable(false);
       setIsRefund(true);
+      setIsCardPayment(false);
       setRefundedTransactionId(refundFrom.id);
       setSaveRule(false);
       setRuleKeyword("");
@@ -148,6 +150,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsCorporateExpense(sourceData.is_corporate_expense || false);
       setIsReimbursable(sourceData.is_reimbursable || false);
       setIsRefund(sourceData.is_refund || false);
+      setIsCardPayment(sourceData.is_card_payment || false);
       setRefundedTransactionId(sourceData.refunded_transaction_id || null);
       setSaveRule(false);
       setRuleKeyword("");
@@ -164,6 +167,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsCorporateExpense(false);
       setIsReimbursable(false);
       setIsRefund(false);
+      setIsCardPayment(false);
       setRefundedTransactionId(null);
       setSaveRule(false);
       setRuleKeyword("");
@@ -255,7 +259,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         is_corporate_expense: isCorporateExpense,
         is_reimbursable: isReimbursable,
         is_refund: isRefund,
-        is_card_payment: false,
+        is_card_payment: paymentMethod === "account" ? isCardPayment : false,
         refunded_transaction_id: refundedTransactionId,
         installment_group_id: null,
         installment_number: null,
@@ -685,6 +689,28 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                 id="corporate-expense"
                 checked={isCorporateExpense}
                 onCheckedChange={setIsCorporateExpense}
+              />
+            </div>
+          )}
+
+          {/* Card Payment - Only show for expenses paid via account */}
+          {type === "expense" && paymentMethod === "account" && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                  <CreditCard className="h-4 w-4 text-purple-600" />
+                </div>
+                <div>
+                  <Label htmlFor="card-payment" className="text-sm font-medium cursor-pointer">
+                    Pagamento de Fatura
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Marcar como pagamento de fatura de cartão</p>
+                </div>
+              </div>
+              <Switch
+                id="card-payment"
+                checked={isCardPayment}
+                onCheckedChange={setIsCardPayment}
               />
             </div>
           )}
