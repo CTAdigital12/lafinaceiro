@@ -77,7 +77,6 @@ export default function Dashboard() {
   const filterTransactionsByView = (t: Transaction) => {
     if (t.type !== "expense" || t.is_refund) return false;
     if (t.is_card_payment) return false; // Exclui pagamentos de fatura (transferência interna)
-    if (t.credit_card_id) return false; // Exclui compras no cartão (já aparecem na fatura)
     
     const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
     const isCorporate = t.is_corporate_expense;
@@ -95,7 +94,6 @@ export default function Dashboard() {
     // Refunds are expense type with is_refund = true, they should reduce the original category
     if (t.type !== "expense" || !t.is_refund) return false;
     if (t.is_card_payment) return false; // Exclui pagamentos de fatura
-    if (t.credit_card_id) return false; // Exclui reembolsos de cartão (tratados na fatura)
     
     const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
     const isCorporate = t.is_corporate_expense;
