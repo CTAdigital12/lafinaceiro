@@ -10,6 +10,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditCards";
 import { useCreditCardReconciliation } from "@/hooks/useCreditCardReconciliation";
@@ -165,6 +175,7 @@ export default function CreditCards() {
   const [importData, setImportData] = useState<ImportCompleteData | null>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [payingCard, setPayingCard] = useState<CreditCardType | null>(null);
+  const [deleteCardId, setDeleteCardId] = useState<string | null>(null);
   // Store credit card info separately for review modal to avoid losing it when import modal closes
   const [reviewCardId, setReviewCardId] = useState<string>("");
   const [reviewCardName, setReviewCardName] = useState<string>("");
@@ -343,7 +354,7 @@ export default function CreditCards() {
               key={card.id} 
               card={card}
               onEdit={handleEdit}
-              onDelete={() => deleteCreditCard.mutate(card.id)}
+              onDelete={() => setDeleteCardId(card.id)}
               onImportInvoice={handleImportInvoice}
               onPayInvoice={handlePayInvoice}
             />
@@ -382,6 +393,30 @@ export default function CreditCards() {
         onOpenChange={(open) => !open && setPayingCard(null)}
         creditCard={payingCard}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteCardId} onOpenChange={(open) => !open && setDeleteCardId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cartão de crédito?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este cartão? Todas as transações vinculadas permanecerão, mas ficarão sem cartão associado. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteCardId) deleteCreditCard.mutate(deleteCardId);
+                setDeleteCardId(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

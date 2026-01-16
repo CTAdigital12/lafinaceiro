@@ -1,5 +1,15 @@
 import React, { useState, useMemo } from "react";
 import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart, Tag, Info, ChevronsUpDown } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Transaction } from "@/hooks/useTransactions";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { Button } from "@/components/ui/button";
@@ -45,6 +55,7 @@ export default function Planning() {
   const [selectedParentCategory, setSelectedParentCategory] = useState<{ id: string; name: string; icon: string; color: string } | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
+  const [deleteBudgetId, setDeleteBudgetId] = useState<string | null>(null);
 
   const { categories } = useCategories();
 
@@ -358,7 +369,7 @@ export default function Planning() {
               variant="ghost" 
               size="icon" 
               className="h-8 w-8 text-muted-foreground hover:text-expense"
-              onClick={() => deleteBudget.mutate(budget.id)}
+              onClick={() => setDeleteBudgetId(budget.id)}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -583,6 +594,30 @@ export default function Planning() {
         }}
         transaction={editingTransaction}
       />
+
+      {/* Delete Budget Confirmation */}
+      <AlertDialog open={!!deleteBudgetId} onOpenChange={(open) => !open && setDeleteBudgetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir meta de orçamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta meta de orçamento? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteBudgetId) deleteBudget.mutate(deleteBudgetId);
+                setDeleteBudgetId(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

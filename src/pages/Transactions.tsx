@@ -112,6 +112,7 @@ export default function Transactions() {
   }, [debouncedSearchQuery]);
   const [showCurrentInvoice, setShowCurrentInvoice] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTransactionId, setDeleteTransactionId] = useState<string | null>(null);
   const [showBulkCategorySelector, setShowBulkCategorySelector] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [selectedInstallmentGroupId, setSelectedInstallmentGroupId] = useState<string | null>(null);
@@ -1003,7 +1004,7 @@ export default function Transactions() {
                               variant="ghost" 
                               size="icon" 
                               className="h-8 w-8 text-expense hover:text-expense"
-                              onClick={() => deleteTransaction.mutate(transaction.id)}
+                              onClick={() => setDeleteTransactionId(transaction.id)}
                               title="Excluir transação"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1175,6 +1176,30 @@ export default function Transactions() {
         onApplyFilters={setFilters}
         activeTab={activeTab}
       />
+
+      {/* Delete Single Transaction Dialog */}
+      <AlertDialog open={!!deleteTransactionId} onOpenChange={(open) => !open && setDeleteTransactionId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir transação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta transação? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTransactionId) deleteTransaction.mutate(deleteTransactionId);
+                setDeleteTransactionId(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
