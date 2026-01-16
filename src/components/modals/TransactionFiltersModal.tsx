@@ -40,6 +40,7 @@ export interface TransactionFilters {
   dateRange: { from: Date | null; to: Date | null } | null;
   installmentFilter: "all" | "only_installments" | "no_installments";
   corporateFilter: "all" | "only_corporate" | "no_corporate";
+  cardPaymentFilter: "all" | "only_card_payment" | "no_card_payment";
 }
 
 interface TransactionFiltersModalProps {
@@ -59,6 +60,7 @@ const defaultFilters: TransactionFilters = {
   dateRange: null,
   installmentFilter: "all",
   corporateFilter: "all",
+  cardPaymentFilter: "all",
 };
 
 const typeOptions = [
@@ -85,6 +87,12 @@ const corporateOptions = [
   { value: "no_corporate", label: "Apenas pessoais" },
 ];
 
+const cardPaymentOptions = [
+  { value: "all", label: "Todas" },
+  { value: "only_card_payment", label: "Apenas pagamentos de fatura" },
+  { value: "no_card_payment", label: "Excluir pagamentos de fatura" },
+];
+
 export function TransactionFiltersModal({
   open,
   onOpenChange,
@@ -103,6 +111,7 @@ export function TransactionFiltersModal({
   const [openCardPopover, setOpenCardPopover] = useState(false);
   const [openInstallmentPopover, setOpenInstallmentPopover] = useState(false);
   const [openCorporatePopover, setOpenCorporatePopover] = useState(false);
+  const [openCardPaymentPopover, setOpenCardPaymentPopover] = useState(false);
   const [categorySearch, setCategorySearch] = useState("");
 
   const allCategories = [...incomeCategories, ...expenseCategories];
@@ -155,7 +164,8 @@ export function TransactionFiltersModal({
     (localFilters.status !== "all" ? 1 : 0) +
     (localFilters.dateRange ? 1 : 0) +
     (localFilters.installmentFilter !== "all" ? 1 : 0) +
-    (localFilters.corporateFilter !== "all" ? 1 : 0);
+    (localFilters.corporateFilter !== "all" ? 1 : 0) +
+    (localFilters.cardPaymentFilter !== "all" ? 1 : 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -334,6 +344,49 @@ export function TransactionFiltersModal({
                         >
                           <Check
                             className={cn("mr-2 h-4 w-4", localFilters.corporateFilter === option.value ? "opacity-100" : "opacity-0")}
+                          />
+                          {option.label}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Filtro de Pagamentos de Fatura */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Pagamentos de Fatura</Label>
+            <Popover open={openCardPaymentPopover} onOpenChange={setOpenCardPaymentPopover}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openCardPaymentPopover}
+                  className="w-full justify-between"
+                >
+                  {cardPaymentOptions.find(o => o.value === localFilters.cardPaymentFilter)?.label || "Todas"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
+                    <CommandGroup>
+                      {cardPaymentOptions.map((option) => (
+                        <CommandItem
+                          key={option.value}
+                          value={option.label}
+                          onSelect={() => {
+                            setLocalFilters((prev) => ({ ...prev, cardPaymentFilter: option.value as "all" | "only_card_payment" | "no_card_payment" }));
+                            setOpenCardPaymentPopover(false);
+                          }}
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", localFilters.cardPaymentFilter === option.value ? "opacity-100" : "opacity-0")}
                           />
                           {option.label}
                         </CommandItem>

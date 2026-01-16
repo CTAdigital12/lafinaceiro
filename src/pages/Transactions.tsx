@@ -124,6 +124,7 @@ export default function Transactions() {
     dateRange: null,
     installmentFilter: "all",
     corporateFilter: "all",
+    cardPaymentFilter: "all",
   });
   
   // Sorting state
@@ -169,7 +170,8 @@ export default function Transactions() {
     (filters.status !== "all" ? 1 : 0) +
     (filters.dateRange ? 1 : 0) +
     (filters.installmentFilter !== "all" ? 1 : 0) +
-    (filters.corporateFilter !== "all" ? 1 : 0);
+    (filters.corporateFilter !== "all" ? 1 : 0) +
+    (filters.cardPaymentFilter !== "all" ? 1 : 0);
 
   // Bulk delete handler
   const handleBulkDelete = async () => {
@@ -224,6 +226,7 @@ export default function Transactions() {
         "Tipo": t.type === "income" ? "Receita" : "Despesa",
         "Valor": value,
         "Status": t.status === "completed" ? "Concluída" : "Pendente",
+        "Pag. Fatura": t.is_card_payment ? "Sim" : "Não",
       };
     });
 
@@ -241,6 +244,7 @@ export default function Transactions() {
       { wch: 10 }, // Tipo
       { wch: 15 }, // Valor
       { wch: 12 }, // Status
+      { wch: 12 }, // Pag. Fatura
     ];
     worksheet["!cols"] = colWidths;
 
@@ -315,6 +319,16 @@ export default function Transactions() {
       }
     } else if (filters.corporateFilter === "no_corporate") {
       if (t.is_corporate_expense) {
+        return false;
+      }
+    }
+    // Filter by card payment
+    if (filters.cardPaymentFilter === "only_card_payment") {
+      if (!t.is_card_payment) {
+        return false;
+      }
+    } else if (filters.cardPaymentFilter === "no_card_payment") {
+      if (t.is_card_payment) {
         return false;
       }
     }
@@ -642,6 +656,7 @@ export default function Transactions() {
                     dateRange: null,
                     installmentFilter: "all",
                     corporateFilter: "all",
+                    cardPaymentFilter: "all",
                   })}
                 >
                   Limpar todos
@@ -911,6 +926,12 @@ export default function Transactions() {
                               <Badge variant="outline" className="text-xs gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30">
                                 <Building className="h-3 w-3" />
                                 Empresarial
+                              </Badge>
+                            )}
+                            {transaction.is_card_payment && (
+                              <Badge variant="outline" className="text-xs gap-1 bg-purple-500/10 text-purple-600 border-purple-500/30">
+                                <CreditCard className="h-3 w-3" />
+                                Pag. Fatura
                               </Badge>
                             )}
                           </div>
