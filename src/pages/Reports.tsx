@@ -24,6 +24,7 @@ export default function Reports() {
 
   const { transactions, isLoading: transactionsLoading } = useTransactions(undefined, undefined, {
     showAll: true,
+    loadedCount: 10000,
   });
 
   const { categories, isLoading: categoriesLoading } = useCategories();
