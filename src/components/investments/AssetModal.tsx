@@ -366,30 +366,39 @@ export function AssetModal({
                         <FormField
                           control={form.control}
                           name="liquidity"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Liquidez (Prazo de Resgate)</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || ""}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o prazo" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="D+0">D+0 (Imediato)</SelectItem>
-                                  <SelectItem value="D+1">D+1</SelectItem>
-                                  <SelectItem value="D+2">D+2</SelectItem>
-                                  <SelectItem value="D+30">D+30</SelectItem>
-                                  <SelectItem value="D+90">D+90</SelectItem>
-                                  <SelectItem value="Vencimento">Apenas no Vencimento</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <p className="text-xs text-muted-foreground">
-                                Prazo para resgate do investimento
-                              </p>
-                              <FormMessage />
-                            </FormItem>
-                          )}
+                          render={({ field }) => {
+                            const quickOptions = ['D+0', 'D+1', 'D+2', 'D+30', 'D+90', 'Vencimento'];
+                            const isQuickOption = quickOptions.includes(field.value || '');
+                            
+                            return (
+                              <FormItem>
+                                <FormLabel>Liquidez (Prazo de Resgate)</FormLabel>
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {quickOptions.map((option) => (
+                                      <Button
+                                        key={option}
+                                        type="button"
+                                        variant={field.value === option ? "default" : "outline"}
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={() => field.onChange(option)}
+                                      >
+                                        {option}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                  <Input
+                                    placeholder="Ou digite outro prazo (ex: D+15, D+60)"
+                                    value={isQuickOption ? '' : (field.value || '')}
+                                    onChange={(e) => field.onChange(e.target.value)}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            );
+                          }}
                         />
                       </>
                     )}
