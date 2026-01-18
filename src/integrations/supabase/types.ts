@@ -220,43 +220,52 @@ export type Database = {
           asset_type: string
           average_price: number
           created_at: string
+          current_balance: number | null
           current_price: number
           id: string
           institution_id: string | null
           maturity_date: string | null
           name: string
+          pricing_method: string | null
           quantity: number
           ticker: string
           updated_at: string
           user_id: string
+          yield_info: string | null
         }
         Insert: {
           asset_type: string
           average_price?: number
           created_at?: string
+          current_balance?: number | null
           current_price?: number
           id?: string
           institution_id?: string | null
           maturity_date?: string | null
           name: string
+          pricing_method?: string | null
           quantity?: number
           ticker: string
           updated_at?: string
           user_id: string
+          yield_info?: string | null
         }
         Update: {
           asset_type?: string
           average_price?: number
           created_at?: string
+          current_balance?: number | null
           current_price?: number
           id?: string
           institution_id?: string | null
           maturity_date?: string | null
           name?: string
+          pricing_method?: string | null
           quantity?: number
           ticker?: string
           updated_at?: string
           user_id?: string
+          yield_info?: string | null
         }
         Relationships: [
           {

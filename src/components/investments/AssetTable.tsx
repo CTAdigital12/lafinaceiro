@@ -33,7 +33,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { InvestmentAsset, ASSET_TYPE_LABELS } from "@/hooks/useInvestments";
+import { InvestmentAsset, ASSET_TYPE_LABELS, getAssetPatrimony, getAssetAppliedValue, usesTotalBalancePricing } from "@/hooks/useInvestments";
 import { InvestmentInstitution } from "@/hooks/useInstitutions";
 import { cn } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
@@ -90,7 +90,8 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
           const assets = assetsByType[type] || [];
           if (assets.length === 0) return null;
 
-          const groupTotal = assets.reduce((sum, a) => sum + a.quantity * a.current_price, 0);
+          const groupTotal = assets.reduce((sum, a) => sum + getAssetPatrimony(a), 0);
+          const isFixedIncome = usesTotalBalancePricing(type);
 
           return (
             <Collapsible
@@ -120,18 +121,28 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                       <TableHead>Ativo</TableHead>
                       <TableHead>Instituição</TableHead>
                       {type === "renda_fixa" && <TableHead>Vencimento</TableHead>}
-                      <TableHead className="text-right">Qtd</TableHead>
-                      <TableHead className="text-right">PM</TableHead>
-                      <TableHead className="text-right">Cotação</TableHead>
-                      <TableHead className="text-right">Saldo</TableHead>
+                      {isFixedIncome ? (
+                        <>
+                          <TableHead className="text-right">Aplicado</TableHead>
+                          <TableHead className="text-right">Saldo Atual</TableHead>
+                          {type === "renda_fixa" && <TableHead>Taxa</TableHead>}
+                        </>
+                      ) : (
+                        <>
+                          <TableHead className="text-right">Qtd</TableHead>
+                          <TableHead className="text-right">PM</TableHead>
+                          <TableHead className="text-right">Cotação</TableHead>
+                          <TableHead className="text-right">Saldo</TableHead>
+                        </>
+                      )}
                       <TableHead className="text-right">Rent.</TableHead>
                       <TableHead className="w-[80px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {assets.map((asset) => {
-                      const saldo = asset.quantity * asset.current_price;
-                      const custo = asset.quantity * asset.average_price;
+                      const saldo = getAssetPatrimony(asset);
+                      const custo = getAssetAppliedValue(asset);
                       const rentabilidade = custo > 0 ? ((saldo - custo) / custo) * 100 : 0;
                       const isProfit = rentabilidade >= 0;
                       const institution = institutions.find((i) => i.id === asset.institution_id);
@@ -141,8 +152,8 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                         <TableRow key={asset.id}>
                           <TableCell>
                             <div>
-                              <p className="font-medium">{asset.ticker}</p>
-                              <p className="text-xs text-muted-foreground">{asset.name}</p>
+                              <p className="font-medium">{isFixedIncome ? asset.name : asset.ticker}</p>
+                              <p className="text-xs text-muted-foreground">{isFixedIncome ? asset.ticker : asset.name}</p>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -197,12 +208,34 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                               )}
                             </TableCell>
                           )}
-                          <TableCell className="text-right">
-                            {formatNumber(asset.quantity, type === "crypto" ? 8 : 0)}
-                          </TableCell>
-                          <TableCell className="text-right">{formatCurrency(asset.average_price)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(asset.current_price)}</TableCell>
-                          <TableCell className="text-right font-medium">{formatCurrency(saldo)}</TableCell>
+                          
+                          {isFixedIncome ? (
+                            <>
+                              <TableCell className="text-right">{formatCurrency(custo)}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(saldo)}</TableCell>
+                              {type === "renda_fixa" && (
+                                <TableCell>
+                                  {asset.yield_info ? (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {asset.yield_info}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <TableCell className="text-right">
+                                {formatNumber(asset.quantity, type === "crypto" ? 8 : 0)}
+                              </TableCell>
+                              <TableCell className="text-right">{formatCurrency(asset.average_price)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(asset.current_price)}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(saldo)}</TableCell>
+                            </>
+                          )}
+                          
                           <TableCell className={cn("text-right font-medium", isProfit ? "text-emerald-500" : "text-red-500")}>
                             {isProfit ? "+" : ""}{rentabilidade.toFixed(2)}%
                           </TableCell>
@@ -226,7 +259,7 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Excluir Ativo</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Tem certeza que deseja excluir {asset.ticker}? Esta ação não pode ser desfeita e também excluirá o histórico de operações.
+                                      Tem certeza que deseja excluir {isFixedIncome ? asset.name : asset.ticker}? Esta ação não pode ser desfeita e também excluirá o histórico de operações.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
