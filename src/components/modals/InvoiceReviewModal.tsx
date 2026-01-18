@@ -272,10 +272,6 @@ export function InvoiceReviewModal({
     }
   };
 
-  // Get parent categories (no parent_id) for subcategory creation
-  const parentCategories = expenseCategories.filter(c => !c.parent_id);
-
-
   const generateFutureInstallments = (item: ReviewItem): Array<{
     description: string;
     amount: number;
