@@ -3,12 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import {
   Select,
   SelectContent,
@@ -110,13 +105,11 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
 
   const isPending = createAccount.isPending || updateAccount.isPending;
 
+  const modalTitle = isEditing ? "Editar Conta" : "Nova Conta";
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar Conta" : "Nova Conta"}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={modalTitle}>
+      <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Nome da Conta</Label>
@@ -157,6 +150,7 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
             <Input
               id="balance"
               type="number"
+              inputMode="decimal"
               step="0.01"
               value={balance}
               onChange={(e) => setBalance(e.target.value)}
@@ -198,7 +192,6 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
             )}
           </Button>
         </form>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

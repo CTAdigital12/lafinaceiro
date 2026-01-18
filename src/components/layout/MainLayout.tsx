@@ -2,6 +2,7 @@ import { ReactNode, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
+import { BottomNav } from "./BottomNav";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDate } from "@/contexts/DateContext";
 import { Loader2 } from "lucide-react";
@@ -42,11 +43,19 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppSidebar />
-      <div className="pl-16 lg:pl-64 transition-all duration-300">
-        <Header currentDate={currentDate} onDateChange={setCurrentDate} />
-        <main className="p-6">{children}</main>
+      {/* Sidebar - hidden on mobile */}
+      <div className="hidden md:block">
+        <AppSidebar />
       </div>
+      
+      {/* Main content */}
+      <div className="md:pl-16 lg:pl-64 transition-all duration-300">
+        <Header currentDate={currentDate} onDateChange={setCurrentDate} />
+        <main className="p-4 md:p-6 pb-24 md:pb-6">{children}</main>
+      </div>
+      
+      {/* Bottom Navigation - only on mobile */}
+      <BottomNav />
     </div>
   );
 }
