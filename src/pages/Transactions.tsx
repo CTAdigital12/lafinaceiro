@@ -800,294 +800,288 @@ export default function Transactions() {
                 )}
               </div>
             ) : (
-              <div className="hidden md:block bg-card rounded-xl border border-border shadow-card overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={allSelected}
-                          onCheckedChange={handleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 hover:text-primary transition-colors cursor-pointer",
-                            sortField === "date" && "text-primary font-semibold"
-                          )}
-                          onClick={() => handleSort("date")}
-                        >
-                          Data Compra
-                          {getSortIcon("date")}
-                        </button>
-                      </TableHead>
-                      {activeTab === "credit" && (
-                        <TableHead className="text-primary font-medium">Vencimento</TableHead>
-                      )}
-                      <TableHead>
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 hover:text-primary transition-colors cursor-pointer",
-                            sortField === "description" && "text-primary font-semibold"
-                          )}
-                          onClick={() => handleSort("description")}
-                        >
-                          Descrição
-                          {getSortIcon("description")}
-                        </button>
-                      </TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead>{activeTab === "credit" ? "Cartão" : "Conta"}</TableHead>
-                      <TableHead className="text-right">
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 ml-auto hover:text-primary transition-colors cursor-pointer",
-                            sortField === "amount" && "text-primary font-semibold"
-                          )}
-                          onClick={() => handleSort("amount")}
-                        >
-                          Valor
-                          {getSortIcon("amount")}
-                        </button>
-                      </TableHead>
-                      <TableHead className="w-20">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTransactions.map((transaction) => (
-                      <TableRow 
-                        key={transaction.id} 
-                        className={cn(
-                          "group",
-                          transaction.installment_group_id && "cursor-pointer hover:bg-muted/50",
-                          transaction.total_installments && transaction.total_installments > 1 && "bg-primary/5 border-l-2 border-l-primary"
-                        )}
-                        onClick={() => {
-                          if (transaction.installment_group_id) {
-                            handleTransactionClick(transaction);
-                          }
-                        }}
-                      >
-                        <TableCell onClick={(e) => e.stopPropagation()}>
+              <>
+                {/* Desktop Table */}
+                <div className="hidden md:block bg-card rounded-xl border border-border shadow-card overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="w-12">
                           <Checkbox
-                            checked={selectedTransactions.includes(transaction.id)}
-                            onCheckedChange={() => toggleTransaction(transaction.id)}
+                            checked={allSelected}
+                            onCheckedChange={handleSelectAll}
                           />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {transaction.status === "completed" ? (
-                              <CheckCircle2 className="h-4 w-4 text-income" />
-                            ) : (
-                              <Circle className="h-4 w-4 text-muted-foreground" />
+                        </TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>
+                          <button
+                            className={cn(
+                              "flex items-center gap-1 hover:text-primary transition-colors cursor-pointer",
+                              sortField === "date" && "text-primary font-semibold"
                             )}
-                            {/* Installment indicator in status column */}
-                            {transaction.total_installments && transaction.total_installments > 1 && (
-                              <Layers className="h-4 w-4 text-primary" />
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDateBR(transaction.date)}
-                        </TableCell>
+                            onClick={() => handleSort("date")}
+                          >
+                            Data Compra
+                            {getSortIcon("date")}
+                          </button>
+                        </TableHead>
                         {activeTab === "credit" && (
-                          <TableCell className="text-primary font-medium">
-                            {formatDateBR(transaction.due_date)}
-                          </TableCell>
+                          <TableHead className="text-primary font-medium">Vencimento</TableHead>
                         )}
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            {transaction.description}
-                            {/* Installment Badge */}
-                            {transaction.total_installments && transaction.total_installments > 1 && (
-                              <Badge 
-                                variant="outline" 
-                                className="text-xs gap-1 bg-primary/10 text-primary border-primary/30 cursor-pointer hover:bg-primary/20"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (transaction.installment_group_id) {
-                                    setSelectedInstallmentGroupId(transaction.installment_group_id);
-                                  }
+                        <TableHead>
+                          <button
+                            className={cn(
+                              "flex items-center gap-1 hover:text-primary transition-colors cursor-pointer",
+                              sortField === "description" && "text-primary font-semibold"
+                            )}
+                            onClick={() => handleSort("description")}
+                          >
+                            Descrição
+                            {getSortIcon("description")}
+                          </button>
+                        </TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>{activeTab === "credit" ? "Cartão" : "Conta"}</TableHead>
+                        <TableHead className="text-right">
+                          <button
+                            className={cn(
+                              "flex items-center gap-1 ml-auto hover:text-primary transition-colors cursor-pointer",
+                              sortField === "amount" && "text-primary font-semibold"
+                            )}
+                            onClick={() => handleSort("amount")}
+                          >
+                            Valor
+                            {getSortIcon("amount")}
+                          </button>
+                        </TableHead>
+                        <TableHead className="w-20">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTransactions.map((transaction) => (
+                        <TableRow 
+                          key={transaction.id} 
+                          className={cn(
+                            "group",
+                            transaction.installment_group_id && "cursor-pointer hover:bg-muted/50",
+                            transaction.total_installments && transaction.total_installments > 1 && "bg-primary/5 border-l-2 border-l-primary"
+                          )}
+                          onClick={() => {
+                            if (transaction.installment_group_id) {
+                              handleTransactionClick(transaction);
+                            }
+                          }}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedTransactions.includes(transaction.id)}
+                              onCheckedChange={() => toggleTransaction(transaction.id)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {transaction.status === "completed" ? (
+                                <CheckCircle2 className="h-4 w-4 text-income" />
+                              ) : (
+                                <Circle className="h-4 w-4 text-muted-foreground" />
+                              )}
+                              {transaction.total_installments && transaction.total_installments > 1 && (
+                                <Layers className="h-4 w-4 text-primary" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">{formatDateBR(transaction.date)}</TableCell>
+                          {activeTab === "credit" && (
+                            <TableCell className="text-primary font-medium">
+                              {formatDateBR(transaction.due_date)}
+                            </TableCell>
+                          )}
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium max-w-[200px] truncate">
+                                {transaction.description}
+                              </span>
+                              {transaction.total_installments && transaction.total_installments > 1 && (
+                                <Badge variant="outline" className="text-xs font-medium text-primary border-primary/30">
+                                  {transaction.installment_number}/{transaction.total_installments}
+                                </Badge>
+                              )}
+                              {transaction.is_refund && (
+                                <Badge variant="outline" className="text-xs font-medium text-amber-600 border-amber-300 bg-amber-50">
+                                  <RotateCcw className="h-3 w-3 mr-1" />
+                                  Extorno
+                                </Badge>
+                              )}
+                              {transaction.is_corporate_expense && (
+                                <Badge variant="secondary" className="text-xs">
+                                  <Building2 className="h-3 w-3 mr-1" />
+                                  Empresa
+                                </Badge>
+                              )}
+                              {transaction.is_card_payment && (
+                                <Badge variant="outline" className="text-xs text-purple-600 border-purple-300 bg-purple-50">
+                                  <CreditCard className="h-3 w-3 mr-1" />
+                                  Fatura
+                                </Badge>
+                              )}
+                              {transaction.is_reimbursable && (
+                                <Badge variant="outline" className="text-xs text-blue-600 border-blue-300 bg-blue-50">
+                                  <Receipt className="h-3 w-3 mr-1" />
+                                  Reembolsável
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <CategorySelector
+                              value={transaction.category_id}
+                              type={transaction.type as "income" | "expense"}
+                              currentCategory={transaction.categories}
+                              onSelect={(categoryId) => handleCategoryChange(transaction.id, categoryId)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {transaction.credit_card_id ? (
+                              <span className="flex items-center gap-1 text-sm">
+                                <CreditCard className="h-4 w-4" />
+                                {transaction.credit_cards?.name}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-sm">
+                                {transaction.accounts?.name}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span
+                              className={cn(
+                                "font-bold",
+                                (transaction.type === "income" && !transaction.is_refund) || 
+                                (transaction.type === "expense" && transaction.is_refund)
+                                  ? "text-income"
+                                  : "text-expense"
+                              )}
+                            >
+                              {(transaction.type === "income" && !transaction.is_refund) || 
+                               (transaction.type === "expense" && transaction.is_refund) ? "+" : "-"}{" "}
+                              R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </span>
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleDuplicate(transaction)}
+                                title="Duplicar"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              {!transaction.is_refund && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleCreateRefund(transaction)}
+                                  title="Criar Extorno"
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleEdit(transaction)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  setDeleteTransactionId(transaction.id);
+                                  setShowDeleteDialog(true);
                                 }}
                               >
-                                <Layers className="h-3 w-3" />
-                                {transaction.installment_number}/{transaction.total_installments}
-                              </Badge>
-                            )}
-                            {transaction.is_refund && (
-                              <Badge variant="outline" className="text-xs gap-1 bg-orange-500/10 text-orange-600 border-orange-500/30">
-                                <RotateCcw className="h-3 w-3" />
-                                Extorno
-                              </Badge>
-                            )}
-                            {transaction.is_corporate_expense && (
-                              <Badge variant="outline" className="text-xs gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30">
-                                <Building className="h-3 w-3" />
-                                Empresarial
-                              </Badge>
-                            )}
-                            {transaction.is_card_payment && (
-                              <Badge variant="outline" className="text-xs gap-1 bg-purple-500/10 text-purple-600 border-purple-500/30">
-                                <CreditCard className="h-3 w-3" />
-                                Pag. Fatura
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <CategorySelector
-                            value={transaction.category_id}
-                            type={transaction.type}
-                            currentCategory={transaction.categories}
-                            onSelect={(categoryId) => handleCategoryChange(transaction.id, categoryId)}
-                          />
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {activeTab === "credit" 
-                            ? (transaction.credit_cards 
-                                ? `${transaction.credit_cards.name} •${transaction.credit_cards.last_digits}` 
-                                : "-")
-                            : (transaction.accounts?.name || "-")
-                          }
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span
-                            className={cn(
-                              "font-semibold",
-                              transaction.is_refund
-                                ? (transaction.type === "expense" ? "text-income" : "text-expense")
-                                : (transaction.type === "income" ? "text-income" : "text-expense")
-                            )}
-                          >
-                            {transaction.is_refund
-                              ? (transaction.type === "expense" ? "+" : "-")
-                              : (transaction.type === "income" ? "+" : "-")
-                            } R${" "}
-                            {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                          </span>
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8"
-                              onClick={() => handleDuplicate(transaction)}
-                              title="Duplicar transação"
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                            {!transaction.is_refund && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-orange-600 hover:text-orange-600"
-                                onClick={() => handleCreateRefund(transaction)}
-                                title="Criar extorno"
-                              >
-                                <RotateCcw className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  {hasMore && (
+                    <div className="p-4 border-t border-border flex justify-center">
+                      <Button
+                        variant="outline"
+                        onClick={handleLoadMore}
+                        className="gap-2"
+                      >
+                        Carregar mais ({totalCount - transactions.length} restantes)
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile Card List */}
+                <div className="block md:hidden space-y-2">
+                  {filteredTransactions.map((transaction) => {
+                    const isIncome = (transaction.type === "income" && !transaction.is_refund) || 
+                                     (transaction.type === "expense" && transaction.is_refund);
+                    const category = categories.find(c => c.id === transaction.category_id);
+                    
+                    return (
+                      <div
+                        key={transaction.id}
+                        onClick={() => handleTransactionClick(transaction)}
+                        className={cn(
+                          "flex items-center gap-3 p-3 bg-card rounded-lg border border-border active:bg-muted/50",
+                          transaction.installment_group_id && "border-l-2 border-l-primary"
+                        )}
+                      >
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0"
+                          style={{ backgroundColor: category?.color ? `${category.color}20` : '#6B728020' }}
+                        >
+                          {category?.icon || "📦"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate text-sm">{transaction.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateBR(transaction.date)}
+                            {transaction.total_installments && transaction.total_installments > 1 && (
+                              <span className="text-primary"> • {transaction.installment_number}/{transaction.total_installments}</span>
                             )}
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8"
-                              onClick={() => handleEdit(transaction)}
-                              title="Editar transação"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-expense hover:text-expense"
-                              onClick={() => setDeleteTransactionId(transaction.id)}
-                              title="Excluir transação"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={cn("font-semibold text-sm", isIncome ? "text-income" : "text-expense")}>
+                            {isIncome ? "+" : "-"} R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </p>
+                          {transaction.is_corporate_expense && (
+                            <span className="text-[10px] text-muted-foreground">Empresa</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
 
-                {/* Empty State */}
-                {filteredTransactions.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <CalendarDays className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                    <p className="text-lg font-medium text-muted-foreground mb-2">
-                      Nenhuma transação encontrada
-                    </p>
-                    <p className="text-sm text-muted-foreground/70 max-w-md">
-                      {showAll 
-                        ? "Não há transações que correspondam aos filtros aplicados." 
-                        : `Não há transações em ${String(month).padStart(2, "0")}/${year}. Tente selecionar outro mês ou ativar "Todas".`
-                      }
-                    </p>
-                  </div>
-                )}
-
-                {/* Load More Button */}
-                {hasMore && (
-                  <div className="flex items-center justify-center p-4 border-t border-border">
+                  {hasMore && (
                     <Button
                       variant="outline"
                       onClick={handleLoadMore}
-                      className="gap-2"
+                      className="w-full gap-2"
                     >
                       Carregar mais ({totalCount - transactions.length} restantes)
                     </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Mobile Card List */}
-              <div className="block md:hidden space-y-2">
-                {filteredTransactions.map((transaction) => {
-                  const isIncome = (transaction.type === "income" && !transaction.is_refund) || 
-                                   (transaction.type === "expense" && transaction.is_refund);
-                  const category = categories.find(c => c.id === transaction.category_id);
-                  
-                  return (
-                    <div
-                      key={transaction.id}
-                      onClick={() => handleTransactionClick(transaction)}
-                      className={cn(
-                        "flex items-center gap-3 p-3 bg-card rounded-lg border border-border active:bg-muted/50",
-                        transaction.installment_group_id && "border-l-2 border-l-primary"
-                      )}
-                    >
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0"
-                        style={{ backgroundColor: category?.color ? `${category.color}20` : '#6B728020' }}
-                      >
-                        {category?.icon || "📦"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate text-sm">{transaction.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDateBR(transaction.date)}
-                          {transaction.total_installments && transaction.total_installments > 1 && (
-                            <span className="text-primary"> • {transaction.installment_number}/{transaction.total_installments}</span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className={cn("font-semibold text-sm", isIncome ? "text-income" : "text-expense")}>
-                          {isIncome ? "+" : "-"} R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </p>
-                        {transaction.is_corporate_expense && (
-                          <span className="text-[10px] text-muted-foreground">Empresa</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                  )}
+                </div>
+              </>
             )}
           </TabsContent>
         </Tabs>
