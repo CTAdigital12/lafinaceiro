@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar as CalendarIcon, Loader2, Wallet, CreditCard } from "lucide-react";
+import { logError } from "@/lib/errorHandler";
 import {
   Dialog,
   DialogContent,
@@ -72,7 +73,7 @@ export function PayInvoiceModal({
       });
       onOpenChange(false);
     } catch (error) {
-      console.error("Error paying invoice:", error);
+      logError(error, "PayInvoiceModal");
     } finally {
       setIsSubmitting(false);
     }

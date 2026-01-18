@@ -5,12 +5,10 @@ import {
   Briefcase, 
   Download, 
   Calendar, 
-  CreditCard, 
   ChevronLeft, 
   ChevronRight,
   FileText,
   Loader2,
-  Check,
   X,
   Clock,
   Send,
@@ -82,7 +80,6 @@ export default function CorporateExpenses() {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [selectedCardId, setSelectedCardId] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [reimbursementFilter, setReimbursementFilter] = useState<string>("all");
@@ -152,24 +149,6 @@ export default function CorporateExpenses() {
     return { total, pending, requested, reimbursed, selectedTotal, selectedCount: selectedIds.size };
   }, [filteredTransactions, selectedIds]);
 
-  // Group by credit card for summary
-  const byCard = useMemo(() => {
-    const grouped: Record<string, { name: string; lastDigits: string; total: number; count: number }> = {};
-    
-    filteredTransactions.forEach((t) => {
-      const cardId = t.credit_card_id || "none";
-      const cardName = t.credit_cards?.name || "Sem cartão";
-      const lastDigits = t.credit_cards?.last_digits || "";
-      
-      if (!grouped[cardId]) {
-        grouped[cardId] = { name: cardName, lastDigits, total: 0, count: 0 };
-      }
-      grouped[cardId].total += Number(t.amount);
-      grouped[cardId].count += 1;
-    });
-    
-    return Object.entries(grouped);
-  }, [filteredTransactions]);
 
   const handlePreviousMonth = () => {
     if (selectedMonth === 1) {

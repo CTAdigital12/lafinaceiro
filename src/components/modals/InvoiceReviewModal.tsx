@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock } from "lucide-react";
+import { logError } from "@/lib/errorHandler";
+import { CATEGORY_COLOR_OPTIONS_COMPACT } from "@/lib/constants";
 import {
   Dialog,
   DialogContent,
@@ -98,22 +100,13 @@ export function InvoiceReviewModal({
   const [openCategoryPopoverIndex, setOpenCategoryPopoverIndex] = useState<number | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [showPostClosingWarning, setShowPostClosingWarning] = useState(true);
-  const [newCategoryParentId, setNewCategoryParentId] = useState<string | null>(null);
-
-  const colorOptions = [
-    "#EF4444", "#F97316", "#F59E0B", "#22C55E", 
-    "#3B82F6", "#8B5CF6", "#EC4899", "#6B7280"
-  ];
 
   const items = importData?.items || [];
-  const futureInstallmentsFromBackend = importData?.future_installments || [];
   const postClosingCount = importData?.post_closing_count || 0;
+  const validationWarning = importData?.validation_warning;
   const invoiceMonth = importData?.invoice_month;
   const invoiceYear = importData?.invoice_year;
   const closingDay = importData?.closing_day;
-  const validationWarning = importData?.validation_warning;
-  const invoiceTotal = importData?.invoice_total;
-  const calculatedTotal = importData?.calculated_total;
 
   // Initialize review items with suggested categories and corporate status
   useEffect(() => {
@@ -257,20 +250,19 @@ export function InvoiceReviewModal({
       const newCategory = await createCategory.mutateAsync({
         name: name.trim(),
         icon: "📦",
-        color: colorOptions[Math.floor(Math.random() * colorOptions.length)],
+        color: CATEGORY_COLOR_OPTIONS_COMPACT[Math.floor(Math.random() * CATEGORY_COLOR_OPTIONS_COMPACT.length)],
         type: "expense",
         parent_id: parentId || null,
       });
       
       handleCategoryChange(index, newCategory.id);
       setCategorySearch("");
-      setNewCategoryParentId(null);
       toast({
         title: parentId ? `Subcategoria "${name}" criada!` : `Categoria "${name}" criada!`,
         description: "A categoria foi criada e aplicada à transação.",
       });
     } catch (error) {
-      console.error("Error creating category:", error);
+      logError(error, "InvoiceReviewModal.createCategory");
       toast({
         title: "Erro ao criar categoria",
         variant: "destructive",
@@ -283,17 +275,6 @@ export function InvoiceReviewModal({
   // Get parent categories (no parent_id) for subcategory creation
   const parentCategories = expenseCategories.filter(c => !c.parent_id);
 
-  const extractKeyword = (description: string): string => {
-    const cleaned = description
-      .toUpperCase()
-      .replace(/^(PAG\*|PIX|COMPRA\s+)/i, "")
-      .trim();
-    
-    const withoutInstallment = cleaned.replace(/\s*\d+\/\d+\s*/g, " ").trim();
-    
-    const match = withoutInstallment.match(/^[\w]+/);
-    return match ? match[0] : withoutInstallment.substring(0, 20);
-  };
 
   const generateFutureInstallments = (item: ReviewItem): Array<{
     description: string;

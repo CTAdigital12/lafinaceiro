@@ -118,8 +118,3 @@ export const cardBrandConfigs: Record<string, { color: string; icon: string }> =
   amex: { color: "from-blue-500 via-blue-600 to-blue-700", icon: "💳" },
   hipercard: { color: "from-red-600 via-red-700 to-red-800", icon: "💳" },
 };
-
-export function detectCardBrandColor(brand: string): string {
-  const normalizedBrand = brand.toLowerCase();
-  return cardBrandConfigs[normalizedBrand]?.color || "from-gray-600 via-gray-700 to-gray-800";
-}

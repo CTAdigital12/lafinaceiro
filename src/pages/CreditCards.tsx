@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditCards";
 import { useCreditCardReconciliation } from "@/hooks/useCreditCardReconciliation";
 import { CreditCardModal } from "@/components/modals/CreditCardModal";
-import { InvoiceImportModal, ImportedItem, ImportCompleteData } from "@/components/modals/InvoiceImportModal";
+import { InvoiceImportModal, ImportCompleteData } from "@/components/modals/InvoiceImportModal";
 import { InvoiceReviewModal } from "@/components/modals/InvoiceReviewModal";
 import { PayInvoiceModal } from "@/components/modals/PayInvoiceModal";
 import { InstallmentsDashboard } from "@/components/credit-cards/InstallmentsDashboard";
@@ -185,7 +185,7 @@ export default function CreditCards() {
   const [reconciliationMonth, setReconciliationMonth] = useState(now.getMonth() + 1);
   const [reconciliationYear, setReconciliationYear] = useState(now.getFullYear());
   
-  const { creditCards, isLoading, totalInvoice, totalLimit, totalAvailable, deleteCreditCard } = useCreditCards();
+  const { creditCards, isLoading, totalInvoice, totalAvailable, deleteCreditCard } = useCreditCards();
   const { reconciliation, isLoading: isReconciliationLoading, transactions } = useCreditCardReconciliation({
     month: reconciliationMonth,
     year: reconciliationYear,

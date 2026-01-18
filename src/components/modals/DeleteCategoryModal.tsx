@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
+import { logError } from "@/lib/errorHandler";
 import {
   Dialog,
   DialogContent,
@@ -73,7 +74,7 @@ export function DeleteCategoryModal({
           .in("category_id", categoryIds);
         
         if (error) {
-          console.error("Error fetching transaction count:", error);
+          logError(error, "DeleteCategoryModal.fetchTransactionCount");
           setTransactionCount(0);
         } else {
           setTransactionCount(count || 0);
@@ -151,7 +152,7 @@ export function DeleteCategoryModal({
       onConfirm();
       onClose();
     } catch (error) {
-      console.error("Error deleting category:", error);
+      logError(error, "DeleteCategoryModal.delete");
     } finally {
       setIsDeleting(false);
     }

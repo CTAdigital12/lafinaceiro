@@ -38,7 +38,6 @@ export interface Transaction {
 interface UseTransactionsOptions {
   showAll?: boolean;
   loadedCount?: number;
-  pageSize?: number;
   filterByDueDate?: boolean;
   creditCardFilter?: "only" | "exclude" | null;
   searchQuery?: string;
@@ -51,7 +50,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { showAll = false, loadedCount = 20, pageSize = 20, filterByDueDate = false, creditCardFilter = null, searchQuery = "", useHybridDateFilter = false } = options;
+  const { showAll = false, loadedCount = 20, filterByDueDate = false, creditCardFilter = null, searchQuery = "", useHybridDateFilter = false } = options;
 
   // Use override values if provided, otherwise use context
   const month = overrideMonth ?? contextMonth;

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { logError } from "@/lib/errorHandler";
 import {
   Dialog,
   DialogContent,
@@ -145,7 +146,7 @@ export function OperationModal({
 
       onOpenChange(false);
     } catch (error) {
-      console.error(error);
+      logError(error, "OperationModal");
     } finally {
       setIsSubmitting(false);
     }
