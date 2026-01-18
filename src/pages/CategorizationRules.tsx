@@ -209,8 +209,8 @@ export default function CategorizationRules() {
         </Button>
       </div>
 
-      {/* Rules Table */}
-      <div className="rounded-lg border border-border bg-card">
+      {/* Rules Table - Desktop */}
+      <div className="hidden md:block rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -282,6 +282,62 @@ export default function CategorizationRules() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Rules Cards - Mobile */}
+      <div className="md:hidden space-y-2">
+        {filteredRules.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground rounded-lg border border-border bg-card">
+            {searchQuery
+              ? "Nenhuma regra encontrada com esse filtro"
+              : "Nenhuma regra de categorização criada ainda"}
+          </div>
+        ) : (
+          filteredRules.map((rule) => {
+            const category = getCategoryInfo(rule.category_id);
+            return (
+              <div key={rule.id} className="rounded-lg border border-border bg-card p-3">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono font-medium text-sm truncate">{rule.keyword}</p>
+                    {category ? (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <span>{category.icon}</span>
+                        <span className="truncate">{category.fullName || category.name}</span>
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1">Sem categoria</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 ml-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleEditClick(rule)}
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => setDeleteRuleId(rule.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                {rule.is_corporate && (
+                  <Badge variant="default" className="gap-1 text-xs">
+                    <Building2 className="h-3 w-3" />
+                    Corporativa
+                  </Badge>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Summary */}

@@ -115,180 +115,280 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                 </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Ativo</TableHead>
-                      <TableHead>Instituição</TableHead>
-                      {type === "renda_fixa" && <TableHead>Vencimento</TableHead>}
-                      {isFixedIncome ? (
-                        <>
-                          <TableHead className="text-right">Aplicado</TableHead>
-                          <TableHead className="text-right">Saldo Atual</TableHead>
-                          {(type === "renda_fixa" || type === "fundos") && <TableHead>Taxa</TableHead>}
-                          {(type === "renda_fixa" || type === "fundos") && <TableHead>Liq.</TableHead>}
-                        </>
-                      ) : (
-                        <>
-                          <TableHead className="text-right">Qtd</TableHead>
-                          <TableHead className="text-right">PM</TableHead>
-                          <TableHead className="text-right">Cotação</TableHead>
-                          <TableHead className="text-right">Saldo</TableHead>
-                        </>
-                      )}
-                      <TableHead className="text-right">Rent.</TableHead>
-                      <TableHead className="w-[80px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {assets.map((asset) => {
-                      const saldo = getAssetPatrimony(asset);
-                      const custo = getAssetAppliedValue(asset);
-                      const rentabilidade = custo > 0 ? ((saldo - custo) / custo) * 100 : 0;
-                      const isProfit = rentabilidade >= 0;
-                      const institution = institutions.find((i) => i.id === asset.institution_id);
-                      const maturity = getMaturityStatus(asset.maturity_date);
+                {/* Desktop Table */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ativo</TableHead>
+                        <TableHead>Instituição</TableHead>
+                        {type === "renda_fixa" && <TableHead>Vencimento</TableHead>}
+                        {isFixedIncome ? (
+                          <>
+                            <TableHead className="text-right">Aplicado</TableHead>
+                            <TableHead className="text-right">Saldo Atual</TableHead>
+                            {(type === "renda_fixa" || type === "fundos") && <TableHead>Taxa</TableHead>}
+                            {(type === "renda_fixa" || type === "fundos") && <TableHead>Liq.</TableHead>}
+                          </>
+                        ) : (
+                          <>
+                            <TableHead className="text-right">Qtd</TableHead>
+                            <TableHead className="text-right">PM</TableHead>
+                            <TableHead className="text-right">Cotação</TableHead>
+                            <TableHead className="text-right">Saldo</TableHead>
+                          </>
+                        )}
+                        <TableHead className="text-right">Rent.</TableHead>
+                        <TableHead className="w-[80px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {assets.map((asset) => {
+                        const saldo = getAssetPatrimony(asset);
+                        const custo = getAssetAppliedValue(asset);
+                        const rentabilidade = custo > 0 ? ((saldo - custo) / custo) * 100 : 0;
+                        const isProfit = rentabilidade >= 0;
+                        const institution = institutions.find((i) => i.id === asset.institution_id);
+                        const maturity = getMaturityStatus(asset.maturity_date);
 
-                      return (
-                        <TableRow key={asset.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{isFixedIncome ? asset.name : asset.ticker}</p>
-                              <p className="text-xs text-muted-foreground">{isFixedIncome ? asset.ticker : asset.name}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {institution ? (
-                              <span className="text-sm">
-                                {institution.icon} {institution.name}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          {type === "renda_fixa" && (
+                        return (
+                          <TableRow key={asset.id}>
                             <TableCell>
-                              {asset.maturity_date ? (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm">
-                                          {format(parseISO(asset.maturity_date), "dd/MM/yyyy", { locale: ptBR })}
-                                        </span>
-                                        {maturity.status === "expired" && (
-                                          <Badge variant="destructive" className="text-xs">
-                                            <AlertTriangle className="h-3 w-3 mr-1" />
-                                            Vencido
-                                          </Badge>
-                                        )}
-                                        {maturity.status === "critical" && (
-                                          <Badge variant="destructive" className="text-xs">
-                                            <Clock className="h-3 w-3 mr-1" />
-                                            {maturity.daysLeft}d
-                                          </Badge>
-                                        )}
-                                        {maturity.status === "warning" && (
-                                          <Badge variant="secondary" className="text-xs bg-amber-500/20 text-amber-500">
-                                            <Clock className="h-3 w-3 mr-1" />
-                                            {maturity.daysLeft}d
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      {maturity.status === "expired" 
-                                        ? `Vencido há ${Math.abs(maturity.daysLeft)} dias`
-                                        : `Vence em ${maturity.daysLeft} dias`
-                                      }
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
+                              <div>
+                                <p className="font-medium">{isFixedIncome ? asset.name : asset.ticker}</p>
+                                <p className="text-xs text-muted-foreground">{isFixedIncome ? asset.ticker : asset.name}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {institution ? (
+                                <span className="text-sm">
+                                  {institution.icon} {institution.name}
+                                </span>
                               ) : (
                                 <span className="text-sm text-muted-foreground">-</span>
                               )}
                             </TableCell>
-                          )}
-                          
-                          {isFixedIncome ? (
-                            <>
-                              <TableCell className="text-right">{formatCurrency(custo)}</TableCell>
-                              <TableCell className="text-right font-medium">{formatCurrency(saldo)}</TableCell>
-                              {(type === "renda_fixa" || type === "fundos") && (
-                                <TableCell>
-                                  {asset.yield_info ? (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {asset.yield_info}
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground">-</span>
-                                  )}
-                                </TableCell>
-                              )}
-                              {(type === "renda_fixa" || type === "fundos") && (
-                                <TableCell>
-                                  {asset.liquidity ? (
-                                    <Badge variant="outline" className="text-xs">
-                                      {asset.liquidity}
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground">-</span>
-                                  )}
-                                </TableCell>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <TableCell className="text-right">
-                                {formatNumber(asset.quantity, type === "crypto" ? 8 : 0)}
+                            {type === "renda_fixa" && (
+                              <TableCell>
+                                {asset.maturity_date ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm">
+                                            {format(parseISO(asset.maturity_date), "dd/MM/yyyy", { locale: ptBR })}
+                                          </span>
+                                          {maturity.status === "expired" && (
+                                            <Badge variant="destructive" className="text-xs">
+                                              <AlertTriangle className="h-3 w-3 mr-1" />
+                                              Vencido
+                                            </Badge>
+                                          )}
+                                          {maturity.status === "critical" && (
+                                            <Badge variant="destructive" className="text-xs">
+                                              <Clock className="h-3 w-3 mr-1" />
+                                              {maturity.daysLeft}d
+                                            </Badge>
+                                          )}
+                                          {maturity.status === "warning" && (
+                                            <Badge variant="secondary" className="text-xs bg-amber-500/20 text-amber-500">
+                                              <Clock className="h-3 w-3 mr-1" />
+                                              {maturity.daysLeft}d
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        {maturity.status === "expired" 
+                                          ? `Vencido há ${Math.abs(maturity.daysLeft)} dias`
+                                          : `Vence em ${maturity.daysLeft} dias`
+                                        }
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">-</span>
+                                )}
                               </TableCell>
-                              <TableCell className="text-right">{formatCurrency(asset.average_price)}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(asset.current_price)}</TableCell>
-                              <TableCell className="text-right font-medium">{formatCurrency(saldo)}</TableCell>
-                            </>
-                          )}
-                          
-                          <TableCell className={cn("text-right font-medium", isProfit ? "text-emerald-500" : "text-red-500")}>
+                            )}
+                            
+                            {isFixedIncome ? (
+                              <>
+                                <TableCell className="text-right">{formatCurrency(custo)}</TableCell>
+                                <TableCell className="text-right font-medium">{formatCurrency(saldo)}</TableCell>
+                                {(type === "renda_fixa" || type === "fundos") && (
+                                  <TableCell>
+                                    {asset.yield_info ? (
+                                      <Badge variant="secondary" className="text-xs">
+                                        {asset.yield_info}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">-</span>
+                                    )}
+                                  </TableCell>
+                                )}
+                                {(type === "renda_fixa" || type === "fundos") && (
+                                  <TableCell>
+                                    {asset.liquidity ? (
+                                      <Badge variant="outline" className="text-xs">
+                                        {asset.liquidity}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">-</span>
+                                    )}
+                                  </TableCell>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <TableCell className="text-right">
+                                  {formatNumber(asset.quantity, type === "crypto" ? 8 : 0)}
+                                </TableCell>
+                                <TableCell className="text-right">{formatCurrency(asset.average_price)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(asset.current_price)}</TableCell>
+                                <TableCell className="text-right font-medium">{formatCurrency(saldo)}</TableCell>
+                              </>
+                            )}
+                            
+                            <TableCell className={cn("text-right font-medium", isProfit ? "text-emerald-500" : "text-red-500")}>
+                              {isProfit ? "+" : ""}{rentabilidade.toFixed(2)}%
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                  onClick={() => onEditAsset(asset)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Excluir Ativo</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja excluir {isFixedIncome ? asset.name : asset.ticker}? Esta ação não pode ser desfeita e também excluirá o histórico de operações.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => onDeleteAsset(asset.id)}>
+                                        Excluir
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="md:hidden space-y-2 pt-2">
+                  {assets.map((asset) => {
+                    const saldo = getAssetPatrimony(asset);
+                    const custo = getAssetAppliedValue(asset);
+                    const rentabilidade = custo > 0 ? ((saldo - custo) / custo) * 100 : 0;
+                    const isProfit = rentabilidade >= 0;
+                    const institution = institutions.find((i) => i.id === asset.institution_id);
+                    const maturity = getMaturityStatus(asset.maturity_date);
+
+                    return (
+                      <div key={asset.id} className="border border-border/50 rounded-lg p-3 bg-background/50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{isFixedIncome ? asset.name : asset.ticker}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {institution ? `${institution.icon} ${institution.name}` : isFixedIncome ? asset.ticker : asset.name}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 ml-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => onEditAsset(asset)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir Ativo</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja excluir {isFixedIncome ? asset.name : asset.ticker}?
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => onDeleteAsset(asset.id)}>
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                        
+                        {type === "renda_fixa" && asset.maturity_date && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs text-muted-foreground">Venc:</span>
+                            <span className="text-xs">{format(parseISO(asset.maturity_date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                            {maturity.status === "expired" && (
+                              <Badge variant="destructive" className="text-[10px] px-1 py-0">Vencido</Badge>
+                            )}
+                            {maturity.status === "critical" && (
+                              <Badge variant="destructive" className="text-[10px] px-1 py-0">{maturity.daysLeft}d</Badge>
+                            )}
+                            {maturity.status === "warning" && (
+                              <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-amber-500/20 text-amber-500">{maturity.daysLeft}d</Badge>
+                            )}
+                          </div>
+                        )}
+                        
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Aplicado</p>
+                            <p className="font-medium">{formatCurrency(custo)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Saldo Atual</p>
+                            <p className="font-medium">{formatCurrency(saldo)}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+                          <div className="flex items-center gap-2">
+                            {asset.yield_info && (
+                              <Badge variant="secondary" className="text-[10px]">{asset.yield_info}</Badge>
+                            )}
+                            {asset.liquidity && (
+                              <Badge variant="outline" className="text-[10px]">{asset.liquidity}</Badge>
+                            )}
+                          </div>
+                          <span className={cn("text-sm font-medium", isProfit ? "text-emerald-500" : "text-red-500")}>
                             {isProfit ? "+" : ""}{rentabilidade.toFixed(2)}%
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                onClick={() => onEditAsset(asset)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Excluir Ativo</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Tem certeza que deseja excluir {isFixedIncome ? asset.name : asset.ticker}? Esta ação não pode ser desfeita e também excluirá o histórico de operações.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => onDeleteAsset(asset.id)}>
-                                      Excluir
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </CollapsibleContent>
             </Collapsible>
           );
