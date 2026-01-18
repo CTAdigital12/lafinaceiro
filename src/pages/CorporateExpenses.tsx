@@ -426,122 +426,207 @@ export default function CorporateExpenses() {
             <p className="text-muted-foreground">Não há despesas corporativas para este período</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
-                    onCheckedChange={toggleSelectAll}
-                  />
-                </TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Vencimento</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead>Cartão</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTransactions.map((transaction) => (
-                <TableRow 
-                  key={transaction.id}
-                  className={cn(selectedIds.has(transaction.id) && "bg-primary/5")}
-                >
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedIds.has(transaction.id)}
-                      onCheckedChange={() => toggleSelect(transaction.id)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {format(parseISO(transaction.date), "dd/MM/yyyy")}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {transaction.due_date ? format(parseISO(transaction.due_date), "dd/MM/yyyy") : "-"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="font-medium truncate max-w-[200px]">
-                        {transaction.description}
-                      </span>
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Vencimento</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead>Categoria</TableHead>
+                    <TableHead>Cartão</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions.map((transaction) => (
+                    <TableRow 
+                      key={transaction.id}
+                      className={cn(selectedIds.has(transaction.id) && "bg-primary/5")}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(transaction.id)}
+                          onCheckedChange={() => toggleSelect(transaction.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(parseISO(transaction.date), "dd/MM/yyyy")}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {transaction.due_date ? format(parseISO(transaction.due_date), "dd/MM/yyyy") : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="font-medium truncate max-w-[200px]">
+                            {transaction.description}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {transaction.categories ? (
+                          <span className="flex items-center gap-1">
+                            <span>{transaction.categories.icon}</span>
+                            <span className="text-sm">{transaction.categories.name}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {transaction.credit_cards ? (
+                          <span className="text-sm">
+                            {transaction.credit_cards.name} (*{transaction.credit_cards.last_digits})
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const status = reimbursementStatusConfig[transaction.reimbursement_status] || reimbursementStatusConfig.pending;
+                          const StatusIcon = status.icon;
+                          return (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className={cn(
+                                    "h-7 px-2 gap-1.5 border",
+                                    status.className
+                                  )}
+                                >
+                                  <StatusIcon className="h-3.5 w-3.5" />
+                                  <span className="text-xs">{status.label}</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem 
+                                  onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "pending" })}
+                                  disabled={transaction.reimbursement_status === "pending"}
+                                >
+                                  <Clock className="h-4 w-4 mr-2 text-chart-4" />
+                                  Pendente
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "requested" })}
+                                  disabled={transaction.reimbursement_status === "requested"}
+                                >
+                                  <Send className="h-4 w-4 mr-2 text-primary" />
+                                  Solicitado
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "reimbursed" })}
+                                  disabled={transaction.reimbursement_status === "reimbursed"}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-2 text-income" />
+                                  Reembolsado
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden p-3 space-y-2">
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+                <Checkbox
+                  checked={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
+                  onCheckedChange={toggleSelectAll}
+                />
+                <span className="text-sm text-muted-foreground">Selecionar todos</span>
+              </div>
+              {filteredTransactions.map((transaction) => {
+                const status = reimbursementStatusConfig[transaction.reimbursement_status] || reimbursementStatusConfig.pending;
+                const StatusIcon = status.icon;
+                return (
+                  <div 
+                    key={transaction.id} 
+                    className={cn(
+                      "border border-border/50 rounded-lg p-3 bg-background/50",
+                      selectedIds.has(transaction.id) && "bg-primary/5 border-primary/30"
+                    )}
+                  >
+                    <div className="flex items-start gap-2 mb-2">
+                      <Checkbox
+                        checked={selectedIds.has(transaction.id)}
+                        onCheckedChange={() => toggleSelect(transaction.id)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{transaction.description}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                          <span>{format(parseISO(transaction.date), "dd/MM/yyyy")}</span>
+                          {transaction.credit_cards && (
+                            <>
+                              <span>•</span>
+                              <span>{transaction.credit_cards.name}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <p className="font-semibold text-sm whitespace-nowrap">
+                        R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </p>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    {transaction.categories ? (
-                      <span className="flex items-center gap-1">
-                        <span>{transaction.categories.icon}</span>
-                        <span className="text-sm">{transaction.categories.name}</span>
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {transaction.credit_cards ? (
-                      <span className="text-sm">
-                        {transaction.credit_cards.name} (*{transaction.credit_cards.last_digits})
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {(() => {
-                      const status = reimbursementStatusConfig[transaction.reimbursement_status] || reimbursementStatusConfig.pending;
-                      const StatusIcon = status.icon;
-                      return (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className={cn(
-                                "h-7 px-2 gap-1.5 border",
-                                status.className
-                              )}
-                            >
-                              <StatusIcon className="h-3.5 w-3.5" />
-                              <span className="text-xs">{status.label}</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
-                              onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "pending" })}
-                              disabled={transaction.reimbursement_status === "pending"}
-                            >
-                              <Clock className="h-4 w-4 mr-2 text-chart-4" />
-                              Pendente
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "requested" })}
-                              disabled={transaction.reimbursement_status === "requested"}
-                            >
-                              <Send className="h-4 w-4 mr-2 text-primary" />
-                              Solicitado
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "reimbursed" })}
-                              disabled={transaction.reimbursement_status === "reimbursed"}
-                            >
-                              <CheckCircle2 className="h-4 w-4 mr-2 text-income" />
-                              Reembolsado
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">
-                    R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {transaction.categories && (
+                          <span className="text-xs flex items-center gap-1">
+                            <span>{transaction.categories.icon}</span>
+                            <span className="text-muted-foreground">{transaction.categories.name}</span>
+                          </span>
+                        )}
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className={cn("h-6 px-2 gap-1 border text-xs", status.className)}
+                          >
+                            <StatusIcon className="h-3 w-3" />
+                            {status.label}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "pending" })}>
+                            <Clock className="h-4 w-4 mr-2 text-chart-4" /> Pendente
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "requested" })}>
+                            <Send className="h-4 w-4 mr-2 text-primary" /> Solicitado
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "reimbursed" })}>
+                            <CheckCircle2 className="h-4 w-4 mr-2 text-income" /> Reembolsado
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

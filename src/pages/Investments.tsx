@@ -109,6 +109,15 @@ export default function Investments() {
         <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
+            size="icon"
+            className="md:hidden"
+            onClick={() => setAssetModalOpen(true)}
+          >
+            <Package className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            className="hidden md:flex"
             onClick={() => setAssetModalOpen(true)}
           >
             <Package className="h-4 w-4 mr-2" />
@@ -116,13 +125,26 @@ export default function Investments() {
           </Button>
           <Button
             variant="outline"
+            size="icon"
+            className="md:hidden"
+            onClick={() => setPricesModalOpen(true)}
+            disabled={assets.length === 0}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            className="hidden md:flex"
             onClick={() => setPricesModalOpen(true)}
             disabled={assets.length === 0}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar Cotações
           </Button>
-          <Button onClick={() => setOperationModalOpen(true)}>
+          <Button size="icon" className="md:hidden" onClick={() => setOperationModalOpen(true)}>
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button className="hidden md:flex" onClick={() => setOperationModalOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Nova Operação
           </Button>
