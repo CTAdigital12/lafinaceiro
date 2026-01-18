@@ -15,8 +15,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DeleteCategoryModal } from "@/components/modals/DeleteCategoryModal";
-import { Plus, ChevronRight, Pencil, Trash2, CornerDownRight, GripVertical } from "lucide-react";
+import { Plus, ChevronRight, Pencil, Trash2, CornerDownRight, GripVertical, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DndContext,
@@ -83,11 +89,12 @@ function DraggableSubcategory({ category, onEdit, onDelete }: DraggableSubcatego
       </div>
 
       <div
-        className="w-3 h-3 rounded-full flex-shrink-0 mx-4"
+        className="w-3 h-3 rounded-full flex-shrink-0 mx-2 md:mx-4"
         style={{ backgroundColor: category.color || "#6B7280" }}
       />
 
-      <div className="flex items-center gap-1">
+      {/* Desktop Actions */}
+      <div className="hidden md:flex items-center gap-1">
         <Button
           variant="ghost"
           size="icon"
@@ -105,6 +112,28 @@ function DraggableSubcategory({ category, onEdit, onDelete }: DraggableSubcatego
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Mobile Actions */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild className="md:hidden">
+          <Button variant="ghost" size="icon" className="h-8 w-8">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onEdit(category)}>
+            <Pencil className="h-4 w-4 mr-2" />
+            Editar
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => onDelete(category)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Excluir
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -170,11 +199,12 @@ function DroppableParentCategory({
         </div>
 
         <div
-          className="w-4 h-4 rounded-full flex-shrink-0 mx-4"
+          className="w-4 h-4 rounded-full flex-shrink-0 mx-2 md:mx-4"
           style={{ backgroundColor: category.color || "#6B7280" }}
         />
 
-        <div className="flex items-center gap-1">
+        {/* Desktop Actions */}
+        <div className="hidden md:flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
@@ -200,6 +230,32 @@ function DroppableParentCategory({
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
+
+        {/* Mobile Actions */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild className="md:hidden">
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEdit(category)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAddSubcategory(category)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Subcategoria
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => onDelete(category)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <CollapsibleContent>
