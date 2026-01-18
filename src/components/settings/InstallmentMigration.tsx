@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Layers, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Layers, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { logError, getSafeErrorMessage } from "@/lib/errorHandler";
 
 interface GroupSummary {
   baseDescription: string;
@@ -42,10 +43,10 @@ export function InstallmentMigration() {
 
       setPreviewData(data as MigrationResult);
     } catch (error) {
-      console.error('Migration preview error:', error);
+      logError(error, "InstallmentMigration.preview");
       toast({
         title: "Erro ao analisar parcelas",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -72,10 +73,10 @@ export function InstallmentMigration() {
         description: `${result.summary.transactionsUpdated} transações foram agrupadas em ${result.summary.groupsFound} grupos de parcelas.`,
       });
     } catch (error) {
-      console.error('Migration error:', error);
+      logError(error, "InstallmentMigration.migrate");
       toast({
         title: "Erro na migração",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {

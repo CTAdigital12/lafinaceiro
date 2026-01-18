@@ -155,7 +155,6 @@ export default function Transactions() {
   } = useTransactions(undefined, undefined, { 
     showAll, 
     loadedCount,
-    pageSize, 
     filterByDueDate,
     creditCardFilter: activeTab === "credit" ? "only" : "exclude",
     searchQuery: debouncedSearchQuery,

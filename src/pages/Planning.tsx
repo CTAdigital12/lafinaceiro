@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, ChevronUp, LineChart, Tag, Info, ChevronsUpDown } from "lucide-react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, LineChart, Info, ChevronsUpDown } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -527,7 +527,7 @@ export default function Planning() {
           <div className="p-4 border-b border-border bg-muted/30">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-chart-4/20 flex items-center justify-center">
-                <Tag className="h-5 w-5 text-chart-4" />
+                <AlertTriangle className="h-5 w-5 text-chart-4" />
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">Despesas sem categoria</h3>
