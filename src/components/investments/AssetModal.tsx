@@ -108,6 +108,7 @@ export function AssetModal({
 
   useEffect(() => {
     if (asset) {
+      const hasPosition = asset.quantity > 0 || asset.average_price > 0;
       form.reset({
         name: asset.name,
         ticker: asset.ticker,
@@ -115,10 +116,11 @@ export function AssetModal({
         institution_id: asset.institution_id || "none",
         current_price: asset.current_price,
         maturity_date: asset.maturity_date || "",
-        initial_quantity: undefined,
+        initial_quantity: asset.quantity || undefined,
         initial_value: undefined,
       });
-      setHasInitialPosition(false);
+      setHasInitialPosition(hasPosition);
+      setInputMode("quantity"); // When editing, default to quantity mode
     } else {
       form.reset({
         name: "",
@@ -131,6 +133,7 @@ export function AssetModal({
         initial_value: undefined,
       });
       setHasInitialPosition(false);
+      setInputMode("value");
     }
   }, [asset, open, form]);
 
@@ -138,10 +141,10 @@ export function AssetModal({
     let calculated_quantity = 0;
     let calculated_average_price = 0;
 
-    if (hasInitialPosition && !asset) {
+    if (hasInitialPosition) {
       if (inputMode === "quantity" && values.initial_quantity && values.initial_quantity > 0) {
         calculated_quantity = values.initial_quantity;
-        calculated_average_price = values.current_price;
+        calculated_average_price = asset?.average_price || values.current_price;
       } else if (inputMode === "value" && values.initial_value && values.initial_value > 0 && values.current_price > 0) {
         calculated_quantity = values.initial_value / values.current_price;
         calculated_average_price = values.current_price;
@@ -294,19 +297,18 @@ export function AssetModal({
               />
             )}
 
-            {/* Initial Position Section - Only for new assets */}
-            {!asset && (
-              <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="hasInitialPosition"
-                    checked={hasInitialPosition}
-                    onCheckedChange={(checked) => setHasInitialPosition(checked === true)}
-                  />
-                  <Label htmlFor="hasInitialPosition" className="font-medium cursor-pointer">
-                    Cadastrar com posição inicial
-                  </Label>
-                </div>
+            {/* Position Section */}
+            <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="hasInitialPosition"
+                  checked={hasInitialPosition}
+                  onCheckedChange={(checked) => setHasInitialPosition(checked === true)}
+                />
+                <Label htmlFor="hasInitialPosition" className="font-medium cursor-pointer">
+                  {asset ? "Editar posição" : "Cadastrar com posição inicial"}
+                </Label>
+              </div>
 
                 {hasInitialPosition && (
                   <div className="space-y-4 pt-2">
@@ -398,7 +400,6 @@ export function AssetModal({
                   </div>
                 )}
               </div>
-            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
