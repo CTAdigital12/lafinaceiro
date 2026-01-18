@@ -224,6 +224,7 @@ export type Database = {
           current_price: number
           id: string
           institution_id: string | null
+          liquidity: string | null
           maturity_date: string | null
           name: string
           pricing_method: string | null
@@ -241,6 +242,7 @@ export type Database = {
           current_price?: number
           id?: string
           institution_id?: string | null
+          liquidity?: string | null
           maturity_date?: string | null
           name: string
           pricing_method?: string | null
@@ -258,6 +260,7 @@ export type Database = {
           current_price?: number
           id?: string
           institution_id?: string | null
+          liquidity?: string | null
           maturity_date?: string | null
           name?: string
           pricing_method?: string | null

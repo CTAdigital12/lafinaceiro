@@ -125,7 +125,8 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                         <>
                           <TableHead className="text-right">Aplicado</TableHead>
                           <TableHead className="text-right">Saldo Atual</TableHead>
-                          {type === "renda_fixa" && <TableHead>Taxa</TableHead>}
+                          {(type === "renda_fixa" || type === "fundos") && <TableHead>Taxa</TableHead>}
+                          {(type === "renda_fixa" || type === "fundos") && <TableHead>Liq.</TableHead>}
                         </>
                       ) : (
                         <>
@@ -213,11 +214,22 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
                             <>
                               <TableCell className="text-right">{formatCurrency(custo)}</TableCell>
                               <TableCell className="text-right font-medium">{formatCurrency(saldo)}</TableCell>
-                              {type === "renda_fixa" && (
+                              {(type === "renda_fixa" || type === "fundos") && (
                                 <TableCell>
                                   {asset.yield_info ? (
                                     <Badge variant="secondary" className="text-xs">
                                       {asset.yield_info}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                              )}
+                              {(type === "renda_fixa" || type === "fundos") && (
+                                <TableCell>
+                                  {asset.liquidity ? (
+                                    <Badge variant="outline" className="text-xs">
+                                      {asset.liquidity}
                                     </Badge>
                                   ) : (
                                     <span className="text-sm text-muted-foreground">-</span>

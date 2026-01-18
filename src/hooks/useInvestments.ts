@@ -19,6 +19,7 @@ export interface InvestmentAsset {
   pricing_method: PricingMethod;
   current_balance: number;
   yield_info: string | null;
+  liquidity: string | null;
   created_at: string;
   updated_at: string;
 }
