@@ -61,6 +61,7 @@ export default function Investments() {
       applied_value,
       pricing_method,
       current_balance,
+      liquidity,
       ...assetData 
     } = data;
     
@@ -72,6 +73,7 @@ export default function Investments() {
         average_price: calculated_average_price ?? editingAsset.average_price,
         pricing_method: pricing_method ?? editingAsset.pricing_method,
         current_balance: current_balance ?? editingAsset.current_balance,
+        liquidity: liquidity ?? editingAsset.liquidity,
       });
     } else {
       createAsset.mutate({
@@ -80,6 +82,7 @@ export default function Investments() {
         average_price: calculated_average_price || 0,
         pricing_method: pricing_method || "unit_price",
         current_balance: current_balance || 0,
+        liquidity: liquidity || null,
       });
     }
     setEditingAsset(null);

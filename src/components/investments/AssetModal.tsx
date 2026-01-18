@@ -38,6 +38,7 @@ const formSchema = z.object({
   current_price: z.coerce.number().min(0).default(0),
   maturity_date: z.string().optional(),
   yield_info: z.string().optional(),
+  liquidity: z.string().optional(),
   // Variable income fields
   initial_quantity: z.coerce.number().min(0).optional(),
   initial_value: z.coerce.number().min(0).optional(),
@@ -52,6 +53,7 @@ export interface AssetModalFormData extends FormValues {
   calculated_quantity?: number;
   calculated_average_price?: number;
   pricing_method?: "unit_price" | "total_balance";
+  liquidity?: string;
 }
 
 interface AssetModalProps {
@@ -82,6 +84,7 @@ export function AssetModal({
       current_price: 0,
       maturity_date: "",
       yield_info: "",
+      liquidity: "",
       initial_quantity: undefined,
       initial_value: undefined,
       applied_value: undefined,
@@ -143,6 +146,7 @@ export function AssetModal({
         current_price: asset.current_price,
         maturity_date: asset.maturity_date || "",
         yield_info: asset.yield_info || "",
+        liquidity: asset.liquidity || "",
         initial_quantity: isFixed ? undefined : (asset.quantity || undefined),
         initial_value: undefined,
         applied_value: isFixed ? (asset.quantity * asset.average_price) : undefined,
@@ -159,6 +163,7 @@ export function AssetModal({
         current_price: 0,
         maturity_date: "",
         yield_info: "",
+        liquidity: "",
         initial_quantity: undefined,
         initial_value: undefined,
         applied_value: undefined,
@@ -210,6 +215,7 @@ export function AssetModal({
       institution_id: values.institution_id === "none" ? undefined : values.institution_id || undefined,
       maturity_date: values.maturity_date || undefined,
       yield_info: values.yield_info || undefined,
+      liquidity: values.liquidity || undefined,
       calculated_quantity,
       calculated_average_price,
       pricing_method,
@@ -325,21 +331,23 @@ export function AssetModal({
                       )}
                     />
 
-                    {assetType === "renda_fixa" && (
+                    {(assetType === "renda_fixa" || assetType === "fundos") && (
                       <>
-                        <FormField
-                          control={form.control}
-                          name="maturity_date"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Data de Vencimento</FormLabel>
-                              <FormControl>
-                                <Input type="date" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        {assetType === "renda_fixa" && (
+                          <FormField
+                            control={form.control}
+                            name="maturity_date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Data de Vencimento</FormLabel>
+                                <FormControl>
+                                  <Input type="date" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
 
                         <FormField
                           control={form.control}
@@ -350,6 +358,35 @@ export function AssetModal({
                               <FormControl>
                                 <Input placeholder="110% CDI ou IPCA+6%" {...field} />
                               </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="liquidity"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Liquidez (Prazo de Resgate)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione o prazo" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="D+0">D+0 (Imediato)</SelectItem>
+                                  <SelectItem value="D+1">D+1</SelectItem>
+                                  <SelectItem value="D+2">D+2</SelectItem>
+                                  <SelectItem value="D+30">D+30</SelectItem>
+                                  <SelectItem value="D+90">D+90</SelectItem>
+                                  <SelectItem value="Vencimento">Apenas no Vencimento</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground">
+                                Prazo para resgate do investimento
+                              </p>
                               <FormMessage />
                             </FormItem>
                           )}
