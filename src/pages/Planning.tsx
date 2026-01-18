@@ -1,5 +1,11 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, LineChart, Info, ChevronsUpDown } from "lucide-react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, LineChart, Info, ChevronsUpDown, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -388,7 +394,8 @@ export default function Planning() {
           <h1 className="text-2xl font-bold text-foreground">Planejamento Mensal</h1>
           <p className="text-muted-foreground">Defina e acompanhe seus orçamentos</p>
         </div>
-        <div className="flex gap-2">
+        {/* Desktop Buttons */}
+        <div className="hidden sm:flex gap-2">
           <Button 
             variant="outline" 
             className="gap-2" 
@@ -404,6 +411,22 @@ export default function Planning() {
           <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={() => setIsModalOpen(true)}>
             <Plus className="h-4 w-4" />
             Nova Meta
+          </Button>
+        </div>
+        {/* Mobile Buttons */}
+        <div className="flex sm:hidden gap-2">
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => setShowChart(!showChart)}
+          >
+            <LineChart className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => copyFromPreviousMonth.mutate()} disabled={copyFromPreviousMonth.isPending}>
+            {copyFromPreviousMonth.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+          </Button>
+          <Button size="icon" className="bg-primary hover:bg-primary/90" onClick={() => setIsModalOpen(true)}>
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -424,7 +447,7 @@ export default function Planning() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg gradient-balance flex items-center justify-center"><Target className="h-5 w-5 text-balance-foreground" /></div>
@@ -462,7 +485,7 @@ export default function Planning() {
         </div>
       )}
 
-      {/* Budget Table */}
+      {/* Budget Section */}
       {isLoading ? (
         <div className="flex items-center justify-center h-32"><Loader2 className="h-8 w-8 animate-spin text-balance" /></div>
       ) : budgets.length === 0 ? (
@@ -470,55 +493,263 @@ export default function Planning() {
           <Target className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma meta para {months[month - 1]}</h3>
           <p className="text-muted-foreground mb-4">Crie metas ou copie do mês anterior</p>
-          <div className="flex gap-2 justify-center">
+          <div className="flex gap-2 justify-center flex-wrap">
             <Button variant="outline" onClick={() => copyFromPreviousMonth.mutate()} disabled={copyFromPreviousMonth.isPending}><Copy className="h-4 w-4 mr-2" />Copiar do Mês Anterior</Button>
             <Button onClick={() => setIsModalOpen(true)}><Plus className="h-4 w-4 mr-2" />Nova Meta</Button>
           </div>
         </div>
       ) : (
-        <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
-          {parentCategoriesWithChildren.length > 0 && (
-            <div className="flex justify-end p-2 border-b border-border">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2 text-muted-foreground hover:text-foreground"
-                onClick={toggleAllCategories}
-              >
-                <ChevronsUpDown className="h-4 w-4" />
-                {allCollapsed ? "Expandir Todas" : "Colapsar Todas"}
-              </Button>
-            </div>
-          )}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="min-w-[200px]">Categoria</TableHead>
-                <TableHead className="text-right">Meta planejada</TableHead>
-                <TableHead className="text-right">Despesas pagas</TableHead>
-                <TableHead className="text-right">Despesas previstas</TableHead>
-                <TableHead className="text-right">Total gasto</TableHead>
-                <TableHead className="min-w-[200px]">Progresso</TableHead>
-                <TableHead className="w-[100px]">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {hierarchicalBudgets.map((parentBudget) => {
-                const categoryId = parentBudget.categories?.id || "";
-                const isCollapsed = collapsedCategories.has(categoryId);
-                
-                return (
-                  <React.Fragment key={parentBudget.id}>
-                    {renderBudgetRow(parentBudget, false)}
-                    {!isCollapsed && parentBudget.children.map((childBudget) => 
-                      renderBudgetRow(childBudget, true)
+        <>
+          {/* Desktop Table View */}
+          <div className="hidden md:block bg-card rounded-xl border border-border shadow-card overflow-hidden">
+            {parentCategoriesWithChildren.length > 0 && (
+              <div className="flex justify-end p-2 border-b border-border">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                  onClick={toggleAllCategories}
+                >
+                  <ChevronsUpDown className="h-4 w-4" />
+                  {allCollapsed ? "Expandir Todas" : "Colapsar Todas"}
+                </Button>
+              </div>
+            )}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[200px]">Categoria</TableHead>
+                  <TableHead className="text-right">Meta planejada</TableHead>
+                  <TableHead className="text-right">Despesas pagas</TableHead>
+                  <TableHead className="text-right">Despesas previstas</TableHead>
+                  <TableHead className="text-right">Total gasto</TableHead>
+                  <TableHead className="min-w-[200px]">Progresso</TableHead>
+                  <TableHead className="w-[100px]">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {hierarchicalBudgets.map((parentBudget) => {
+                  const categoryId = parentBudget.categories?.id || "";
+                  const isCollapsed = collapsedCategories.has(categoryId);
+                  
+                  return (
+                    <React.Fragment key={parentBudget.id}>
+                      {renderBudgetRow(parentBudget, false)}
+                      {!isCollapsed && parentBudget.children.map((childBudget) => 
+                        renderBudgetRow(childBudget, true)
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile Cards View */}
+          <div className="md:hidden space-y-3">
+            {parentCategoriesWithChildren.length > 0 && (
+              <div className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                  onClick={toggleAllCategories}
+                >
+                  <ChevronsUpDown className="h-4 w-4" />
+                  {allCollapsed ? "Expandir Todas" : "Colapsar Todas"}
+                </Button>
+              </div>
+            )}
+            {hierarchicalBudgets.map((parentBudget) => {
+              const categoryId = parentBudget.categories?.id || "";
+              const isCollapsed = collapsedCategories.has(categoryId);
+              const planned = parentBudget.isParent ? parentBudget.totalPlanned : Number(parentBudget.planned_amount);
+              const spent = parentBudget.isParent ? parentBudget.totalSpent : (spentByCategory[parentBudget.category_id || ""] || 0);
+              const remaining = planned - spent;
+              const percentage = planned > 0 ? (spent / planned) * 100 : 0;
+              const isOverBudget = spent > planned;
+              const hasChildren = parentBudget.children.length > 0;
+              const hasUnbudgetedSubcategories = parentBudget.unbudgetedSubcategorySpent > 0;
+
+              return (
+                <div key={parentBudget.id} className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+                  {/* Parent Card */}
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {hasChildren && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 shrink-0"
+                            onClick={() => toggleCategory(categoryId)}
+                          >
+                            {isCollapsed ? (
+                              <ChevronRight className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                        <div 
+                          className="h-10 w-10 rounded-lg flex items-center justify-center text-lg shrink-0"
+                          style={{ backgroundColor: `${parentBudget.categories?.color}20` }}
+                        >
+                          {parentBudget.categories?.icon || "📦"}
+                        </div>
+                        <span className="font-semibold text-foreground truncate">
+                          {parentBudget.categories?.name || "Categoria"}
+                        </span>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleAddSubcategory(parentBudget)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Adicionar subcategoria
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditBudget(parentBudget)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar meta
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => setDeleteBudgetId(parentBudget.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    {hasUnbudgetedSubcategories && (
+                      <div className="flex items-center gap-1 text-xs text-chart-4 mb-3 ml-11">
+                        <Info className="h-3 w-3 shrink-0" />
+                        <span className="truncate">
+                          R$ {parentBudget.unbudgetedSubcategorySpent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em: {parentBudget.subcategoriesWithoutBudget.join(", ")}
+                        </span>
+                      </div>
                     )}
-                  </React.Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Planejado</p>
+                        <p className="font-semibold">R$ {planned.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Gasto</p>
+                        <p className="font-semibold text-expense">R$ {spent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Progress
+                          value={Math.min(percentage, 100)}
+                          className={cn(
+                            "h-2.5 flex-1",
+                            isOverBudget ? "[&>div]:bg-expense" : percentage > 80 ? "[&>div]:bg-chart-4" : "[&>div]:bg-income"
+                          )}
+                        />
+                        <span className={cn(
+                          "text-xs font-medium min-w-[45px] text-right",
+                          isOverBudget ? "text-expense" : percentage > 80 ? "text-chart-4" : "text-income"
+                        )}>
+                          {percentage.toFixed(0)}%
+                        </span>
+                      </div>
+                      <p className={cn(
+                        "text-sm font-medium",
+                        isOverBudget ? "text-expense" : "text-income"
+                      )}>
+                        {isOverBudget 
+                          ? `Excederam R$ ${Math.abs(remaining).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                          : `Restam R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Children Cards */}
+                  {!isCollapsed && parentBudget.children.length > 0 && (
+                    <div className="border-t border-border bg-muted/30">
+                      {parentBudget.children.map((childBudget) => {
+                        const childPlanned = Number(childBudget.planned_amount);
+                        const childSpent = spentByCategory[childBudget.category_id || ""] || 0;
+                        const childRemaining = childPlanned - childSpent;
+                        const childPercentage = childPlanned > 0 ? (childSpent / childPlanned) * 100 : 0;
+                        const childIsOverBudget = childSpent > childPlanned;
+
+                        return (
+                          <div key={childBudget.id} className="p-3 border-b border-border last:border-b-0">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <CornerDownRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="text-sm font-medium truncate">
+                                  {childBudget.categories?.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-7 w-7"
+                                  onClick={() => handleEditBudget(childBudget)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-7 w-7 text-muted-foreground hover:text-expense"
+                                  onClick={() => setDeleteBudgetId(childBudget.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-xs mb-2">
+                              <span className="text-muted-foreground">
+                                R$ {childSpent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / R$ {childPlanned.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className={cn(
+                                "font-medium",
+                                childIsOverBudget ? "text-expense" : childPercentage > 80 ? "text-chart-4" : "text-income"
+                              )}>
+                                {childPercentage.toFixed(0)}%
+                              </span>
+                            </div>
+                            <Progress
+                              value={Math.min(childPercentage, 100)}
+                              className={cn(
+                                "h-1.5",
+                                childIsOverBudget ? "[&>div]:bg-expense" : childPercentage > 80 ? "[&>div]:bg-chart-4" : "[&>div]:bg-income"
+                              )}
+                            />
+                            <p className={cn(
+                              "text-xs mt-1",
+                              childIsOverBudget ? "text-expense" : "text-income"
+                            )}>
+                              {childIsOverBudget 
+                                ? `Excedeu R$ ${Math.abs(childRemaining).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                                : `Resta R$ ${childRemaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                              }
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Uncategorized Expenses */}
@@ -538,42 +769,75 @@ export default function Planning() {
             </div>
           </div>
           
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {uncategorizedTransactions.map((transaction) => (
-                <TableRow key={transaction.id}>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(transaction.date).toLocaleDateString("pt-BR")}
-                  </TableCell>
-                  <TableCell>{transaction.description}</TableCell>
-                  <TableCell className="text-right font-medium text-expense">
-                    R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditingTransaction(transaction);
-                        setTransactionModalOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4 mr-1" />
-                      Categorizar
-                    </Button>
-                  </TableCell>
+          {/* Desktop Table */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {uncategorizedTransactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                    </TableCell>
+                    <TableCell>{transaction.description}</TableCell>
+                    <TableCell className="text-right font-medium text-expense">
+                      R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingTransaction(transaction);
+                          setTransactionModalOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4 mr-1" />
+                        Categorizar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="md:hidden divide-y divide-border">
+            {uncategorizedTransactions.map((transaction) => (
+              <div key={transaction.id} className="p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-foreground truncate">{transaction.description}</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">
+                      {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                    </span>
+                    <span className="font-medium text-expense">
+                      R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    setEditingTransaction(transaction);
+                    setTransactionModalOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
