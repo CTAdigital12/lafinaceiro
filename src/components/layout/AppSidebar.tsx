@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { APP_VERSION } from "@/config/version";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -92,8 +93,8 @@ export function AppSidebar() {
         <div className="border-t border-sidebar-border p-3">
           {!collapsed && (
             <div className="rounded-lg bg-sidebar-accent p-3">
-              <p className="text-xs font-medium text-sidebar-primary">Versão 1.0</p>
-              <p className="text-xs text-sidebar-foreground">Sistema de Finanças</p>
+              <p className="text-xs font-medium text-sidebar-primary">Versão {APP_VERSION.display}</p>
+              <p className="text-xs text-sidebar-foreground">Build {APP_VERSION.buildTime}</p>
             </div>
           )}
         </div>
