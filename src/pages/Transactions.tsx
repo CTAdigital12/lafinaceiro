@@ -800,7 +800,7 @@ export default function Transactions() {
                 )}
               </div>
             ) : (
-              <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+              <div className="hidden md:block bg-card rounded-xl border border-border shadow-card overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
@@ -1043,6 +1043,50 @@ export default function Transactions() {
                     </Button>
                   </div>
                 )}
+              </div>
+
+              {/* Mobile Card List */}
+              <div className="block md:hidden space-y-2">
+                {filteredTransactions.map((transaction) => {
+                  const isIncome = (transaction.type === "income" && !transaction.is_refund) || 
+                                   (transaction.type === "expense" && transaction.is_refund);
+                  const category = categories.find(c => c.id === transaction.category_id);
+                  
+                  return (
+                    <div
+                      key={transaction.id}
+                      onClick={() => handleTransactionClick(transaction)}
+                      className={cn(
+                        "flex items-center gap-3 p-3 bg-card rounded-lg border border-border active:bg-muted/50",
+                        transaction.installment_group_id && "border-l-2 border-l-primary"
+                      )}
+                    >
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0"
+                        style={{ backgroundColor: category?.color ? `${category.color}20` : '#6B728020' }}
+                      >
+                        {category?.icon || "📦"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate text-sm">{transaction.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateBR(transaction.date)}
+                          {transaction.total_installments && transaction.total_installments > 1 && (
+                            <span className="text-primary"> • {transaction.installment_number}/{transaction.total_installments}</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={cn("font-semibold text-sm", isIncome ? "text-income" : "text-expense")}>
+                          {isIncome ? "+" : "-"} R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </p>
+                        {transaction.is_corporate_expense && (
+                          <span className="text-[10px] text-muted-foreground">Empresa</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

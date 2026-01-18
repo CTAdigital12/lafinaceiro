@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -111,16 +111,12 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
 
   const isPending = createCreditCard.isPending || updateCreditCard.isPending;
 
+  const modalTitle = isEditing ? "Editar Cartão de Crédito" : "Novo Cartão de Crédito";
+  const modalDescription = isEditing ? "Atualize as informações do seu cartão" : "Adicione um novo cartão para gerenciar suas faturas";
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar Cartão de Crédito" : "Novo Cartão de Crédito"}</DialogTitle>
-          <DialogDescription>
-            {isEditing ? "Atualize as informações do seu cartão" : "Adicione um novo cartão para gerenciar suas faturas"}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={modalTitle} description={modalDescription}>
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome do Cartão</Label>
             <Input
@@ -172,6 +168,7 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
               <Input
                 id="limit"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 placeholder="0,00"
                 value={creditLimit}
@@ -185,6 +182,7 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
                 <Input
                   id="invoice"
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   placeholder="0,00"
                   value={currentInvoice}
@@ -260,7 +258,6 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

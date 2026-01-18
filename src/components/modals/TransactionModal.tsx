@@ -6,12 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import {
   Select,
   SelectContent,
@@ -278,15 +273,11 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
 
   const isPending = createTransaction.isPending || updateTransaction.isPending;
 
+  const modalTitle = isEditing ? "Editar Transação" : isDuplicating ? "Duplicar Transação" : isCreatingRefund ? "Criar Extorno" : "Nova Transação";
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Editar Transação" : isDuplicating ? "Duplicar Transação" : isCreatingRefund ? "Criar Extorno" : "Nova Transação"}
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={modalTitle}>
+      <form onSubmit={handleSubmit} className="space-y-4">
           {/* Type Toggle */}
           <div className="flex rounded-lg bg-muted p-1">
             <button
@@ -333,6 +324,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
             <Input
               id="amount"
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0"
               value={amount}
@@ -790,7 +782,6 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
             )}
           </Button>
         </form>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }
