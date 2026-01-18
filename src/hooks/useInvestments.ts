@@ -3,20 +3,43 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
+export type PricingMethod = "unit_price" | "total_balance";
+
 export interface InvestmentAsset {
   id: string;
   user_id: string;
   name: string;
   ticker: string;
-  asset_type: "renda_fixa" | "renda_variavel" | "fiis" | "crypto" | "saldo_corretora";
+  asset_type: "renda_fixa" | "renda_variavel" | "fiis" | "crypto" | "saldo_corretora" | "acoes" | "etfs" | "bdrs";
   quantity: number;
   average_price: number;
   current_price: number;
   institution_id: string | null;
   maturity_date: string | null;
+  pricing_method: PricingMethod;
+  current_balance: number;
+  yield_info: string | null;
   created_at: string;
   updated_at: string;
 }
+
+// Helper to determine if asset uses total_balance pricing
+export const usesTotalBalancePricing = (assetType: string): boolean => {
+  return ["renda_fixa", "saldo_corretora"].includes(assetType);
+};
+
+// Helper to get the patrimony value of an asset
+export const getAssetPatrimony = (asset: InvestmentAsset): number => {
+  if (asset.pricing_method === "total_balance") {
+    return asset.current_balance || 0;
+  }
+  return asset.quantity * asset.current_price;
+};
+
+// Helper to get the applied value of an asset
+export const getAssetAppliedValue = (asset: InvestmentAsset): number => {
+  return asset.quantity * asset.average_price;
+};
 
 export interface InvestmentTransaction {
   id: string;
@@ -243,15 +266,22 @@ export function useInvestments() {
     },
   });
 
-  // Bulk update prices
+  // Bulk update prices (supports both unit_price and total_balance)
   const updatePrices = useMutation({
-    mutationFn: async (updates: { id: string; current_price: number }[]) => {
-      const promises = updates.map((update) =>
-        supabase
+    mutationFn: async (updates: { id: string; current_price?: number; current_balance?: number }[]) => {
+      const promises = updates.map((update) => {
+        const updateData: { current_price?: number; current_balance?: number } = {};
+        if (update.current_price !== undefined) {
+          updateData.current_price = update.current_price;
+        }
+        if (update.current_balance !== undefined) {
+          updateData.current_balance = update.current_balance;
+        }
+        return supabase
           .from("investment_assets")
-          .update({ current_price: update.current_price })
-          .eq("id", update.id)
-      );
+          .update(updateData)
+          .eq("id", update.id);
+      });
       await Promise.all(promises);
     },
     onSuccess: () => {
@@ -263,9 +293,9 @@ export function useInvestments() {
     },
   });
 
-  // Calculated values
-  const totalPatrimony = assets.reduce((sum, a) => sum + a.quantity * a.current_price, 0);
-  const totalApplied = assets.reduce((sum, a) => sum + a.quantity * a.average_price, 0);
+  // Calculated values - using conditional logic based on pricing_method
+  const totalPatrimony = assets.reduce((sum, a) => sum + getAssetPatrimony(a), 0);
+  const totalApplied = assets.reduce((sum, a) => sum + getAssetAppliedValue(a), 0);
   const totalResult = totalPatrimony - totalApplied;
   const resultPercentage = totalApplied > 0 ? (totalResult / totalApplied) * 100 : 0;
 
@@ -278,10 +308,10 @@ export function useInvestments() {
     return acc;
   }, {} as Record<string, InvestmentAsset[]>);
 
-  // Allocation data for chart
+  // Allocation data for chart - using correct patrimony calculation
   const allocationData = Object.entries(assetsByType).map(([type, typeAssets]) => ({
     name: ASSET_TYPE_LABELS[type] || type,
-    value: typeAssets.reduce((sum, a) => sum + a.quantity * a.current_price, 0),
+    value: typeAssets.reduce((sum, a) => sum + getAssetPatrimony(a), 0),
   }));
 
   return {

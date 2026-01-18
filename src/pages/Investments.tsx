@@ -53,7 +53,16 @@ export default function Investments() {
   };
 
   const handleAssetSubmit = (data: any) => {
-    const { calculated_quantity, calculated_average_price, initial_quantity, initial_value, ...assetData } = data;
+    const { 
+      calculated_quantity, 
+      calculated_average_price, 
+      initial_quantity, 
+      initial_value, 
+      applied_value,
+      pricing_method,
+      current_balance,
+      ...assetData 
+    } = data;
     
     if (editingAsset) {
       updateAsset.mutate({ 
@@ -61,12 +70,16 @@ export default function Investments() {
         ...assetData,
         quantity: calculated_quantity ?? editingAsset.quantity,
         average_price: calculated_average_price ?? editingAsset.average_price,
+        pricing_method: pricing_method ?? editingAsset.pricing_method,
+        current_balance: current_balance ?? editingAsset.current_balance,
       });
     } else {
       createAsset.mutate({
         ...assetData,
         quantity: calculated_quantity || 0,
         average_price: calculated_average_price || 0,
+        pricing_method: pricing_method || "unit_price",
+        current_balance: current_balance || 0,
       });
     }
     setEditingAsset(null);
