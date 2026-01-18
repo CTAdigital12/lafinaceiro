@@ -301,45 +301,78 @@ export function RefundReport() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <ScrollArea className="max-h-[300px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[100px]">Data</TableHead>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead className="w-[100px]">Tipo</TableHead>
-                        <TableHead className="text-right w-[120px]">Valor</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {category.transactions.map(t => (
-                        <TableRow key={t.id}>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {format(new Date(t.date), "dd/MM/yyyy")}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {t.description}
-                          </TableCell>
-                          <TableCell>
-                            {t.isRefund ? (
-                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800">
-                                Reembolso
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800">
-                                Despesa
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className={`text-right font-medium ${t.isRefund ? "text-emerald-600" : ""}`}>
-                            {t.isRefund ? "- " : ""}
-                            {formatCurrency(t.amount)}
-                          </TableCell>
+                {/* Desktop Table */}
+                <div className="hidden md:block">
+                  <ScrollArea className="max-h-[300px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[100px]">Data</TableHead>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead className="w-[100px]">Tipo</TableHead>
+                          <TableHead className="text-right w-[120px]">Valor</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                      </TableHeader>
+                      <TableBody>
+                        {category.transactions.map(t => (
+                          <TableRow key={t.id}>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {format(new Date(t.date), "dd/MM/yyyy")}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {t.description}
+                            </TableCell>
+                            <TableCell>
+                              {t.isRefund ? (
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800">
+                                  Reembolso
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800">
+                                  Despesa
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className={`text-right font-medium ${t.isRefund ? "text-emerald-600" : ""}`}>
+                              {t.isRefund ? "- " : ""}
+                              {formatCurrency(t.amount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="md:hidden space-y-2">
+                  {category.transactions.map(t => (
+                    <div 
+                      key={t.id}
+                      className="p-3 rounded-lg border border-border bg-muted/30"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(t.date), "dd/MM/yyyy")}
+                        </span>
+                        {t.isRefund ? (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800 text-xs">
+                            Reembolso
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800 text-xs">
+                            Despesa
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="font-medium text-sm truncate">{t.description}</p>
+                      <p className={`text-sm font-semibold mt-1 ${t.isRefund ? "text-emerald-600" : ""}`}>
+                        {t.isRefund ? "- " : ""}
+                        {formatCurrency(t.amount)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           ))}

@@ -135,10 +135,12 @@ export default function Reports() {
 
       {/* Tabs for different reports */}
       <Tabs defaultValue="expenses" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="expenses">Despesas</TabsTrigger>
-          <TabsTrigger value="refunds">Reembolsos</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <TabsList className="w-max md:w-auto">
+            <TabsTrigger value="expenses">Despesas</TabsTrigger>
+            <TabsTrigger value="refunds">Reembolsos</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="expenses" className="space-y-6">
           {/* Header actions for expenses tab */}

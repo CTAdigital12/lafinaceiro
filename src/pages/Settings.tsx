@@ -36,32 +36,34 @@ export default function Settings() {
 
       {/* Settings Tabs */}
       <Tabs defaultValue="preferences" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
-          <TabsTrigger value="preferences" className="gap-2">
-            <Globe className="h-4 w-4" />
-            Preferências
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-2">
-            <Bell className="h-4 w-4" />
-            Alertas
-          </TabsTrigger>
-          <TabsTrigger value="appearance" className="gap-2">
-            <Palette className="h-4 w-4" />
-            Aparência
-          </TabsTrigger>
-          <TabsTrigger value="members" className="gap-2">
-            <Users className="h-4 w-4" />
-            Membros
-          </TabsTrigger>
-          <TabsTrigger value="tools" className="gap-2">
-            <Wrench className="h-4 w-4" />
-            Ferramentas
-          </TabsTrigger>
-          <TabsTrigger value="account" className="gap-2">
-            <User className="h-4 w-4" />
-            Conta
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <TabsList className="bg-muted/50 p-1 w-max md:w-auto">
+            <TabsTrigger value="preferences" className="gap-2">
+              <Globe className="h-4 w-4" />
+              <span className="hidden sm:inline">Preferências</span>
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="gap-2">
+              <Bell className="h-4 w-4" />
+              <span className="hidden sm:inline">Alertas</span>
+            </TabsTrigger>
+            <TabsTrigger value="appearance" className="gap-2">
+              <Palette className="h-4 w-4" />
+              <span className="hidden sm:inline">Aparência</span>
+            </TabsTrigger>
+            <TabsTrigger value="members" className="gap-2">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Membros</span>
+            </TabsTrigger>
+            <TabsTrigger value="tools" className="gap-2">
+              <Wrench className="h-4 w-4" />
+              <span className="hidden sm:inline">Ferramentas</span>
+            </TabsTrigger>
+            <TabsTrigger value="account" className="gap-2">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Conta</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Preferences Tab */}
         <TabsContent value="preferences" className="space-y-6">
