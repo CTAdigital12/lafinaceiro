@@ -60,7 +60,7 @@ export function AssetModal({
       name: "",
       ticker: "",
       asset_type: "",
-      institution_id: "",
+      institution_id: "none",
       current_price: 0,
       maturity_date: "",
     },
@@ -74,7 +74,7 @@ export function AssetModal({
         name: asset.name,
         ticker: asset.ticker,
         asset_type: asset.asset_type,
-        institution_id: asset.institution_id || "",
+        institution_id: asset.institution_id || "none",
         current_price: asset.current_price,
         maturity_date: asset.maturity_date || "",
       });
@@ -83,7 +83,7 @@ export function AssetModal({
         name: "",
         ticker: "",
         asset_type: "",
-        institution_id: "",
+        institution_id: "none",
         current_price: 0,
         maturity_date: "",
       });
@@ -94,7 +94,7 @@ export function AssetModal({
     onSubmit({
       ...values,
       ticker: values.ticker.toUpperCase(),
-      institution_id: values.institution_id || undefined,
+      institution_id: values.institution_id === "none" ? undefined : values.institution_id || undefined,
       maturity_date: values.maturity_date || undefined,
     });
     onOpenChange(false);
@@ -178,7 +178,7 @@ export function AssetModal({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Nenhuma</SelectItem>
+                      <SelectItem value="none">Nenhuma</SelectItem>
                       {institutions.map((inst) => (
                         <SelectItem key={inst.id} value={inst.id}>
                           {inst.icon} {inst.name}
@@ -200,6 +200,7 @@ export function AssetModal({
                   <FormControl>
                     <Input
                       type="number"
+                      inputMode="decimal"
                       step="0.01"
                       placeholder="0.00"
                       {...field}
