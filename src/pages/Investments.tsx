@@ -56,7 +56,12 @@ export default function Investments() {
     const { calculated_quantity, calculated_average_price, initial_quantity, initial_value, ...assetData } = data;
     
     if (editingAsset) {
-      updateAsset.mutate({ id: editingAsset.id, ...assetData });
+      updateAsset.mutate({ 
+        id: editingAsset.id, 
+        ...assetData,
+        quantity: calculated_quantity ?? editingAsset.quantity,
+        average_price: calculated_average_price ?? editingAsset.average_price,
+      });
     } else {
       createAsset.mutate({
         ...assetData,
