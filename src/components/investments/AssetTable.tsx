@@ -63,7 +63,7 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     renda_fixa: true,
     renda_variavel: true,
-    fiis: true,
+    fundos: true,
     crypto: true,
     saldo_corretora: true,
   });
@@ -78,7 +78,7 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
     setOpenGroups((prev) => ({ ...prev, [type]: !prev[type] }));
   };
 
-  const assetTypes = ["renda_fixa", "renda_variavel", "fiis", "crypto", "saldo_corretora"];
+  const assetTypes = ["renda_fixa", "renda_variavel", "fundos", "crypto", "saldo_corretora"];
 
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur">

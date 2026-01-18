@@ -10,7 +10,7 @@ export interface InvestmentAsset {
   user_id: string;
   name: string;
   ticker: string;
-  asset_type: "renda_fixa" | "renda_variavel" | "fiis" | "crypto" | "saldo_corretora" | "acoes" | "etfs" | "bdrs";
+  asset_type: "renda_fixa" | "renda_variavel" | "fundos" | "crypto" | "saldo_corretora" | "acoes" | "etfs" | "bdrs";
   quantity: number;
   average_price: number;
   current_price: number;
@@ -61,7 +61,7 @@ export interface InvestmentTransaction {
 export const ASSET_TYPE_LABELS: Record<string, string> = {
   renda_fixa: "Renda Fixa",
   renda_variavel: "Renda Variável",
-  fiis: "Fundos Imobiliários",
+  fundos: "Fundos de Investimentos",
   crypto: "Criptomoedas",
   saldo_corretora: "Saldo em Corretora",
 };
