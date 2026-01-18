@@ -473,9 +473,9 @@ export default function Transactions() {
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="flex gap-6 overflow-x-hidden">
       {/* Main Content */}
-      <div className="flex-1 space-y-6">
+      <div className="flex-1 min-w-0 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -1029,7 +1029,7 @@ export default function Transactions() {
                 </div>
 
                 {/* Mobile Card List */}
-                <div className="block md:hidden space-y-2">
+                <div className="block md:hidden space-y-2 overflow-hidden">
                   {filteredTransactions.map((transaction) => {
                     const isIncome = (transaction.type === "income" && !transaction.is_refund) || 
                                      (transaction.type === "expense" && transaction.is_refund);
@@ -1040,7 +1040,7 @@ export default function Transactions() {
                         key={transaction.id}
                         onClick={() => handleTransactionClick(transaction)}
                         className={cn(
-                          "flex items-center gap-3 p-3 bg-card rounded-lg border border-border active:bg-muted/50",
+                          "flex items-center gap-3 p-3 bg-card rounded-lg border border-border active:bg-muted/50 w-full",
                           transaction.installment_group_id && "border-l-2 border-l-primary"
                         )}
                       >
