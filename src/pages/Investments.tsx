@@ -53,13 +53,15 @@ export default function Investments() {
   };
 
   const handleAssetSubmit = (data: any) => {
+    const { calculated_quantity, calculated_average_price, initial_quantity, initial_value, ...assetData } = data;
+    
     if (editingAsset) {
-      updateAsset.mutate({ id: editingAsset.id, ...data });
+      updateAsset.mutate({ id: editingAsset.id, ...assetData });
     } else {
       createAsset.mutate({
-        ...data,
-        quantity: 0,
-        average_price: 0,
+        ...assetData,
+        quantity: calculated_quantity || 0,
+        average_price: calculated_average_price || 0,
       });
     }
     setEditingAsset(null);
