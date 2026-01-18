@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { InvestmentAsset, ASSET_TYPE_LABELS } from "@/hooks/useInvestments";
 import { InvestmentInstitution } from "@/hooks/useInstitutions";
 
@@ -33,18 +35,25 @@ const formSchema = z.object({
   ticker: z.string().min(1, "Ticker é obrigatório"),
   asset_type: z.string().min(1, "Tipo é obrigatório"),
   institution_id: z.string().optional(),
-  current_price: z.number().min(0).default(0),
+  current_price: z.coerce.number().min(0).default(0),
   maturity_date: z.string().optional(),
+  initial_quantity: z.coerce.number().min(0).optional(),
+  initial_value: z.coerce.number().min(0).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+export interface AssetModalFormData extends FormValues {
+  calculated_quantity?: number;
+  calculated_average_price?: number;
+}
 
 interface AssetModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   asset?: InvestmentAsset | null;
   institutions: InvestmentInstitution[];
-  onSubmit: (data: FormValues) => void;
+  onSubmit: (data: AssetModalFormData) => void;
 }
 
 export function AssetModal({
@@ -54,6 +63,9 @@ export function AssetModal({
   institutions,
   onSubmit,
 }: AssetModalProps) {
+  const [hasInitialPosition, setHasInitialPosition] = useState(false);
+  const [inputMode, setInputMode] = useState<"value" | "quantity">("value");
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -63,10 +75,36 @@ export function AssetModal({
       institution_id: "none",
       current_price: 0,
       maturity_date: "",
+      initial_quantity: undefined,
+      initial_value: undefined,
     },
   });
 
   const assetType = form.watch("asset_type");
+  const currentPrice = form.watch("current_price");
+  const initialQuantity = form.watch("initial_quantity");
+  const initialValue = form.watch("initial_value");
+
+  // Calculate estimated balance
+  const estimatedBalance = (() => {
+    if (!hasInitialPosition) return 0;
+    if (inputMode === "quantity" && initialQuantity && currentPrice) {
+      return initialQuantity * currentPrice;
+    }
+    if (inputMode === "value" && initialValue) {
+      return initialValue;
+    }
+    return 0;
+  })();
+
+  // Calculate quantity from value
+  const calculatedQuantity = (() => {
+    if (!hasInitialPosition) return 0;
+    if (inputMode === "value" && initialValue && currentPrice > 0) {
+      return initialValue / currentPrice;
+    }
+    return initialQuantity || 0;
+  })();
 
   useEffect(() => {
     if (asset) {
@@ -77,7 +115,10 @@ export function AssetModal({
         institution_id: asset.institution_id || "none",
         current_price: asset.current_price,
         maturity_date: asset.maturity_date || "",
+        initial_quantity: undefined,
+        initial_value: undefined,
       });
+      setHasInitialPosition(false);
     } else {
       form.reset({
         name: "",
@@ -86,23 +127,48 @@ export function AssetModal({
         institution_id: "none",
         current_price: 0,
         maturity_date: "",
+        initial_quantity: undefined,
+        initial_value: undefined,
       });
+      setHasInitialPosition(false);
     }
   }, [asset, open, form]);
 
   const handleSubmit = (values: FormValues) => {
+    let calculated_quantity = 0;
+    let calculated_average_price = 0;
+
+    if (hasInitialPosition && !asset) {
+      if (inputMode === "quantity" && values.initial_quantity && values.initial_quantity > 0) {
+        calculated_quantity = values.initial_quantity;
+        calculated_average_price = values.current_price;
+      } else if (inputMode === "value" && values.initial_value && values.initial_value > 0 && values.current_price > 0) {
+        calculated_quantity = values.initial_value / values.current_price;
+        calculated_average_price = values.current_price;
+      }
+    }
+
     onSubmit({
       ...values,
       ticker: values.ticker.toUpperCase(),
       institution_id: values.institution_id === "none" ? undefined : values.institution_id || undefined,
       maturity_date: values.maturity_date || undefined,
+      calculated_quantity,
+      calculated_average_price,
     });
     onOpenChange(false);
   };
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {asset ? "Editar Ativo" : "Novo Ativo"}
@@ -196,7 +262,7 @@ export function AssetModal({
               name="current_price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Preço Atual</FormLabel>
+                  <FormLabel>Cotação Atual</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -226,6 +292,112 @@ export function AssetModal({
                   </FormItem>
                 )}
               />
+            )}
+
+            {/* Initial Position Section - Only for new assets */}
+            {!asset && (
+              <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="hasInitialPosition"
+                    checked={hasInitialPosition}
+                    onCheckedChange={(checked) => setHasInitialPosition(checked === true)}
+                  />
+                  <Label htmlFor="hasInitialPosition" className="font-medium cursor-pointer">
+                    Cadastrar com posição inicial
+                  </Label>
+                </div>
+
+                {hasInitialPosition && (
+                  <div className="space-y-4 pt-2">
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={inputMode === "value" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setInputMode("value")}
+                        className="flex-1"
+                      >
+                        Valor Total
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={inputMode === "quantity" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setInputMode("quantity")}
+                        className="flex-1"
+                      >
+                        Quantidade
+                      </Button>
+                    </div>
+
+                    {inputMode === "value" ? (
+                      <FormField
+                        control={form.control}
+                        name="initial_value"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Valor Total Aplicado (R$)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                placeholder="0.00"
+                                {...field}
+                                value={field.value || ""}
+                                onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : (
+                      <FormField
+                        control={form.control}
+                        name="initial_quantity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Quantidade de Cotas/Ações</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.000001"
+                                placeholder="0"
+                                {...field}
+                                value={field.value || ""}
+                                onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {estimatedBalance > 0 && (
+                      <div className="text-sm text-muted-foreground bg-background rounded p-3">
+                        <div className="flex justify-between">
+                          <span>Saldo estimado:</span>
+                          <span className="font-medium text-foreground">
+                            {formatCurrency(estimatedBalance)}
+                          </span>
+                        </div>
+                        {inputMode === "value" && currentPrice > 0 && (
+                          <div className="flex justify-between mt-1">
+                            <span>Quantidade calculada:</span>
+                            <span className="font-medium text-foreground">
+                              {calculatedQuantity.toFixed(6)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="flex justify-end gap-2 pt-4">
