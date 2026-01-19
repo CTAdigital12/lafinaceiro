@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { useBudgets, Budget } from "@/hooks/useBudgets";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCategories } from "@/hooks/useCategories";
+import { useDate } from "@/contexts/DateContext";
 import { NewBudgetModal } from "@/components/modals/NewBudgetModal";
 import { EditBudgetModal } from "@/components/modals/EditBudgetModal";
 import { BudgetEvolutionChart } from "@/components/dashboard/BudgetEvolutionChart";
@@ -49,9 +50,7 @@ interface HierarchicalBudget extends Budget {
 }
 
 export default function Planning() {
-  const currentDate = new Date();
-  const [month, setMonth] = useState(currentDate.getMonth() + 1);
-  const [year, setYear] = useState(currentDate.getFullYear());
+  const { month, year, setCurrentDate } = useDate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
@@ -197,13 +196,13 @@ export default function Planning() {
   }, [uncategorizedTransactions]);
 
   const goToPreviousMonth = () => {
-    if (month === 1) { setMonth(12); setYear(year - 1); }
-    else { setMonth(month - 1); }
+    const newDate = new Date(year, month - 2, 1);
+    setCurrentDate(newDate);
   };
 
   const goToNextMonth = () => {
-    if (month === 12) { setMonth(1); setYear(year + 1); }
-    else { setMonth(month + 1); }
+    const newDate = new Date(year, month, 1);
+    setCurrentDate(newDate);
   };
 
   const toggleCategory = (categoryId: string) => {
