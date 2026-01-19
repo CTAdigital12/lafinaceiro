@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Plus,
   Search,
@@ -139,6 +141,7 @@ export default function Transactions() {
   const { month, year } = useDate();
   const { toast } = useToast();
   const { categories } = useCategories();
+  const queryClient = useQueryClient();
   
   // Use filterByDueDate when showing current invoice on credit tab
   const filterByDueDate = showCurrentInvoice && activeTab === "credit";
@@ -397,9 +400,28 @@ export default function Transactions() {
   const allSelected = filteredTransactions.length > 0 && 
     filteredTransactions.every(t => selectedTransactions.includes(t.id));
 
-  // Handle category update inline
-  const handleCategoryChange = (transactionId: string, categoryId: string) => {
-    updateTransaction.mutate({ id: transactionId, category_id: categoryId });
+  // Handle category update inline - for installments, update all in group
+  const handleCategoryChange = async (transactionId: string, categoryId: string) => {
+    const transaction = transactions.find(t => t.id === transactionId);
+    
+    // If it's part of an installment group, update all installments
+    if (transaction?.installment_group_id) {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ category_id: categoryId })
+        .eq("installment_group_id", transaction.installment_group_id);
+      
+      if (error) {
+        toast({ title: "Erro ao atualizar categoria", description: error.message, variant: "destructive" });
+        return;
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast({ title: "Categoria atualizada em todas as parcelas!" });
+    } else {
+      // Single transaction - update only it
+      updateTransaction.mutate({ id: transactionId, category_id: categoryId });
+    }
   };
 
   // Calculate totals based on filtered transactions (respects all filters and refunds)
