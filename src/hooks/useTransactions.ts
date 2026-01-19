@@ -61,7 +61,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   // Query for transactions with "load more" support
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, loadedCount, filterByDueDate, creditCardFilter, searchQuery],
+    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, loadedCount, filterByDueDate, creditCardFilter, searchQuery, useHybridDateFilter],
     queryFn: async () => {
       let query = supabase
         .from("transactions")
