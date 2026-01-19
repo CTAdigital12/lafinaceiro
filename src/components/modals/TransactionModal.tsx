@@ -51,6 +51,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [accountId, setAccountId] = useState("");
   const [creditCardId, setCreditCardId] = useState("");
   const [date, setDate] = useState<Date>(new Date());
+  const [dueDate, setDueDate] = useState<Date | null>(null);
   const [status, setStatus] = useState<"completed" | "pending">("completed");
   const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_card">("account");
   const [isCorporateExpense, setIsCorporateExpense] = useState(false);
@@ -140,6 +141,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setCreditCardId(sourceData.credit_card_id || "");
       // For duplicating, use today's date; for editing, use original date
       setDate(isDuplicating ? new Date() : parseISO(sourceData.date));
+      setDueDate(sourceData.due_date ? parseISO(sourceData.due_date) : null);
       setStatus(sourceData.status as "completed" | "pending");
       setPaymentMethod(sourceData.credit_card_id ? "credit_card" : "account");
       setIsCorporateExpense(sourceData.is_corporate_expense || false);
@@ -169,6 +171,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsInstallment(false);
       setInstallmentNumber(1);
       setTotalInstallments(2);
+      setDueDate(null);
     }
   }, [sourceData, open, isDuplicating, refundFrom]);
 
@@ -219,6 +222,11 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       // Normal single transaction creation/update
       // Calculate due_date for credit card transactions
       const calculateDueDate = (): string | null => {
+        // Se o usuário definiu uma data manual, usar ela
+        if (dueDate) {
+          return format(dueDate, "yyyy-MM-dd");
+        }
+        
         if (paymentMethod !== "credit_card" || !creditCardId) return null;
         
         const selectedCard = creditCards.find(c => c.id === creditCardId);
@@ -237,8 +245,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           }
         }
         
-        const dueDate = new Date(dueYear, dueMonth, selectedCard.due_date);
-        return format(dueDate, "yyyy-MM-dd");
+        const calculatedDueDate = new Date(dueYear, dueMonth, selectedCard.due_date);
+        return format(calculatedDueDate, "yyyy-MM-dd");
       };
 
       const transactionData = {
@@ -623,8 +631,41 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                   className="pointer-events-auto"
                 />
               </PopoverContent>
-            </Popover>
+          </Popover>
           </div>
+
+          {/* Due Date - Only for credit card payments */}
+          {paymentMethod === "credit_card" && (
+            <div className="space-y-2">
+              <Label>Data de Vencimento</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dueDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dueDate ? format(dueDate, "dd/MM/yyyy") : "Calculada automaticamente"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dueDate ?? undefined}
+                    onSelect={(d) => setDueDate(d ?? null)}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-muted-foreground">
+                Deixe em branco para calcular com base no fechamento do cartão
+              </p>
+            </div>
+          )}
 
           {/* Status */}
           <div className="space-y-2">
