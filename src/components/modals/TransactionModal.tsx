@@ -52,6 +52,11 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [creditCardId, setCreditCardId] = useState("");
   const [date, setDate] = useState<Date>(new Date());
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  
+  // Track original values for due_date preservation logic
+  const [originalDate, setOriginalDate] = useState<Date | null>(null);
+  const [originalCardId, setOriginalCardId] = useState<string | null>(null);
+  const [originalDueDate, setOriginalDueDate] = useState<Date | null>(null);
   const [status, setStatus] = useState<"completed" | "pending">("completed");
   const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_card">("account");
   const [isCorporateExpense, setIsCorporateExpense] = useState(false);
@@ -143,6 +148,17 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setDate(isDuplicating ? new Date() : parseISO(sourceData.date));
       setDueDate(sourceData.due_date ? parseISO(sourceData.due_date) : null);
       setStatus(sourceData.status as "completed" | "pending");
+      
+      // Store original values for due_date preservation (only when editing, not duplicating)
+      if (!isDuplicating && transaction) {
+        setOriginalDate(parseISO(sourceData.date));
+        setOriginalCardId(sourceData.credit_card_id || null);
+        setOriginalDueDate(sourceData.due_date ? parseISO(sourceData.due_date) : null);
+      } else {
+        setOriginalDate(null);
+        setOriginalCardId(null);
+        setOriginalDueDate(null);
+      }
       setPaymentMethod(sourceData.credit_card_id ? "credit_card" : "account");
       setIsCorporateExpense(sourceData.is_corporate_expense || false);
       setIsReimbursable(sourceData.is_reimbursable || false);
@@ -172,6 +188,9 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setInstallmentNumber(1);
       setTotalInstallments(2);
       setDueDate(null);
+      setOriginalDate(null);
+      setOriginalCardId(null);
+      setOriginalDueDate(null);
     }
   }, [sourceData, open, isDuplicating, refundFrom]);
 
@@ -225,6 +244,16 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         // Se o usuário definiu uma data manual, usar ela
         if (dueDate) {
           return format(dueDate, "yyyy-MM-dd");
+        }
+        
+        // Se editando e NÃO mudou data nem cartão, preservar original
+        if (isEditing && originalDueDate) {
+          const dateChanged = !originalDate || format(date, "yyyy-MM-dd") !== format(originalDate, "yyyy-MM-dd");
+          const cardChanged = creditCardId !== originalCardId;
+          
+          if (!dateChanged && !cardChanged) {
+            return format(originalDueDate, "yyyy-MM-dd"); // Preserva original
+          }
         }
         
         if (paymentMethod !== "credit_card" || !creditCardId) return null;
