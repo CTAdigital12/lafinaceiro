@@ -18,34 +18,35 @@ export function useCreditCardInvoiceSync() {
 
   const recalculateInvoice = useMutation({
     mutationFn: async (creditCardId: string) => {
-      // Fetch all transactions for this credit card
+      // Fetch all transactions for this credit card (expenses + payments)
       const { data: transactions, error: txError } = await supabase
         .from("transactions")
         .select("amount, type, status, is_refund, is_card_payment")
-        .eq("credit_card_id", creditCardId)
-        .eq("type", "expense");
+        .eq("credit_card_id", creditCardId);
 
       if (txError) throw txError;
 
       // Calculate net invoice:
-      // - Add completed non-refund transactions
-      // - Subtract refund transactions
-      // - Exclude card payments (they're deductions from the invoice)
+      // + Completed expenses (non-refund, non-payment)
+      // - Refund transactions
+      // - Card payments (is_card_payment = true)
       let invoiceTotal = 0;
 
       for (const tx of transactions || []) {
-        // Skip card payments (these are invoice payments, not charges)
-        if (tx.is_card_payment) continue;
-        
         // Only count completed transactions
         if (tx.status !== "completed") continue;
 
-        if (tx.is_refund) {
-          // Refunds reduce the invoice
+        if (tx.is_card_payment) {
+          // Payments REDUCE the invoice balance
           invoiceTotal -= Number(tx.amount);
-        } else {
-          // Regular expenses increase the invoice
-          invoiceTotal += Number(tx.amount);
+        } else if (tx.type === "expense") {
+          if (tx.is_refund) {
+            // Refunds reduce the invoice
+            invoiceTotal -= Number(tx.amount);
+          } else {
+            // Regular expenses increase the invoice
+            invoiceTotal += Number(tx.amount);
+          }
         }
       }
 
