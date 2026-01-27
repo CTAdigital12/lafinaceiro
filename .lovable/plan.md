@@ -1,101 +1,111 @@
 
-# Plano: Corrigir Lógica de Exibição do Saldo Residual (v2)
 
-## Diagnóstico Detalhado
+# Plano: Corrigir Reconciliação para Faturas Pagas
 
-Analisando o banco de dados e o código, identifiquei o problema:
+## Problema Identificado
 
-| Variável | Valor Atual | Origem |
-|----------|-------------|--------|
-| `current_invoice` do cartão | R$ 93,90 | Tabela `credit_cards` |
-| `corporateTotal` | ~R$ 28.680 | Calculado das transações do período |
-| `myTotalToPay` | ~R$ 12.053 | Calculado das transações do período |
-| `hasTransactionsToPay` | `true` | Porque totais > 0 |
-| `calculatedResidual` | `0` | `Max(0, 93.90 - 40.733) = 0` |
-| **Resultado** | Seção não aparece | ❌ |
+A tela de "Conciliação de Faturas" mostra divergência mesmo quando a fatura já foi paga:
 
-**Causa raiz**: As transações antigas ainda existem no banco (a empresa pagou R$ 28.586,73, você pagou R$ 93,90). O sistema não "limpa" transações após pagamento - apenas atualiza o `current_invoice`. Por isso, ao calcular os totais, ele ainda vê R$ 40.733+ em transações.
+| Campo | Valor | Problema |
+|-------|-------|----------|
+| Total Banco | R$ 0,00 | Correto - fatura foi paga |
+| Total Lançamentos | R$ 40.733,78 | Transações ainda existem no histórico |
+| Diferença | -R$ 40.733,78 | Sistema considera como divergência |
+| Status do Cartão | "Paga" | Deveria indicar que está tudo certo |
 
-## Solução
+**Causa raiz**: A reconciliação compara `current_invoice` (zerado após pagamento) com a soma das transações do período (que continuam existindo). Não considera que a fatura já foi quitada.
 
-Detectar quando `current_invoice < transactionsTotal` (fatura parcialmente paga) e tratar TODO o saldo restante como residual, ocultando as seções de transações já pagas.
+## Solução Proposta
+
+Modificar a lógica de reconciliação para:
+1. Detectar quando a fatura foi paga (status = "paid" OU `current_invoice = 0`)
+2. Considerar as transações de pagamento (`is_card_payment = true`) como "baixa" do período
+3. Marcar como "Conciliado" quando: `transactionsTotal ≈ soma dos pagamentos`
 
 ## Mudanças Técnicas
 
-### Arquivo: `src/components/modals/PayInvoiceModal.tsx`
+### Arquivo 1: `src/hooks/useCreditCardReconciliation.ts`
 
-**Linhas 129-136 - Adicionar detecção de pagamento parcial:**
+**Alterações na query (linhas 64-84):**
+- Buscar também as transações de pagamento (`is_card_payment = true`) do período para contabilizar a baixa
 
+**Alterações no cálculo (linhas 86-155):**
 ```typescript
-const totalInvoice = Number(creditCard?.current_invoice || 0);
-const transactionsTotal = corporateTotal + myTotalToPay;
+// Adicionar: buscar pagamentos do período
+const paymentTransactions = transactions.filter(
+  (t) => t.credit_card_id === card.id && t.is_card_payment === true
+);
 
-// Detectar situação de pagamento parcial anterior:
-// Se current_invoice < total das transações, significa que já pagou parte
-// e o que sobra é residual (juros, taxas, ou diferença)
-const isPartiallyPaid = totalInvoice < transactionsTotal && totalInvoice > 0;
+// Soma dos pagamentos realizados no período
+const paidAmount = paymentTransactions.reduce(
+  (sum, t) => sum + Number(t.amount), 0
+);
 
-// Se parcialmente pago, TODO o saldo restante é residual
-// Caso contrário, calcular diferença entre fatura e transações
-const calculatedResidual = isPartiallyPaid 
-  ? totalInvoice 
-  : Math.max(0, totalInvoice - transactionsTotal);
+// Nova lógica de diferença:
+// Se bankInvoice = 0 e há pagamentos, a diferença é:
+// transactionsTotal - paidAmount (deve ser ~0 se tudo foi pago)
+const isPaid = card.status === 'paid' || bankInvoice === 0;
+const effectiveDifference = isPaid 
+  ? transactionsTotal - paidAmount  // Comparar lançamentos vs pagamentos
+  : bankInvoice - transactionsTotal; // Comparar banco vs lançamentos
 
-// Mostrar seção se há residual > 0
-const hasResidualBalance = calculatedResidual > 0;
-
-// Quando é pagamento parcial, ocultar seções de transações (já foram pagas)
-const shouldHideTransactionSections = isPartiallyPaid;
+// Divergência só se a diferença efetiva for significativa
+const hasDiscrepancy = Math.abs(effectiveDifference) > 0.01 && !isPaid;
 ```
 
-**Linhas 168-180 - Ajustar inicialização do estado:**
-
+**Adicionar ao retorno:**
 ```typescript
-const transTotal = corporateTotal + myTotalToPay;
-const isPartiallyPaid = Number(creditCard.current_invoice) < transTotal && Number(creditCard.current_invoice) > 0;
+return {
+  // ... campos existentes
+  isPaid: isPaid,
+  paidAmount: paidAmount,
+  effectiveDifference: effectiveDifference,
+};
+```
 
-const residual = isPartiallyPaid 
-  ? Number(creditCard.current_invoice) 
-  : Math.max(0, Number(creditCard.current_invoice) - transTotal);
+### Arquivo 2: `src/components/credit-cards/ReconciliationCard.tsx`
 
-setResidualAmount(residual.toFixed(2));
-setIncludeResidual(isPartiallyPaid && residual > 0); // Marcar automaticamente
+**Alterações no CardReconciliationItem (linhas 25-112):**
+- Se `card.isPaid === true`, mostrar badge "Paga" em vez de "Divergência"
+- Ocultar a mensagem de alerta quando a fatura está paga
 
-// Quando parcialmente pago, desmarcar seções de transações
-if (isPartiallyPaid) {
-  setIncludeCorporate(false);
-  setIncludePersonal(false);
+**Alterações no componente principal (linhas 115-287):**
+- Ajustar `hasAnyDiscrepancy` para não considerar cartões pagos
+- Mostrar mensagem diferente para faturas pagas: "Fatura quitada em [data]"
+
+### Interface CardReconciliation
+
+**Adicionar novos campos:**
+```typescript
+export interface CardReconciliation {
+  // ... campos existentes
+  isPaid: boolean;           // Se a fatura está quitada
+  paidAmount: number;        // Total pago no período
+  effectiveDifference: number; // Diferença real (considerando pagamentos)
 }
-```
-
-**Linhas 385+ e 500+ - Ocultar seções de transações quando parcialmente pago:**
-
-Na seção Corporativa (linha ~385):
-```typescript
-{corporateTotal > 0 && !shouldHideTransactionSections && (
-  <Collapsible>...</Collapsible>
-)}
-```
-
-Na seção Pessoal (linha ~440+):
-```typescript
-{!shouldHideTransactionSections && (
-  <Collapsible>...</Collapsible>
-)}
 ```
 
 ## Resultado Esperado
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Fatura R$ 93,90, transações R$ 40.733 | Seção não aparece, mostra "Corporativo R$ 28k" | Mostra apenas "Saldo Residual R$ 93,90" com checkbox marcado |
-| Fatura R$ 50.000, transações R$ 40.000 | Mostra R$ 10.000 residual | Sem mudança |
-| Fatura R$ 0 | Não aparece | Não aparece |
+| Fatura R$ 0, transações R$ 40.733, paga | "Divergência R$ -40.733" | "Paga ✓" |
+| Fatura R$ 93,90, transações R$ 40.733 | "Divergência R$ -40.639" | "Divergência R$ 93,90" (valor real) |
+| Fatura R$ 1.000, transações R$ 1.000 | "Conciliado ✓" | Sem mudança |
 
 ## Arquivos a Modificar
 
-1. **`src/components/modals/PayInvoiceModal.tsx`**
-   - Linhas 129-136: Adicionar detecção de `isPartiallyPaid` e ajustar `calculatedResidual`
-   - Linhas 168-180: Ajustar inicialização dos estados para marcar residual automaticamente
-   - Linha ~385: Ocultar seção corporativa quando `shouldHideTransactionSections`
-   - Linha ~440+: Ocultar seção pessoal quando `shouldHideTransactionSections`
+1. **`src/hooks/useCreditCardReconciliation.ts`**
+   - Buscar transações de pagamento na query
+   - Calcular `paidAmount` e `isPaid`
+   - Ajustar lógica de `difference` e `hasDiscrepancy`
+   - Adicionar novos campos ao retorno
+
+2. **`src/components/credit-cards/ReconciliationCard.tsx`**
+   - Mostrar status "Paga" para faturas quitadas
+   - Não mostrar alerta de divergência quando paga
+   - Ajustar mensagens e ícones
+
+3. **`src/hooks/useCreditCards.ts`** (opcional)
+   - Verificar se o status do cartão está sendo passado corretamente
+
