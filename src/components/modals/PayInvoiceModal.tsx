@@ -117,10 +117,11 @@ export function PayInvoiceModal({
     return new Date(invoiceYear, invoiceMonth - 1, dueDateNumber);
   }, [creditCard, invoiceMonth, invoiceYear]);
 
-  // Fetch bank payment candidates
+  // Fetch bank payment candidates based on my payment amount
   const totalInvoice = Number(creditCard?.current_invoice || 0);
+  const myPaymentAmount = parseFloat(personalAmount) || myTotalToPay;
   const { candidates: bankCandidates, isLoading: isLoadingCandidates } = useBankPaymentCandidates({
-    invoiceAmount: totalInvoice,
+    targetAmount: myPaymentAmount,
     dueDate,
     enabled: open && !!creditCard && personalPaymentType === "bank",
   });
