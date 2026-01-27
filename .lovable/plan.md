@@ -1,87 +1,137 @@
 
-# Plano: Corrigir Lógica do Saldo da Fatura
+# Relatório Detalhado: Despesas vs Fatura Paga
 
-## Problema Identificado
+## Objetivo
 
-O campo `current_invoice` está sendo calculado incorretamente:
+Criar um novo componente que exiba um relatório detalhado comparando:
+- Total de despesas registradas no sistema
+- Valor total pago ao banco
+- Identificação precisa de onde está a diferença de R$ 282,06
 
-| Campo | Valor Atual | Valor Esperado |
-|-------|-------------|----------------|
-| `current_invoice` | R$ 40.451,72 | R$ 0,00 (fatura paga) |
+## Arquivos a Criar
 
-### Causa Raiz
+### 1. `src/components/credit-cards/InvoiceDiscrepancyReport.tsx`
 
-O hook `useCreditCardInvoiceSync` calcula o saldo somando **todas as despesas de todos os tempos** e subtraindo apenas reembolsos, mas **não desconta os pagamentos** (`is_card_payment = true`).
+Novo componente que mostrará:
 
+**Seção 1: Resumo Geral**
 ```
-Cálculo atual:
-  Despesas: R$ 40.552,51
-- Reembolsos: R$ 100,79
-= R$ 40.451,72 (ERRADO - ignora pagamentos)
-
-Cálculo correto:
-  Despesas: R$ 40.552,51
-- Reembolsos: R$ 100,79
-- Pagamentos: R$ 40.733,78
-= R$ -282,06 → R$ 0,00 (arredondado para não ficar negativo)
+┌─────────────────────────────────────────────────────────────┐
+│  COMPARATIVO: DESPESAS vs PAGAMENTOS                        │
+├─────────────────────────────────────────────────────────────┤
+│  Despesas Brutas (sistema)       R$ 40.552,51   (141 trans) │
+│  Estornos (deduzidos)           -R$    100,79   (16 trans)  │
+│  ═══════════════════════════════════════════════════════════│
+│  Total Líquido (sistema)         R$ 40.451,72               │
+│                                                              │
+│  Pagamentos Realizados                                       │
+│    → Corporativo                 R$ 28.586,73               │
+│    → Pessoal                     R$ 12.147,05               │
+│  ───────────────────────────────────────────────────────────│
+│  Total Pagamentos                R$ 40.733,78               │
+│                                                              │
+│  DIFERENÇA (Pagamentos - Sistema)  R$ 282,06  ⚠️            │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Solução Proposta
+**Seção 2: Análise por Categoria (Empresa vs Pessoal)**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  DETALHAMENTO                   DESPESAS    PAGTO    DIFF   │
+├─────────────────────────────────────────────────────────────┤
+│  Corporativo                                                 │
+│    Despesas brutas              R$ 28.680,63                │
+│    Estornos corporativos        R$     0,00                 │
+│    Líquido corporativo          R$ 28.680,63                │
+│    Pagamento empresa           -R$ 28.586,73                │
+│    → Diferença                              -R$ 93,90  ✓    │
+│                                                              │
+│  Pessoal                                                     │
+│    Despesas brutas              R$ 11.871,88                │
+│    Estornos pessoais           -R$    100,79                │
+│    Líquido pessoal              R$ 11.771,09                │
+│    Pagamento pessoal           -R$ 12.147,05                │
+│    → Diferença                             +R$ 375,96  ⚠️   │
+│                                                              │
+│  SOMA DAS DIFERENÇAS                        +R$ 282,06      │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Arquivo: `src/hooks/useCreditCardInvoiceSync.ts`
+**Seção 3: Investigação da Diferença**
 
-Modificar a lógica de recálculo para **descontar os pagamentos** do saldo:
+Listar as possíveis causas:
+- Transações faltando no sistema
+- Transações marcadas com categoria errada (pessoal/corporativo)
+- Pagamentos registrados com valor incorreto
+
+**Seção 4: Lista de Transações Detalhada**
+
+Tabela expansível com:
+- Data | Descrição | Categoria | Valor | Origem (Importada/Manual) | Tipo (Pessoal/Corporativo)
+- Filtros por tipo, origem, e busca por texto
+- Ordenação por valor para encontrar discrepâncias
+
+**Seção 5: Lista de Pagamentos**
+
+Tabela mostrando todos os pagamentos (`is_card_payment = true`):
+- Data | Descrição | Valor | Tipo (Pessoal/Corporativo)
+
+## Arquivos a Modificar
+
+### 2. `src/components/credit-cards/ReconciliationDetailModal.tsx`
+
+Adicionar uma nova aba "Relatório de Divergência" que mostrará o componente `InvoiceDiscrepancyReport`.
+
+### 3. `src/hooks/useCreditCardReconciliation.ts`
+
+Adicionar campos extras ao retorno:
+- `grossExpenses` (despesas brutas, sem deduzir estornos)
+- `corporateGross` / `personalGross` (despesas brutas por tipo)
+- `paymentsByType` (pagamentos separados por pessoal/corporativo)
+
+## Fluxo de Uso
+
+1. Usuário acessa **Cartões de Crédito**
+2. Clica no cartão na seção **Conciliação de Faturas**
+3. No modal, vai para a aba **"Relatório de Divergência"**
+4. Visualiza a análise completa e pode:
+   - Expandir seções para ver transações
+   - Filtrar/buscar transações específicas
+   - Exportar relatório em CSV
+
+## Detalhes Técnicos
+
+O componente usará os dados já disponíveis do hook `useCreditCardReconciliation`, adicionando cálculos extras para:
 
 ```typescript
-// Buscar TODAS as transações do cartão (despesas + pagamentos)
-const { data: transactions, error: txError } = await supabase
-  .from("transactions")
-  .select("amount, type, status, is_refund, is_card_payment")
-  .eq("credit_card_id", creditCardId);
+// Calcular totais brutos (antes de deduzir estornos)
+const grossExpenses = transactions
+  .filter(t => !t.is_refund && !t.is_card_payment && t.status === 'completed')
+  .reduce((sum, t) => sum + Number(t.amount), 0);
 
-// Calcular o saldo:
-// + Despesas completadas (não reembolsos, não pagamentos)
-// - Reembolsos
-// - Pagamentos (is_card_payment = true)
-let invoiceTotal = 0;
+// Separar pagamentos por tipo
+const corporatePayments = transactions
+  .filter(t => t.is_card_payment && t.is_corporate_expense)
+  .reduce((sum, t) => sum + Number(t.amount), 0);
 
-for (const tx of transactions || []) {
-  if (tx.status !== "completed") continue;
-
-  if (tx.is_card_payment) {
-    // Pagamentos REDUZEM o saldo
-    invoiceTotal -= Number(tx.amount);
-  } else if (tx.type === "expense") {
-    if (tx.is_refund) {
-      invoiceTotal -= Number(tx.amount);
-    } else {
-      invoiceTotal += Number(tx.amount);
-    }
-  }
-}
-
-// Garantir que não fique negativo
-invoiceTotal = Math.max(0, invoiceTotal);
+const personalPayments = transactions
+  .filter(t => t.is_card_payment && !t.is_corporate_expense)
+  .reduce((sum, t) => sum + Number(t.amount), 0);
 ```
 
 ## Resultado Esperado
 
-Após a correção:
+Após implementação, você poderá:
 
-| Campo | Antes | Depois |
-|-------|-------|--------|
-| `current_invoice` | R$ 40.451,72 | R$ 0,00 |
-| Status visual | Mostra saldo pendente | Mostra fatura paga |
+1. **Ver exatamente** onde está a diferença de R$ 282,06
+2. **Identificar** que o pagamento pessoal (R$ 12.147,05) está R$ 375,96 maior que as despesas pessoais líquidas
+3. **Entender** que você cobriu R$ 93,90 de despesas corporativas
+4. **Investigar** se há transações mal categorizadas ou faltando
 
-## Impacto
+| Análise | Despesas | Pagamentos | Diferença |
+|---------|----------|------------|-----------|
+| Corporativo | R$ 28.680,63 | R$ 28.586,73 | -R$ 93,90 |
+| Pessoal | R$ 11.771,09 | R$ 12.147,05 | +R$ 375,96 |
+| **Total** | R$ 40.451,72 | R$ 40.733,78 | **+R$ 282,06** |
 
-1. **Tela de Cartões**: O card "Fatura Banco" mostrará R$ 0,00 para cartões com fatura paga
-2. **Reconciliação**: Continuará funcionando normalmente (já considera pagamentos)
-3. **Limite Disponível**: Será recalculado corretamente
-
-## Arquivos a Modificar
-
-1. **`src/hooks/useCreditCardInvoiceSync.ts`**
-   - Remover filtro `type.eq.expense` da query
-   - Adicionar lógica para descontar pagamentos do saldo
-   - Manter proteção contra valores negativos
+A diferença mostra que você pagou R$ 282,06 a mais do que as despesas registradas no sistema, sugerindo que há transações faltando ou valores incorretos.
