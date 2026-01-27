@@ -1,120 +1,68 @@
 
-# Plano: Permitir Pagamento de Saldo Restante da Fatura
+# Plano: Corrigir Exibição do Saldo Residual
 
 ## Contexto do Problema
 
-Após pagar a fatura parcialmente (baixa corporativa + vinculação de transação), o saldo restante do cartão é **R$ 93,90**. Porém, ao abrir o modal de pagamento:
+A seção "Saldo Residual" foi implementada mas **não está aparecendo** porque a condição de exibição está incorreta.
 
-1. O sistema calcula os totais com base nas transações ainda existentes
-2. Como as transações já foram "contabilizadas" nos pagamentos anteriores, os valores aparecem zerados ou incorretos
-3. O usuário não consegue pagar o saldo residual de R$ 93,90
+**Situação atual:**
+- `current_invoice` do cartão: **R$ 93,90**
+- `transactionsTotal` (soma das transações da fatura): **R$ 40.733+** (calculado pelo hook)
+- `calculatedResidual = Max(0, 93.90 - 40733) = 0`
+
+Como a soma das transações é maior que o saldo da fatura (porque você já pagou a maior parte), a seção não aparece.
+
+## Problema na Lógica
+
+A lógica assume que "saldo residual" = fatura - transações. Mas após pagamentos parciais, o `current_invoice` já foi atualizado para refletir o que sobrou. As transações antigas ainda existem no período, criando essa inconsistência.
 
 ## Solução Proposta
 
-Adicionar uma seção "Saldo Restante" no modal que permite pagar qualquer diferença entre o `current_invoice` do cartão e o que já foi calculado/pago.
+Alterar a condição para mostrar a seção sempre que `current_invoice > 0` **E** não há valores calculados para pagar (corporativo + pessoal já foram quitados ou estão zerados).
 
----
+## Mudanças no Arquivo
 
-## Mudanças Detalhadas
+### `src/components/modals/PayInvoiceModal.tsx`
 
-### 1. Arquivo: `src/components/modals/PayInvoiceModal.tsx`
-
-**Nova Seção - Saldo Residual:**
-- Adicionar uma seção "Saldo Restante" quando `current_invoice > 0` e os totais calculados são menores que o saldo
-- Permitir digitar manualmente o valor a pagar (pré-populado com `current_invoice`)
-- Opções: débito em conta OU vincular a transação existente
-
-**Mudanças na lógica:**
-```text
-Antes:
-├── Modal calcula totais apenas das transações
-├── Se totais = 0, não há o que pagar
-└── Usuário fica travado
-
-Depois:
-├── Modal verifica: current_invoice > transactionsTotal calculado?
-├── Se sim, mostra seção "Saldo Restante" com a diferença
-├── Permite pagar o saldo residual via conta ou vincular transação
-└── Campo de valor editável pré-populado com current_invoice atual
-```
-
-**Nova variável para detectar residual:**
+**Linha 130-132 - Alterar cálculo:**
 ```typescript
-const residualBalance = Math.max(0, totalInvoice - transactionsTotal);
-const hasResidualBalance = residualBalance > 0;
+// Antes
+const transactionsTotal = corporateTotal + myTotalToPay;
+const calculatedResidual = Math.max(0, totalInvoice - transactionsTotal);
+const hasResidualBalance = calculatedResidual > 0;
+
+// Depois
+// Se current_invoice > 0 mas não há valores de transações para pagar, 
+// é saldo residual (já pagou parcialmente, sobrou diferença)
+const hasTransactionsToPay = corporateTotal > 0 || myTotalToPay > 0;
+const calculatedResidual = hasTransactionsToPay 
+  ? Math.max(0, totalInvoice - (corporateTotal + myTotalToPay))
+  : totalInvoice; // Se não há transações, todo o saldo é residual
+const hasResidualBalance = totalInvoice > 0 && calculatedResidual > 0;
 ```
 
-**Nova seção no UI (após seção pessoal):**
+**Linha 165-167 - Ajustar inicialização:**
 ```typescript
-{hasResidualBalance && (
-  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
-    <h3 className="font-medium text-sm flex items-center gap-2">
-      ⚠️ Saldo Residual
-      <span className="text-muted-foreground font-normal">
-        ({formatCurrency(residualBalance)})
-      </span>
-    </h3>
-    <p className="text-xs text-muted-foreground">
-      Este valor não está vinculado a transações específicas (pode ser juros, IOF, taxas ou diferenças de importação).
-    </p>
-    // Checkbox para incluir + campo de valor + opções de pagamento
-  </div>
-)}
+// Depois
+const hasTransactions = corporateTotal > 0 || myTotalToPay > 0;
+const residual = hasTransactions 
+  ? Math.max(0, Number(creditCard.current_invoice) - corporateTotal - myTotalToPay)
+  : Number(creditCard.current_invoice);
+setResidualAmount(residual.toFixed(2));
+// Marcar automaticamente se todo o saldo é residual
+setIncludeResidual(residual > 0 && !hasTransactions);
 ```
 
-### 2. Atualizar hook `useCreditCards.ts` - `paySplitInvoice`
+## Resultado Esperado
 
-**Adicionar suporte a pagamento de saldo residual:**
-```typescript
-interface SplitPaymentParams {
-  // ... campos existentes ...
-  
-  // Nova seção para saldo residual
-  residualAmount: number;
-  includeResidual: boolean;
-  residualPaymentType: "bank" | "external";
-  residualAccountId: string | null;
-  residualLinkedTransactionId: string | null;
-}
-```
-
-### 3. Ajustar busca de candidatos para vincular
-
-O hook `useBankPaymentCandidates` já foi atualizado para buscar transações pelo valor digitado. Para o saldo residual de R$ 93,90, a busca funcionará se:
-- Faixa: 20% a 200% de R$ 93,90 = R$ 18,78 a R$ 187,80
-
----
-
-## Fluxo do Usuário Após a Mudança
-
-1. Usuário abre modal de pagamento do cartão
-2. Vê que os totais calculados são R$ 0 (pois já foram pagos)
-3. Porém, aparece seção "Saldo Residual: R$ 93,90"
-4. Usuário marca "Incluir saldo residual" 
-5. Escolhe: "Débito em conta" → seleciona conta OU "Vincular transação" → busca candidatos
-6. Confirma pagamento
-7. Fatura zerada
-
----
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Fatura R$ 93,90, sem transações do período | Seção não aparece | Aparece com valor R$ 93,90 |
+| Fatura R$ 1000, transações = R$ 800 | Aparece R$ 200 residual | Sem mudança |
+| Fatura R$ 0 | Não aparece | Não aparece |
 
 ## Arquivos a Modificar
 
 1. **`src/components/modals/PayInvoiceModal.tsx`**
-   - Adicionar cálculo de `residualBalance`
-   - Adicionar seção UI para saldo residual
-   - Adicionar estados: `includeResidual`, `residualAmount`, `residualPaymentType`, `residualAccountId`, `residualLinkedTransactionId`
-   - Passar novos parâmetros para `paySplitInvoice`
-
-2. **`src/hooks/useCreditCards.ts`**
-   - Atualizar interface `SplitPaymentParams`
-   - Implementar lógica para processar pagamento de saldo residual (similar à seção pessoal)
-
----
-
-## Impacto da Mudança
-
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Fatura com saldo residual | Não consegue pagar | Seção dedicada para pagar |
-| Valores calculados = 0 | Modal "vazio" | Mostra saldo real do cartão |
-| Juros/IOF/taxas não importados | Diferença fica pendente | Pode pagar como "saldo residual" |
+   - Linhas 130-132: Ajustar lógica de `calculatedResidual` e `hasResidualBalance`
+   - Linhas 165-167: Ajustar inicialização do estado `residualAmount` e `includeResidual`
