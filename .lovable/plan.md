@@ -1,89 +1,75 @@
 
-# Plano: Corrigir Reconciliação - Incluir Pagamentos na Query
+
+# Plano: Corrigir Vinculação de Pagamentos ao Cartão
 
 ## Problema Identificado
 
-A transação de pagamento de R$ 28.586,73 existe no banco de dados:
+A transação de pagamento pessoal não está vinculada ao cartão de crédito:
 
-| Campo | Valor |
-|-------|-------|
-| `description` | "Baixa Corporativa - Itaú Personnalité Black" |
-| `amount` | R$ 28.586,73 |
-| `type` | **`income`** (entrada na conta do cartão) |
-| `is_card_payment` | `true` |
-| `date` | 2026-01-15 |
-| `due_date` | NULL |
+| Transação | Valor | `credit_card_id` | Status |
+|-----------|-------|------------------|--------|
+| Baixa Corporativa | R$ 28.586,73 | `af7803d9-...` | Vinculado ao cartão |
+| FATURA PAGA PERSON MULTI | R$ 12.053,15 | **`NULL`** | Não vinculado ao cartão |
+| Residual (R$ 93,90) | - | - | Não registrado como pagamento |
 
-**Causa raiz**: A query do hook `useCreditCardReconciliation` filtra apenas:
-```typescript
-.eq("type", "expense")
-```
-
-Isso exclui as transações de pagamento que têm `type = 'income'`.
+Por isso a reconciliação mostra diferença de R$ 12.147,05:
+- Total lançamentos: R$ 40.733,78
+- Pagamentos encontrados: R$ 28.586,73 (só o corporativo, porque tem `credit_card_id`)
+- Diferença: R$ 12.147,05
 
 ## Solução
 
-Modificar a query para incluir transações de pagamento, permitindo calcular corretamente o `paidAmount`.
+Há duas abordagens possíveis:
 
-## Mudanças Técnicas
+### Opção A: Correção Manual dos Dados (Recomendada)
 
-### Arquivo: `src/hooks/useCreditCardReconciliation.ts`
+Atualizar a transação existente para vincular ao cartão correto:
 
-**Linhas 72-77 - Ajustar query para incluir pagamentos:**
-
-Antes:
-```typescript
-const { data, error } = await supabase
-  .from("transactions")
-  .select("*, categories(name, icon)")
-  .not("credit_card_id", "is", null)
-  .eq("type", "expense")
-  .or(`and(due_date.gte.${periodStart},...)`);
+```sql
+-- Vincular pagamento pessoal ao cartão
+UPDATE transactions 
+SET credit_card_id = 'af7803d9-fee2-4c24-a38f-50b312ef2245'
+WHERE id = '73e1331a-29db-4448-85ed-62b35281e34c';
 ```
 
-Depois:
-```typescript
-const { data, error } = await supabase
-  .from("transactions")
-  .select("*, categories(name, icon)")
-  .not("credit_card_id", "is", null)
-  // Include expenses OR payment transactions (is_card_payment = true)
-  .or(`type.eq.expense,is_card_payment.eq.true`)
-  .or(`and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`);
-```
+E criar a transação do pagamento residual (R$ 93,90) se ainda não existir.
 
-**Linhas 102-127 - Ajustar cálculos para excluir pagamentos do total de transações:**
+### Opção B: Melhorar a Lógica do Sistema (Alternativa)
 
-O `transactionsTotal` deve excluir as transações de pagamento (elas não são "gastos"):
+Modificar o modal de pagamento para garantir que **todas** as transações de pagamento (`is_card_payment = true`) sejam vinculadas ao cartão correspondente.
+
+**Arquivo:** `src/components/modals/PayInvoiceModal.tsx`
+
+Na função de criar transação de pagamento, garantir que `credit_card_id` seja sempre preenchido:
 
 ```typescript
-// Filter OUT payment transactions from expense calculations
-const expenseTransactions = cardTransactions.filter(
-  (t) => t.is_card_payment !== true
-);
-
-// Use expenseTransactions for calculating totals
-const completedTransactions = expenseTransactions.filter(
-  (t) => t.status === "completed"
-);
-// ... resto dos cálculos
+// Ao criar transação de pagamento
+const paymentTransaction = {
+  description: `Pagamento Fatura - ${creditCard.name}`,
+  amount: totalToPay,
+  type: "income", // ou "expense" dependendo da conta
+  is_card_payment: true,
+  credit_card_id: creditCard.id, // SEMPRE vincular ao cartão
+  account_id: selectedAccountId,
+  // ...
+};
 ```
 
-**Linhas 144-154 - Pagamentos agora serão incluídos:**
+## Arquivos a Modificar
 
-A lógica existente já busca `paymentTransactions` corretamente, mas agora elas estarão disponíveis porque a query as incluiu.
+1. **Correção de Dados (via SQL)**
+   - Atualizar `credit_card_id` da transação de R$ 12.053,15
+   - Opcionalmente criar transação de R$ 93,90 como pagamento
+
+2. **`src/components/modals/PayInvoiceModal.tsx`**
+   - Garantir que transações de pagamento sempre tenham `credit_card_id` preenchido
+   - Revisar lógica de criação de transações de baixa
 
 ## Resultado Esperado
 
 | Antes | Depois |
 |-------|--------|
-| Query: `type = expense` | Query: `type = expense OR is_card_payment = true` |
-| `paidAmount = 0` | `paidAmount = 28.586,73` |
-| `difference = 40.733 - 0 = 40.733` | `difference = 40.733 - 28.586 = 12.147` |
-| Exibe "Diferença: R$ 40.733" | Exibe diferença real ou "Paga" se `isPaid` |
+| Pagamentos: R$ 28.586,73 | Pagamentos: R$ 40.733,78 |
+| Diferença: R$ 12.147,05 | Diferença: R$ 0,00 |
+| Status: Divergência | Status: Paga |
 
-## Arquivos a Modificar
-
-1. **`src/hooks/useCreditCardReconciliation.ts`**
-   - Linhas 72-77: Ajustar query para incluir `is_card_payment = true`
-   - Linhas 102-127: Filtrar pagamentos do cálculo de `transactionsTotal`
