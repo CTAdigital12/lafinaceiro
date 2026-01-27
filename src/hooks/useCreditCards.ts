@@ -39,6 +39,12 @@ export interface SplitPaymentParams {
   personalPaymentType: "bank" | "external";
   accountId: string | null;
   linkToTransactionId: string | null;
+  // Residual balance section
+  residualAmount: number;
+  includeResidual: boolean;
+  residualPaymentType: "bank" | "external";
+  residualAccountId: string | null;
+  residualLinkedTransactionId: string | null;
   // General
   date: string;
 }
@@ -198,6 +204,11 @@ export function useCreditCards() {
         personalPaymentType,
         accountId,
         linkToTransactionId,
+        residualAmount,
+        includeResidual,
+        residualPaymentType,
+        residualAccountId,
+        residualLinkedTransactionId,
         date,
       } = params;
 
@@ -295,7 +306,77 @@ export function useCreditCards() {
         totalPaid += personalAmount;
       }
 
-      // 3. Update credit card invoice
+      // 3. Handle residual balance portion
+      if (includeResidual && residualAmount > 0) {
+        if (residualLinkedTransactionId) {
+          // Link to existing transaction
+          const { error: linkError } = await supabase
+            .from("transactions")
+            .update({ is_card_payment: true })
+            .eq("id", residualLinkedTransactionId);
+
+          if (linkError) throw linkError;
+        } else if (residualPaymentType === "bank" && residualAccountId) {
+          // Create bank debit transaction for residual
+          const { error: bankError } = await supabase.from("transactions").insert({
+            user_id: user?.id,
+            description: `Pagamento de saldo - ${creditCardName}`,
+            amount: residualAmount,
+            type: "expense",
+            date,
+            account_id: residualAccountId,
+            credit_card_id: null,
+            category_id: null,
+            status: "completed",
+            is_corporate_expense: false,
+            is_reimbursable: false,
+            is_refund: false,
+            is_card_payment: true,
+          });
+
+          if (bankError) throw bankError;
+
+          // Update account balance
+          const { data: account, error: accFetchError } = await supabase
+            .from("accounts")
+            .select("current_balance")
+            .eq("id", residualAccountId)
+            .single();
+
+          if (accFetchError) throw accFetchError;
+
+          const newBalance = Number(account.current_balance) - residualAmount;
+          const { error: accUpdateError } = await supabase
+            .from("accounts")
+            .update({ current_balance: newBalance })
+            .eq("id", residualAccountId);
+
+          if (accUpdateError) throw accUpdateError;
+        } else if (residualPaymentType === "external") {
+          // Create external payment record for residual
+          const { error: extError } = await supabase.from("transactions").insert({
+            user_id: user?.id,
+            description: `Pagamento Externo (Saldo) - ${creditCardName}`,
+            amount: residualAmount,
+            type: "income",
+            date,
+            account_id: null,
+            credit_card_id: creditCardId,
+            category_id: null,
+            status: "completed",
+            is_corporate_expense: false,
+            is_reimbursable: false,
+            is_refund: false,
+            is_card_payment: true,
+          });
+
+          if (extError) throw extError;
+        }
+
+        totalPaid += residualAmount;
+      }
+
+      // 4. Update credit card invoice
       if (totalPaid > 0) {
         const { data: card, error: cardFetchError } = await supabase
           .from("credit_cards")

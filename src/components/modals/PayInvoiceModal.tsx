@@ -109,6 +109,14 @@ export function PayInvoiceModal({
   const [personalOpen, setPersonalOpen] = useState(true);
   const [showItemsModal, setShowItemsModal] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  
+  // Residual balance state
+  const [includeResidual, setIncludeResidual] = useState(false);
+  const [residualAmount, setResidualAmount] = useState("0");
+  const [residualPaymentType, setResidualPaymentType] = useState<"bank" | "external">("bank");
+  const [residualAccountId, setResidualAccountId] = useState("");
+  const [residualLinkToTransaction, setResidualLinkToTransaction] = useState(false);
+  const [residualLinkedTransactionId, setResidualLinkedTransactionId] = useState("");
 
   // Calculate due date for bank payment candidates
   const dueDate = useMemo(() => {
@@ -119,11 +127,23 @@ export function PayInvoiceModal({
 
   // Fetch bank payment candidates based on my payment amount
   const totalInvoice = Number(creditCard?.current_invoice || 0);
+  const transactionsTotal = corporateTotal + myTotalToPay;
+  const calculatedResidual = Math.max(0, totalInvoice - transactionsTotal);
+  const hasResidualBalance = calculatedResidual > 0;
+  
   const myPaymentAmount = parseFloat(personalAmount) || myTotalToPay;
   const { candidates: bankCandidates, isLoading: isLoadingCandidates } = useBankPaymentCandidates({
     targetAmount: myPaymentAmount,
     dueDate,
     enabled: open && !!creditCard && personalPaymentType === "bank",
+  });
+
+  // Fetch candidates for residual balance linking
+  const residualSearchAmount = parseFloat(residualAmount) || calculatedResidual;
+  const { candidates: residualCandidates, isLoading: isLoadingResidualCandidates } = useBankPaymentCandidates({
+    targetAmount: residualSearchAmount,
+    dueDate,
+    enabled: open && !!creditCard && includeResidual && residualPaymentType === "bank" && residualLinkToTransaction,
   });
 
   // Reset form when modal opens
@@ -141,6 +161,14 @@ export function PayInvoiceModal({
       setSelectedItems([]);
       setCorporateOpen(corporateTotal > 0);
       setPersonalOpen(true);
+      // Reset residual state
+      const residual = Math.max(0, Number(creditCard.current_invoice) - corporateTotal - myTotalToPay);
+      setResidualAmount(residual.toFixed(2));
+      setIncludeResidual(residual > 0 && corporateTotal === 0 && myTotalToPay === 0);
+      setResidualPaymentType("bank");
+      setResidualAccountId("");
+      setResidualLinkToTransaction(false);
+      setResidualLinkedTransactionId("");
     }
   }, [open, creditCard, corporateTotal, myTotalToPay]);
 
@@ -149,8 +177,9 @@ export function PayInvoiceModal({
     let total = 0;
     if (includeCorporate) total += parseFloat(corporateAmount) || 0;
     if (includePersonal) total += parseFloat(personalAmount) || 0;
+    if (includeResidual) total += parseFloat(residualAmount) || 0;
     return total;
-  }, [includeCorporate, corporateAmount, includePersonal, personalAmount]);
+  }, [includeCorporate, corporateAmount, includePersonal, personalAmount, includeResidual, residualAmount]);
 
   const remainingAfterPayment = useMemo(() => {
     return Math.max(0, totalInvoice - totalToPay);
@@ -176,6 +205,11 @@ export function PayInvoiceModal({
         personalPaymentType,
         accountId: personalPaymentType === "bank" && !linkToTransaction ? accountId : null,
         linkToTransactionId: linkToTransaction ? linkedTransactionId : null,
+        residualAmount: parseFloat(residualAmount) || 0,
+        includeResidual,
+        residualPaymentType,
+        residualAccountId: residualPaymentType === "bank" && !residualLinkToTransaction ? residualAccountId : null,
+        residualLinkedTransactionId: residualLinkToTransaction ? residualLinkedTransactionId : null,
         date: format(date, "yyyy-MM-dd"),
       });
       onOpenChange(false);
@@ -194,8 +228,12 @@ export function PayInvoiceModal({
       if (linkToTransaction && !linkedTransactionId) return false;
       if (!linkToTransaction && !accountId) return false;
     }
+    if (includeResidual && residualPaymentType === "bank") {
+      if (residualLinkToTransaction && !residualLinkedTransactionId) return false;
+      if (!residualLinkToTransaction && !residualAccountId) return false;
+    }
     return true;
-  }, [totalToPay, includePersonal, personalPaymentType, linkToTransaction, linkedTransactionId, accountId]);
+  }, [totalToPay, includePersonal, personalPaymentType, linkToTransaction, linkedTransactionId, accountId, includeResidual, residualPaymentType, residualLinkToTransaction, residualLinkedTransactionId, residualAccountId]);
 
   // Handle item selection from review modal
   const handleItemsSelected = (itemIds: string[]) => {
@@ -575,6 +613,169 @@ export function PayInvoiceModal({
               </div>
             </Collapsible>
 
+            {/* Residual Balance Section */}
+            {hasResidualBalance && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 space-y-3">
+                <h3 className="font-medium text-sm flex items-center gap-2">
+                  ⚠️ Saldo Residual
+                  <span className="text-muted-foreground font-normal">
+                    ({formatCurrency(calculatedResidual)})
+                  </span>
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Este valor não está vinculado a transações específicas (pode ser juros, IOF, taxas ou diferenças de importação).
+                </p>
+
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="includeResidual"
+                    checked={includeResidual}
+                    onCheckedChange={(checked) => setIncludeResidual(!!checked)}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor="includeResidual"
+                      className="text-sm font-medium leading-none cursor-pointer"
+                    >
+                      Incluir saldo residual no pagamento
+                    </label>
+                  </div>
+                </div>
+
+                {includeResidual && (
+                  <div className="space-y-4 pl-6">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Valor a pagar</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                          R$
+                        </span>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          value={residualAmount}
+                          onChange={(e) => setResidualAmount(e.target.value)}
+                          className="pl-10 h-9"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-xs">Como você vai pagar?</Label>
+                      <RadioGroup
+                        value={residualPaymentType}
+                        onValueChange={(v) => {
+                          setResidualPaymentType(v as "bank" | "external");
+                          setResidualLinkToTransaction(false);
+                          setResidualLinkedTransactionId("");
+                        }}
+                        className="space-y-2"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="bank" id="residual-bank" />
+                          <Label htmlFor="residual-bank" className="text-sm cursor-pointer">
+                            Débito em conta bancária
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="external" id="residual-external" />
+                          <Label htmlFor="residual-external" className="text-sm cursor-pointer flex items-center gap-1">
+                            <ExternalLink className="h-3 w-3" />
+                            Já paguei externamente
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+
+                    {residualPaymentType === "bank" && (
+                      <div className="space-y-3">
+                        {/* Link to existing transaction */}
+                        <div className="flex items-start space-x-3">
+                          <Checkbox
+                            id="residualLinkToTransaction"
+                            checked={residualLinkToTransaction}
+                            onCheckedChange={(checked) => {
+                              setResidualLinkToTransaction(!!checked);
+                              if (!checked) setResidualLinkedTransactionId("");
+                            }}
+                          />
+                          <div className="grid gap-1.5 leading-none">
+                            <label
+                              htmlFor="residualLinkToTransaction"
+                              className="text-sm font-medium leading-none cursor-pointer flex items-center gap-1"
+                            >
+                              <LinkIcon className="h-3 w-3" />
+                              Vincular a transação existente
+                            </label>
+                            <p className="text-xs text-muted-foreground">
+                              Evita duplicidade se você já importou o extrato.
+                            </p>
+                          </div>
+                        </div>
+
+                        {residualLinkToTransaction ? (
+                          <Select value={residualLinkedTransactionId} onValueChange={setResidualLinkedTransactionId}>
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Selecione a transação" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {isLoadingResidualCandidates ? (
+                                <div className="p-2 text-center text-sm text-muted-foreground">
+                                  Carregando...
+                                </div>
+                              ) : residualCandidates.length === 0 ? (
+                                <div className="p-2 text-center text-sm text-muted-foreground">
+                                  Nenhuma transação encontrada
+                                </div>
+                              ) : (
+                                residualCandidates.map((tx) => (
+                                  <SelectItem key={tx.id} value={tx.id}>
+                                    <span className="flex items-center gap-2 text-xs">
+                                      <span className="truncate max-w-[180px]">{tx.description}</span>
+                                      <span className="text-muted-foreground">
+                                        {formatCurrency(tx.amount)}
+                                      </span>
+                                    </span>
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Select value={residualAccountId} onValueChange={setResidualAccountId}>
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Selecione a conta" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {bankAccounts.map((acc) => (
+                                <SelectItem key={acc.id} value={acc.id}>
+                                  <span className="flex items-center gap-2">
+                                    <span>{acc.icon}</span>
+                                    <span>{acc.name}</span>
+                                    <span className="text-muted-foreground text-xs">
+                                      ({formatCurrency(Number(acc.current_balance))})
+                                    </span>
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    )}
+
+                    {residualPaymentType === "external" && (
+                      <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                        Não altera saldo de nenhuma conta, apenas baixa a fatura.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Payment Summary */}
             <div className="rounded-lg border bg-primary/5 p-4 space-y-3">
               <h3 className="font-medium text-sm flex items-center gap-2">
@@ -599,6 +800,19 @@ export function PayInvoiceModal({
                         : "Pagamento externo"}
                     </span>
                     <span className="font-medium">{formatCurrency(parseFloat(personalAmount))}</span>
+                  </div>
+                )}
+
+                {includeResidual && parseFloat(residualAmount) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      Saldo residual {residualPaymentType === "bank"
+                        ? residualLinkToTransaction
+                          ? "(vincular)"
+                          : "(débito)"
+                        : "(externo)"}
+                    </span>
+                    <span className="font-medium">{formatCurrency(parseFloat(residualAmount))}</span>
                   </div>
                 )}
 
