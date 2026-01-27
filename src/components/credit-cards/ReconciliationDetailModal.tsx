@@ -37,8 +37,10 @@ import {
   Download,
   FileDown,
   PenLine,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { InvoiceDiscrepancyReport } from "./InvoiceDiscrepancyReport";
 import { InvoiceBreakdownCard } from "./InvoiceBreakdownCard";
 
 interface Transaction {
@@ -225,6 +227,10 @@ export function ReconciliationDetailModal({
         <Tabs defaultValue="transactions" className="flex-1 flex flex-col min-h-0">
           <TabsList className="w-full justify-start">
             <TabsTrigger value="transactions">Transações</TabsTrigger>
+            <TabsTrigger value="discrepancy" className="flex items-center gap-1">
+              <BarChart3 className="h-3 w-3" />
+              Divergência
+            </TabsTrigger>
             <TabsTrigger value="breakdown">Como Foi Calculado</TabsTrigger>
           </TabsList>
 
@@ -390,6 +396,16 @@ export function ReconciliationDetailModal({
                 </p>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="discrepancy" className="flex-1 min-h-0 mt-3">
+            <ScrollArea className="h-full">
+              <InvoiceDiscrepancyReport
+                transactions={transactions}
+                cardId={cardId}
+                cardName={cardName}
+              />
+            </ScrollArea>
           </TabsContent>
 
           <TabsContent value="breakdown" className="flex-1 min-h-0 mt-3">
