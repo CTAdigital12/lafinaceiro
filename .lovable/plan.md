@@ -1,45 +1,87 @@
 
-
-# Plano: Corrigir Vinculação do Pagamento Residual
+# Plano: Corrigir Lógica do Saldo da Fatura
 
 ## Problema Identificado
 
-A transação de pagamento residual de R$ 93,90 não está vinculada ao cartão de crédito:
+O campo `current_invoice` está sendo calculado incorretamente:
 
-| Campo | Valor |
-|-------|-------|
-| `id` | `27539968-e9cc-4c8f-807b-51e6b61aac79` |
-| `description` | "PAG BOLETO ITAU UNIBANCO HOLDING S A" |
-| `amount` | R$ 93,90 |
-| `is_card_payment` | `true` |
-| `credit_card_id` | **`NULL`** (deveria ser o ID do cartão) |
-| `date` | 2026-01-15 |
+| Campo | Valor Atual | Valor Esperado |
+|-------|-------------|----------------|
+| `current_invoice` | R$ 40.451,72 | R$ 0,00 (fatura paga) |
 
-Por isso a reconciliação ainda mostra R$ 93,90 de diferença:
-- Total lançamentos: R$ 40.733,78
-- Pagamentos encontrados: R$ 40.639,88 (corporativo + pessoal)
-- Diferença: R$ 93,90 (este pagamento não está vinculado)
+### Causa Raiz
 
-## Solução
+O hook `useCreditCardInvoiceSync` calcula o saldo somando **todas as despesas de todos os tempos** e subtraindo apenas reembolsos, mas **não desconta os pagamentos** (`is_card_payment = true`).
 
-Atualizar a transação para vincular ao cartão correto:
+```
+Cálculo atual:
+  Despesas: R$ 40.552,51
+- Reembolsos: R$ 100,79
+= R$ 40.451,72 (ERRADO - ignora pagamentos)
 
-```sql
-UPDATE transactions 
-SET credit_card_id = 'af7803d9-fee2-4c24-a38f-50b312ef2245'
-WHERE id = '27539968-e9cc-4c8f-807b-51e6b61aac79';
+Cálculo correto:
+  Despesas: R$ 40.552,51
+- Reembolsos: R$ 100,79
+- Pagamentos: R$ 40.733,78
+= R$ -282,06 → R$ 0,00 (arredondado para não ficar negativo)
+```
+
+## Solução Proposta
+
+### Arquivo: `src/hooks/useCreditCardInvoiceSync.ts`
+
+Modificar a lógica de recálculo para **descontar os pagamentos** do saldo:
+
+```typescript
+// Buscar TODAS as transações do cartão (despesas + pagamentos)
+const { data: transactions, error: txError } = await supabase
+  .from("transactions")
+  .select("amount, type, status, is_refund, is_card_payment")
+  .eq("credit_card_id", creditCardId);
+
+// Calcular o saldo:
+// + Despesas completadas (não reembolsos, não pagamentos)
+// - Reembolsos
+// - Pagamentos (is_card_payment = true)
+let invoiceTotal = 0;
+
+for (const tx of transactions || []) {
+  if (tx.status !== "completed") continue;
+
+  if (tx.is_card_payment) {
+    // Pagamentos REDUZEM o saldo
+    invoiceTotal -= Number(tx.amount);
+  } else if (tx.type === "expense") {
+    if (tx.is_refund) {
+      invoiceTotal -= Number(tx.amount);
+    } else {
+      invoiceTotal += Number(tx.amount);
+    }
+  }
+}
+
+// Garantir que não fique negativo
+invoiceTotal = Math.max(0, invoiceTotal);
 ```
 
 ## Resultado Esperado
 
-| Antes | Depois |
-|-------|--------|
-| Pagamentos: R$ 40.639,88 | Pagamentos: R$ 40.733,78 |
-| Diferença: R$ 93,90 | Diferença: R$ 0,00 |
-| Status: Divergência | Status: Paga |
+Após a correção:
+
+| Campo | Antes | Depois |
+|-------|-------|--------|
+| `current_invoice` | R$ 40.451,72 | R$ 0,00 |
+| Status visual | Mostra saldo pendente | Mostra fatura paga |
+
+## Impacto
+
+1. **Tela de Cartões**: O card "Fatura Banco" mostrará R$ 0,00 para cartões com fatura paga
+2. **Reconciliação**: Continuará funcionando normalmente (já considera pagamentos)
+3. **Limite Disponível**: Será recalculado corretamente
 
 ## Arquivos a Modificar
 
-1. **Correção de Dados (via SQL)**
-   - Atualizar `credit_card_id` da transação de R$ 93,90
-
+1. **`src/hooks/useCreditCardInvoiceSync.ts`**
+   - Remover filtro `type.eq.expense` da query
+   - Adicionar lógica para descontar pagamentos do saldo
+   - Manter proteção contra valores negativos
