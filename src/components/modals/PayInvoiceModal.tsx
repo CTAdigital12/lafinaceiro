@@ -127,9 +127,13 @@ export function PayInvoiceModal({
 
   // Fetch bank payment candidates based on my payment amount
   const totalInvoice = Number(creditCard?.current_invoice || 0);
-  const transactionsTotal = corporateTotal + myTotalToPay;
-  const calculatedResidual = Math.max(0, totalInvoice - transactionsTotal);
-  const hasResidualBalance = calculatedResidual > 0;
+  // Se current_invoice > 0 mas não há valores de transações para pagar, 
+  // é saldo residual (já pagou parcialmente, sobrou diferença)
+  const hasTransactionsToPay = corporateTotal > 0 || myTotalToPay > 0;
+  const calculatedResidual = hasTransactionsToPay 
+    ? Math.max(0, totalInvoice - (corporateTotal + myTotalToPay))
+    : totalInvoice; // Se não há transações, todo o saldo é residual
+  const hasResidualBalance = totalInvoice > 0 && calculatedResidual > 0;
   
   const myPaymentAmount = parseFloat(personalAmount) || myTotalToPay;
   const { candidates: bankCandidates, isLoading: isLoadingCandidates } = useBankPaymentCandidates({
@@ -162,9 +166,13 @@ export function PayInvoiceModal({
       setCorporateOpen(corporateTotal > 0);
       setPersonalOpen(true);
       // Reset residual state
-      const residual = Math.max(0, Number(creditCard.current_invoice) - corporateTotal - myTotalToPay);
+      const hasTransactions = corporateTotal > 0 || myTotalToPay > 0;
+      const residual = hasTransactions 
+        ? Math.max(0, Number(creditCard.current_invoice) - corporateTotal - myTotalToPay)
+        : Number(creditCard.current_invoice);
       setResidualAmount(residual.toFixed(2));
-      setIncludeResidual(residual > 0 && corporateTotal === 0 && myTotalToPay === 0);
+      // Marcar automaticamente se todo o saldo é residual
+      setIncludeResidual(residual > 0 && !hasTransactions);
       setResidualPaymentType("bank");
       setResidualAccountId("");
       setResidualLinkToTransaction(false);
