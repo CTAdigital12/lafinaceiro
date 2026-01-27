@@ -29,9 +29,37 @@ function CardReconciliationItem({
   card: CardReconciliation;
   onViewDetails: () => void;
 }) {
-  const matchPercent = card.bankInvoice > 0 
-    ? Math.min(100, (card.transactionsTotal / card.bankInvoice) * 100) 
-    : card.transactionsTotal === 0 ? 100 : 0;
+  const matchPercent = card.isPaid 
+    ? 100 
+    : card.bankInvoice > 0 
+      ? Math.min(100, (card.transactionsTotal / card.bankInvoice) * 100) 
+      : card.transactionsTotal === 0 ? 100 : 0;
+
+  // Determine badge to show based on status
+  const getBadge = () => {
+    if (card.isPaid) {
+      return (
+        <Badge variant="secondary" className="bg-income/10 text-income text-xs">
+          <CheckCircle className="h-3 w-3 mr-1" />
+          Paga
+        </Badge>
+      );
+    }
+    if (card.hasDiscrepancy) {
+      return (
+        <Badge variant="secondary" className="bg-chart-4/10 text-chart-4 text-xs">
+          <AlertTriangle className="h-3 w-3 mr-1" />
+          Divergência
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="secondary" className="bg-income/10 text-income text-xs">
+        <CheckCircle className="h-3 w-3 mr-1" />
+        Conciliado
+      </Badge>
+    );
+  };
 
   return (
     <div 
@@ -44,17 +72,7 @@ function CardReconciliationItem({
           <span className="font-medium text-sm">{card.creditCardName}</span>
         </div>
         <div className="flex items-center gap-2">
-          {card.hasDiscrepancy ? (
-            <Badge variant="secondary" className="bg-chart-4/10 text-chart-4 text-xs">
-              <AlertTriangle className="h-3 w-3 mr-1" />
-              Divergência
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="bg-income/10 text-income text-xs">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Conciliado
-            </Badge>
-          )}
+          {getBadge()}
           <FileText className="h-4 w-4 text-muted-foreground" />
         </div>
       </div>
@@ -252,7 +270,8 @@ export function ReconciliationCard({
           </div>
         )}
 
-      {reconciliation.hasAnyDiscrepancy && Math.abs(reconciliation.totalDifference) > 0.01 && (
+      {/* Only show discrepancy alert if there are cards with real discrepancies (not paid) */}
+      {reconciliation.cards.some(c => c.hasDiscrepancy && !c.isPaid) && Math.abs(reconciliation.totalDifference) > 0.01 && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-sm">
           <AlertTriangle className="h-4 w-4 text-chart-4 mt-0.5 flex-shrink-0" />
           <div>

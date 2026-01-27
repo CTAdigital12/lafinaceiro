@@ -15,6 +15,8 @@ export interface CardReconciliation {
   hasDiscrepancy: boolean;
   corporateTotal: number; // Sum of corporate expenses
   personalTotal: number; // transactionsTotal - corporateTotal
+  isPaid: boolean; // Whether the invoice has been paid
+  paidAmount: number; // Total payments made for this card in the period
 }
 
 export interface ReconciliationSummary {
@@ -138,7 +140,33 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
     const personalTotal = personalNormal - personalRefunds;
 
     const bankInvoice = Number(card.current_invoice);
-    const difference = bankInvoice - transactionsTotal;
+    
+    // Find payment transactions for this card (is_card_payment = true)
+    // These are transactions that represent invoice payments
+    const paymentTransactions = cardTransactions.filter(
+      (t) => t.is_card_payment === true
+    );
+    
+    // Sum of payments made for this card in the period
+    const paidAmount = paymentTransactions.reduce(
+      (sum, t) => sum + Number(t.amount),
+      0
+    );
+    
+    // Detect if invoice is paid:
+    // - status is 'paid' OR
+    // - current_invoice is 0 and there are payments
+    const isPaid = card.status === 'paid' || (bankInvoice === 0 && paidAmount > 0);
+    
+    // Calculate difference based on payment status:
+    // - If paid: compare transactions vs payments (should be ~0 if fully paid)
+    // - If not paid: compare bank invoice vs transactions
+    const difference = isPaid 
+      ? transactionsTotal - paidAmount
+      : bankInvoice - transactionsTotal;
+    
+    // Only show discrepancy if difference is significant AND invoice is not paid
+    const hasDiscrepancy = Math.abs(difference) > 0.01 && !isPaid;
 
     return {
       creditCardId: card.id,
@@ -148,9 +176,11 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       pendingTotal,
       refundTotal,
       difference,
-      hasDiscrepancy: Math.abs(difference) > 0.01, // Allow for floating point errors
+      hasDiscrepancy,
       corporateTotal,
       personalTotal,
+      isPaid,
+      paidAmount,
     };
   });
 
