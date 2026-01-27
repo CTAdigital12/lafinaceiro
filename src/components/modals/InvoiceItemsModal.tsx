@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Building2, User, Check } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Building2, User, Check, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -34,11 +35,11 @@ export function InvoiceItemsModal({
   const [selected, setSelected] = useState<Set<string>>(new Set(selectedItems));
 
   // Reset selection when modal opens
-  useState(() => {
+  useEffect(() => {
     if (open) {
       setSelected(new Set(selectedItems));
     }
-  });
+  }, [open, selectedItems]);
 
   const toggleItem = (id: string) => {
     const newSelected = new Set(selected);
@@ -58,18 +59,23 @@ export function InvoiceItemsModal({
     }
   };
 
-  const { corporateSelected, personalSelected, totalSelected } = useMemo(() => {
+  const { corporateSelected, reimbursableSelected, personalSelected, myTotalSelected, totalSelected } = useMemo(() => {
     const selectedTxs = transactions.filter((t) => selected.has(t.id));
     const corporate = selectedTxs
       .filter((t) => t.is_corporate_expense && !t.is_refund)
       .reduce((sum, t) => sum + t.amount, 0);
+    const reimbursable = selectedTxs
+      .filter((t) => t.is_reimbursable && !t.is_corporate_expense && !t.is_refund)
+      .reduce((sum, t) => sum + t.amount, 0);
     const personal = selectedTxs
-      .filter((t) => !t.is_corporate_expense && !t.is_refund)
+      .filter((t) => !t.is_corporate_expense && !t.is_reimbursable && !t.is_refund)
       .reduce((sum, t) => sum + t.amount, 0);
     return {
       corporateSelected: corporate,
+      reimbursableSelected: reimbursable,
       personalSelected: personal,
-      totalSelected: corporate + personal,
+      myTotalSelected: reimbursable + personal,
+      totalSelected: corporate + reimbursable + personal,
     };
   }, [transactions, selected]);
 
@@ -78,9 +84,10 @@ export function InvoiceItemsModal({
     onOpenChange(false);
   };
 
-  // Separate transactions by type
+  // Separate transactions by type (3 categories now)
   const corporateTransactions = transactions.filter((t) => t.is_corporate_expense);
-  const personalTransactions = transactions.filter((t) => !t.is_corporate_expense);
+  const reimbursableTransactions = transactions.filter((t) => t.is_reimbursable && !t.is_corporate_expense);
+  const personalTransactions = transactions.filter((t) => !t.is_corporate_expense && !t.is_reimbursable);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -113,6 +120,9 @@ export function InvoiceItemsModal({
                   <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <Building2 className="h-3 w-3" />
                     Gastos Corporativos
+                    <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                      {corporateTransactions.length}
+                    </Badge>
                   </h4>
                   <div className="space-y-1">
                     {corporateTransactions.map((tx) => (
@@ -121,6 +131,31 @@ export function InvoiceItemsModal({
                         transaction={tx}
                         isSelected={selected.has(tx.id)}
                         onToggle={() => toggleItem(tx.id)}
+                        typeIcon="corporate"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Reimbursable Transactions */}
+              {reimbursableTransactions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <RefreshCw className="h-3 w-3" />
+                    Compras Reembolsáveis
+                    <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                      {reimbursableTransactions.length}
+                    </Badge>
+                  </h4>
+                  <div className="space-y-1">
+                    {reimbursableTransactions.map((tx) => (
+                      <TransactionItem
+                        key={tx.id}
+                        transaction={tx}
+                        isSelected={selected.has(tx.id)}
+                        onToggle={() => toggleItem(tx.id)}
+                        typeIcon="reimbursable"
                       />
                     ))}
                   </div>
@@ -133,6 +168,9 @@ export function InvoiceItemsModal({
                   <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <User className="h-3 w-3" />
                     Gastos Pessoais
+                    <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                      {personalTransactions.length}
+                    </Badge>
                   </h4>
                   <div className="space-y-1">
                     {personalTransactions.map((tx) => (
@@ -141,6 +179,7 @@ export function InvoiceItemsModal({
                         transaction={tx}
                         isSelected={selected.has(tx.id)}
                         onToggle={() => toggleItem(tx.id)}
+                        typeIcon="personal"
                       />
                     ))}
                   </div>
@@ -154,18 +193,29 @@ export function InvoiceItemsModal({
           {/* Summary */}
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Corporativo Selecionado</span>
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Building2 className="h-3 w-3" /> Corporativo
+              </span>
               <span className="font-medium">{formatCurrency(corporateSelected)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Pessoal Selecionado</span>
+              <span className="text-muted-foreground flex items-center gap-1">
+                <RefreshCw className="h-3 w-3" /> Reembolsáveis
+              </span>
+              <span className="font-medium">{formatCurrency(reimbursableSelected)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <User className="h-3 w-3" /> Pessoais
+              </span>
               <span className="font-medium">{formatCurrency(personalSelected)}</span>
             </div>
             <Separator />
             <div className="flex justify-between">
-              <span className="font-medium">Total Selecionado</span>
-              <span className="font-bold text-primary">{formatCurrency(totalSelected)}</span>
+              <span className="font-medium">💰 Meu Total a Pagar</span>
+              <span className="font-bold text-primary">{formatCurrency(myTotalSelected)}</span>
             </div>
+            <p className="text-xs text-muted-foreground">(Reembolsáveis + Pessoais)</p>
           </div>
         </div>
 
@@ -187,17 +237,28 @@ function TransactionItem({
   transaction,
   isSelected,
   onToggle,
+  typeIcon,
 }: {
   transaction: InvoiceTransaction;
   isSelected: boolean;
   onToggle: () => void;
+  typeIcon: "corporate" | "reimbursable" | "personal";
 }) {
+  const icons = {
+    corporate: <Building2 className="h-3 w-3 text-muted-foreground" />,
+    reimbursable: <RefreshCw className="h-3 w-3 text-amber-500" />,
+    personal: <User className="h-3 w-3 text-primary" />,
+  };
+
   return (
     <div
       className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
       onClick={onToggle}
     >
       <Checkbox checked={isSelected} onCheckedChange={onToggle} />
+      <div className="flex items-center gap-1.5">
+        {icons[typeIcon]}
+      </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{transaction.description}</p>
         <p className="text-xs text-muted-foreground">
