@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   ListChecks,
+  RefreshCw,
 } from "lucide-react";
 import { logError } from "@/lib/errorHandler";
 import {
@@ -82,7 +83,9 @@ export function PayInvoiceModal({
   const {
     transactions,
     corporateTotal,
+    reimbursableTotal,
     personalTotal,
+    myTotalToPay,
     isLoading: isLoadingTransactions,
   } = useInvoiceTransactions({
     creditCardId: creditCard?.id || "",
@@ -126,9 +129,9 @@ export function PayInvoiceModal({
   useEffect(() => {
     if (open && creditCard) {
       setCorporateAmount(corporateTotal.toFixed(2));
-      setPersonalAmount(personalTotal.toFixed(2));
+      setPersonalAmount(myTotalToPay.toFixed(2)); // Use myTotalToPay (reimbursable + personal)
       setIncludeCorporate(corporateTotal > 0);
-      setIncludePersonal(personalTotal > 0);
+      setIncludePersonal(myTotalToPay > 0);
       setAccountId("");
       setLinkedTransactionId("");
       setLinkToTransaction(false);
@@ -138,7 +141,7 @@ export function PayInvoiceModal({
       setCorporateOpen(corporateTotal > 0);
       setPersonalOpen(true);
     }
-  }, [open, creditCard, corporateTotal, personalTotal]);
+  }, [open, creditCard, corporateTotal, myTotalToPay]);
 
   // Calculate payment summary
   const totalToPay = useMemo(() => {
@@ -197,19 +200,25 @@ export function PayInvoiceModal({
   const handleItemsSelected = (itemIds: string[]) => {
     setSelectedItems(itemIds);
     
-    // Recalculate amounts based on selected items
+    // Recalculate amounts based on selected items (3 categories)
     const selectedTxs = transactions.filter((t) => itemIds.includes(t.id));
     const newCorporate = selectedTxs
       .filter((t) => t.is_corporate_expense && !t.is_refund)
       .reduce((sum, t) => sum + t.amount, 0);
-    const newPersonal = selectedTxs
-      .filter((t) => !t.is_corporate_expense && !t.is_refund)
+    const newReimbursable = selectedTxs
+      .filter((t) => t.is_reimbursable && !t.is_corporate_expense && !t.is_refund)
       .reduce((sum, t) => sum + t.amount, 0);
+    const newPersonal = selectedTxs
+      .filter((t) => !t.is_corporate_expense && !t.is_reimbursable && !t.is_refund)
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    // My part = reimbursable + personal
+    const myPart = newReimbursable + newPersonal;
 
     setCorporateAmount(newCorporate.toFixed(2));
-    setPersonalAmount(newPersonal.toFixed(2));
+    setPersonalAmount(myPart.toFixed(2));
     setIncludeCorporate(newCorporate > 0);
-    setIncludePersonal(newPersonal > 0);
+    setIncludePersonal(myPart > 0);
   };
 
   if (isLoadingTransactions) {
@@ -260,7 +269,7 @@ export function PayInvoiceModal({
                   </span>
                   <span className="text-sm font-medium text-slate-600">
                     {formatCurrency(corporateTotal)}
-                    {corporateTotal > 0 && (
+                    {corporateTotal > 0 && totalInvoice > 0 && (
                       <span className="text-xs text-muted-foreground ml-1">
                         ({Math.round((corporateTotal / totalInvoice) * 100)}%)
                       </span>
@@ -270,18 +279,45 @@ export function PayInvoiceModal({
                 
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground flex items-center gap-1">
+                    <RefreshCw className="h-3 w-3" />
+                    Compras Reembolsáveis
+                  </span>
+                  <span className="text-sm font-medium text-amber-600">
+                    {formatCurrency(reimbursableTotal)}
+                    {reimbursableTotal > 0 && totalInvoice > 0 && (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({Math.round((reimbursableTotal / totalInvoice) * 100)}%)
+                      </span>
+                    )}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground flex items-center gap-1">
                     <User className="h-3 w-3" />
-                    Meu Saldo Devedor
+                    Meus Gastos Pessoais
                   </span>
                   <span className="text-sm font-medium text-primary">
                     {formatCurrency(personalTotal)}
-                    {personalTotal > 0 && (
+                    {personalTotal > 0 && totalInvoice > 0 && (
                       <span className="text-xs text-muted-foreground ml-1">
                         ({Math.round((personalTotal / totalInvoice) * 100)}%)
                       </span>
                     )}
                   </span>
                 </div>
+
+                <Separator />
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium flex items-center gap-1">
+                    💰 Meu Total a Pagar
+                  </span>
+                  <span className="text-sm font-bold text-primary">
+                    {formatCurrency(myTotalToPay)}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">(Reembolsáveis + Pessoais)</p>
               </div>
 
               {/* Review Items Button */}
@@ -375,7 +411,7 @@ export function PayInvoiceModal({
                       <User className="h-4 w-4 text-primary" />
                       Minha Parte
                       <span className="text-muted-foreground font-normal">
-                        ({formatCurrency(personalTotal)})
+                        ({formatCurrency(myTotalToPay)})
                       </span>
                     </h3>
                     {personalOpen ? (

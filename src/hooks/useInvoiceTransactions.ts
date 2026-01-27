@@ -10,6 +10,7 @@ export interface InvoiceTransaction {
   date: string;
   due_date: string | null;
   is_corporate_expense: boolean;
+  is_reimbursable: boolean;
   is_refund: boolean;
   status: string;
   category_name: string | null;
@@ -47,6 +48,7 @@ export function useInvoiceTransactions({
           date,
           due_date,
           is_corporate_expense,
+          is_reimbursable,
           is_refund,
           status,
           categories(name, icon)
@@ -69,6 +71,7 @@ export function useInvoiceTransactions({
         date: t.date,
         due_date: t.due_date,
         is_corporate_expense: t.is_corporate_expense,
+        is_reimbursable: t.is_reimbursable,
         is_refund: t.is_refund,
         status: t.status,
         category_name: (t.categories as { name: string } | null)?.name || null,
@@ -78,35 +81,48 @@ export function useInvoiceTransactions({
     enabled: !!user && !!creditCardId && enabled,
   });
 
-  // Calculate totals
+  // Calculate totals with 3 categories
   const normalTransactions = transactions.filter((t) => !t.is_refund);
   const refundTransactions = transactions.filter((t) => t.is_refund);
 
+  // Corporate: is_corporate_expense = true
   const corporateNormal = normalTransactions
     .filter((t) => t.is_corporate_expense)
     .reduce((sum, t) => sum + t.amount, 0);
-
   const corporateRefunds = refundTransactions
     .filter((t) => t.is_corporate_expense)
     .reduce((sum, t) => sum + t.amount, 0);
-
-  const personalNormal = normalTransactions
-    .filter((t) => !t.is_corporate_expense)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const personalRefunds = refundTransactions
-    .filter((t) => !t.is_corporate_expense)
-    .reduce((sum, t) => sum + t.amount, 0);
-
   const corporateTotal = corporateNormal - corporateRefunds;
+
+  // Reimbursable: is_reimbursable = true AND is_corporate_expense = false
+  const reimbursableNormal = normalTransactions
+    .filter((t) => t.is_reimbursable && !t.is_corporate_expense)
+    .reduce((sum, t) => sum + t.amount, 0);
+  const reimbursableRefunds = refundTransactions
+    .filter((t) => t.is_reimbursable && !t.is_corporate_expense)
+    .reduce((sum, t) => sum + t.amount, 0);
+  const reimbursableTotal = reimbursableNormal - reimbursableRefunds;
+
+  // Personal: is_corporate_expense = false AND is_reimbursable = false
+  const personalNormal = normalTransactions
+    .filter((t) => !t.is_corporate_expense && !t.is_reimbursable)
+    .reduce((sum, t) => sum + t.amount, 0);
+  const personalRefunds = refundTransactions
+    .filter((t) => !t.is_corporate_expense && !t.is_reimbursable)
+    .reduce((sum, t) => sum + t.amount, 0);
   const personalTotal = personalNormal - personalRefunds;
-  const transactionsTotal = corporateTotal + personalTotal;
+
+  // My total to pay = reimbursable + personal (both come out of my pocket)
+  const myTotalToPay = reimbursableTotal + personalTotal;
+  const transactionsTotal = corporateTotal + reimbursableTotal + personalTotal;
 
   return {
     transactions,
     isLoading,
     corporateTotal,
+    reimbursableTotal,
     personalTotal,
+    myTotalToPay,
     transactionsTotal,
   };
 }
