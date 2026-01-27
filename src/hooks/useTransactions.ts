@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
 
 export interface Transaction {
   id: string;
@@ -49,6 +50,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const { month: contextMonth, year: contextYear } = useDate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { syncInvoiceForCard } = useCreditCardInvoiceSync();
 
   const { showAll = false, loadedCount = 20, filterByDueDate = false, creditCardFilter = null, searchQuery = "", useHybridDateFilter = false } = options;
 
@@ -143,11 +145,17 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         .single();
 
       if (error) throw error;
-      return { data, silent };
+      return { data, silent, creditCardId: sanitizedTransaction.credit_card_id };
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      
+      // Sync credit card invoice if this was a credit card transaction
+      if (result.creditCardId) {
+        await syncInvoiceForCard(result.creditCardId);
+      }
+      
       if (!result.silent) {
         toast({ title: "Transação criada com sucesso!" });
       }
@@ -161,6 +169,13 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   const updateTransaction = useMutation({
     mutationFn: async ({ id, ...transaction }: Partial<Transaction> & { id: string }) => {
+      // First, get the original transaction to check for credit card changes
+      const { data: original } = await supabase
+        .from("transactions")
+        .select("credit_card_id")
+        .eq("id", id)
+        .maybeSingle();
+
       const { data, error } = await supabase
         .from("transactions")
         .update(transaction)
@@ -169,11 +184,26 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         .single();
 
       if (error) throw error;
-      return data;
+      
+      // Return both old and new credit card IDs for syncing
+      return {
+        data,
+        oldCreditCardId: original?.credit_card_id,
+        newCreditCardId: transaction.credit_card_id ?? data.credit_card_id,
+      };
     },
-    onSuccess: () => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      
+      // Sync credit card invoices if affected
+      if (result.oldCreditCardId) {
+        await syncInvoiceForCard(result.oldCreditCardId);
+      }
+      if (result.newCreditCardId && result.newCreditCardId !== result.oldCreditCardId) {
+        await syncInvoiceForCard(result.newCreditCardId);
+      }
+      
       toast({ title: "Transação atualizada!" });
     },
     onError: (error: Error) => {
@@ -183,12 +213,27 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   const deleteTransaction = useMutation({
     mutationFn: async (id: string) => {
+      // First, get the transaction to know which credit card to sync
+      const { data: original } = await supabase
+        .from("transactions")
+        .select("credit_card_id")
+        .eq("id", id)
+        .maybeSingle();
+
       const { error } = await supabase.from("transactions").delete().eq("id", id);
       if (error) throw error;
+      
+      return { creditCardId: original?.credit_card_id };
     },
-    onSuccess: () => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      
+      // Sync credit card invoice if this was a credit card transaction
+      if (result.creditCardId) {
+        await syncInvoiceForCard(result.creditCardId);
+      }
+      
       toast({ title: "Transação excluída!" });
     },
     onError: (error: Error) => {

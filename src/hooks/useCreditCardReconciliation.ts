@@ -39,6 +39,8 @@ export interface ReconciliationTransaction {
   is_corporate_expense: boolean;
   credit_card_id: string;
   category_id: string | null;
+  imported_at: string | null;
+  is_card_payment: boolean | null;
 }
 
 interface UseCreditCardReconciliationOptions {

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -34,8 +35,11 @@ import {
   Briefcase,
   CreditCard,
   Download,
+  FileDown,
+  PenLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { InvoiceBreakdownCard } from "./InvoiceBreakdownCard";
 
 interface Transaction {
   id: string;
@@ -47,6 +51,8 @@ interface Transaction {
   is_refund: boolean;
   is_corporate_expense: boolean;
   credit_card_id: string;
+  imported_at?: string | null;
+  is_card_payment?: boolean | null;
   category?: { name: string; icon: string } | null;
 }
 
@@ -81,12 +87,14 @@ export function ReconciliationDetailModal({
 
   const cardTransactions = useMemo(() => {
     return transactions
-      .filter((t) => t.credit_card_id === cardId)
+      .filter((t) => t.credit_card_id === cardId && !t.is_card_payment)
       .filter((t) => {
         if (statusFilter !== "all" && t.status !== statusFilter) return false;
         if (typeFilter === "refund" && !t.is_refund) return false;
         if (typeFilter === "corporate" && !t.is_corporate_expense) return false;
         if (typeFilter === "personal" && (t.is_refund || t.is_corporate_expense)) return false;
+        if (typeFilter === "imported" && !t.imported_at) return false;
+        if (typeFilter === "manual" && t.imported_at) return false;
         if (search) {
           const searchLower = search.toLowerCase();
           return t.description.toLowerCase().includes(searchLower);
@@ -97,11 +105,13 @@ export function ReconciliationDetailModal({
   }, [transactions, cardId, search, statusFilter, typeFilter]);
 
   const stats = useMemo(() => {
-    const allCardTx = transactions.filter((t) => t.credit_card_id === cardId);
+    const allCardTx = transactions.filter((t) => t.credit_card_id === cardId && !t.is_card_payment);
     const completed = allCardTx.filter((t) => t.status === "completed" && !t.is_refund);
     const pending = allCardTx.filter((t) => t.status === "pending");
     const refunds = allCardTx.filter((t) => t.is_refund);
     const corporate = completed.filter((t) => t.is_corporate_expense);
+    const imported = completed.filter((t) => t.imported_at);
+    const manual = completed.filter((t) => !t.imported_at);
 
     return {
       completedTotal: completed.reduce((s, t) => s + Number(t.amount), 0),
@@ -111,6 +121,8 @@ export function ReconciliationDetailModal({
       completedCount: completed.length,
       pendingCount: pending.length,
       refundCount: refunds.length,
+      importedCount: imported.length,
+      manualCount: manual.length,
     };
   }, [transactions, cardId]);
 
@@ -182,8 +194,12 @@ export function ReconciliationDetailModal({
         {/* Stats Breakdown */}
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary" className="gap-1">
-            <CheckCircle className="h-3 w-3 text-income" />
-            {stats.completedCount} concluídas ({formatCurrency(stats.completedTotal)})
+            <FileDown className="h-3 w-3 text-primary" />
+            {stats.importedCount} importadas
+          </Badge>
+          <Badge variant="secondary" className="gap-1">
+            <PenLine className="h-3 w-3" />
+            {stats.manualCount} manuais
           </Badge>
           {stats.pendingCount > 0 && (
             <Badge variant="secondary" className="gap-1">
@@ -205,149 +221,187 @@ export function ReconciliationDetailModal({
           )}
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar transações..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Status</SelectItem>
-              <SelectItem value="completed">Concluídos</SelectItem>
-              <SelectItem value="pending">Pendentes</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Tipos</SelectItem>
-              <SelectItem value="personal">Pessoal</SelectItem>
-              <SelectItem value="corporate">Empresa</SelectItem>
-              <SelectItem value="refund">Estornos</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="icon" onClick={exportCSV} title="Exportar CSV">
-            <Download className="h-4 w-4" />
-          </Button>
-        </div>
+        {/* Tabs for Transactions and Breakdown */}
+        <Tabs defaultValue="transactions" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="w-full justify-start">
+            <TabsTrigger value="transactions">Transações</TabsTrigger>
+            <TabsTrigger value="breakdown">Como Foi Calculado</TabsTrigger>
+          </TabsList>
 
-        {/* Transactions Table */}
-        <ScrollArea className="flex-1 min-h-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cardTransactions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                    Nenhuma transação encontrada
-                  </TableCell>
-                </TableRow>
-              ) : (
-                cardTransactions.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="whitespace-nowrap">
-                      {format(new Date(t.date), "dd/MM/yyyy")}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {t.category?.icon && (
-                          <span className="text-sm">{t.category.icon}</span>
-                        )}
-                        <span className={cn(t.is_refund && "text-income")}>
-                          {t.description}
-                        </span>
-                        {t.is_refund && (
-                          <Badge variant="secondary" className="text-xs bg-income/10 text-income">
-                            <RotateCcw className="h-2.5 w-2.5 mr-0.5" />
-                            Estorno
-                          </Badge>
-                        )}
-                        {t.is_corporate_expense && !t.is_refund && (
-                          <Badge variant="secondary" className="text-xs">
-                            <Briefcase className="h-2.5 w-2.5 mr-0.5" />
-                            Empresa
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "text-xs",
-                          t.status === "completed"
-                            ? "bg-income/10 text-income"
-                            : "bg-primary/10 text-primary"
-                        )}
-                      >
-                        {t.status === "completed" ? "Concluído" : "Pendente"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      <span className={cn(
-                        "font-medium",
-                        t.is_refund ? "text-income" : "text-expense"
-                      )}>
-                        {t.is_refund ? "-" : ""}{formatCurrency(Number(t.amount))}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </ScrollArea>
-
-        {/* Analysis */}
-        {Math.abs(difference) > 0.01 && (
-          <div className="bg-chart-4/10 rounded-lg p-4 text-sm space-y-2">
-            <div className="flex items-center gap-2 font-medium text-chart-4">
-              <AlertTriangle className="h-4 w-4" />
-              Análise da Divergência
+          <TabsContent value="transactions" className="flex-1 flex flex-col min-h-0 space-y-3 mt-3">
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar transações..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos Status</SelectItem>
+                  <SelectItem value="completed">Concluídos</SelectItem>
+                  <SelectItem value="pending">Pendentes</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos Tipos</SelectItem>
+                  <SelectItem value="personal">Pessoal</SelectItem>
+                  <SelectItem value="corporate">Empresa</SelectItem>
+                  <SelectItem value="refund">Estornos</SelectItem>
+                  <SelectItem value="imported">Importadas</SelectItem>
+                  <SelectItem value="manual">Manuais</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="icon" onClick={exportCSV} title="Exportar CSV">
+                <Download className="h-4 w-4" />
+              </Button>
             </div>
-            <p className="text-muted-foreground">
-              {difference > 0 ? (
-                <>
-                  O banco mostra <strong className="text-foreground">{formatCurrency(difference)}</strong> a mais 
-                  que os lançamentos registrados. Possíveis causas:
-                  <ul className="list-disc list-inside mt-1 space-y-0.5">
-                    <li>Transações ainda não lançadas no sistema</li>
-                    <li>Compras parceladas com parcelas pendentes de registro</li>
-                    <li>Taxas ou encargos não registrados</li>
-                  </ul>
-                </>
-              ) : (
-                <>
-                  Os lançamentos mostram <strong className="text-foreground">{formatCurrency(difference)}</strong> a mais 
-                  que a fatura do banco. Possíveis causas:
-                  <ul className="list-disc list-inside mt-1 space-y-0.5">
-                    <li>Transações duplicadas no sistema</li>
-                    <li>Estornos não registrados</li>
-                    <li>Pagamentos parciais já efetuados</li>
-                  </ul>
-                </>
-              )}
-            </p>
-          </div>
-        )}
+
+            {/* Transactions Table */}
+            <ScrollArea className="flex-1 min-h-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead>Origem</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cardTransactions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                        Nenhuma transação encontrada
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    cardTransactions.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell className="whitespace-nowrap">
+                          {format(new Date(t.date), "dd/MM/yyyy")}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {t.category?.icon && (
+                              <span className="text-sm">{t.category.icon}</span>
+                            )}
+                            <span className={cn(t.is_refund && "text-income")}>
+                              {t.description}
+                            </span>
+                            {t.is_refund && (
+                              <Badge variant="secondary" className="text-xs bg-income/10 text-income">
+                                <RotateCcw className="h-2.5 w-2.5 mr-0.5" />
+                                Estorno
+                              </Badge>
+                            )}
+                            {t.is_corporate_expense && !t.is_refund && (
+                              <Badge variant="secondary" className="text-xs">
+                                <Briefcase className="h-2.5 w-2.5 mr-0.5" />
+                                Empresa
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-xs",
+                              t.imported_at ? "border-primary/30" : "border-muted-foreground/30"
+                            )}
+                          >
+                            {t.imported_at ? (
+                              <><FileDown className="h-2.5 w-2.5 mr-1" />Importada</>
+                            ) : (
+                              <><PenLine className="h-2.5 w-2.5 mr-1" />Manual</>
+                            )}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "text-xs",
+                              t.status === "completed"
+                                ? "bg-income/10 text-income"
+                                : "bg-primary/10 text-primary"
+                            )}
+                          >
+                            {t.status === "completed" ? "Concluído" : "Pendente"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          <span className={cn(
+                            "font-medium",
+                            t.is_refund ? "text-income" : "text-expense"
+                          )}>
+                            {t.is_refund ? "-" : ""}{formatCurrency(Number(t.amount))}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+
+            {/* Analysis */}
+            {Math.abs(difference) > 0.01 && (
+              <div className="bg-chart-4/10 rounded-lg p-4 text-sm space-y-2">
+                <div className="flex items-center gap-2 font-medium text-chart-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  Análise da Divergência
+                </div>
+                <p className="text-muted-foreground">
+                  {difference > 0 ? (
+                    <>
+                      O banco mostra <strong className="text-foreground">{formatCurrency(difference)}</strong> a mais 
+                      que os lançamentos registrados. Possíveis causas:
+                      <ul className="list-disc list-inside mt-1 space-y-0.5">
+                        <li>Transações ainda não lançadas no sistema</li>
+                        <li>Compras parceladas com parcelas pendentes de registro</li>
+                        <li>Taxas ou encargos não registrados</li>
+                      </ul>
+                    </>
+                  ) : (
+                    <>
+                      Os lançamentos mostram <strong className="text-foreground">{formatCurrency(Math.abs(difference))}</strong> a mais 
+                      que a fatura do banco. Possíveis causas:
+                      <ul className="list-disc list-inside mt-1 space-y-0.5">
+                        <li>Transações duplicadas no sistema</li>
+                        <li>Estornos não registrados</li>
+                        <li>Pagamentos parciais já efetuados</li>
+                      </ul>
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="breakdown" className="flex-1 min-h-0 mt-3">
+            <ScrollArea className="h-full">
+              <InvoiceBreakdownCard
+                transactions={transactions}
+                bankInvoice={bankInvoice}
+                cardId={cardId}
+              />
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
