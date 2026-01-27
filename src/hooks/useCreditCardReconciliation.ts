@@ -69,11 +69,12 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       // Include transactions where:
       // 1. due_date is within the period, OR
       // 2. due_date is NULL and date is within the period (for refunds/adjustments without due_date)
+      // Include expenses OR payment transactions (is_card_payment = true, which may be type = 'income')
       const { data, error } = await supabase
         .from("transactions")
         .select("*, categories(name, icon)")
         .not("credit_card_id", "is", null)
-        .eq("type", "expense")
+        .or(`type.eq.expense,is_card_payment.eq.true`)
         .or(`and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`);
 
       if (error) throw error;
@@ -91,10 +92,16 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       (t) => t.credit_card_id === card.id
     );
 
-    const completedTransactions = cardTransactions.filter(
+    // Separate expense transactions from payment transactions
+    // Payment transactions (is_card_payment = true) should not be counted as expenses
+    const expenseTransactions = cardTransactions.filter(
+      (t) => t.is_card_payment !== true
+    );
+
+    const completedTransactions = expenseTransactions.filter(
       (t) => t.status === "completed"
     );
-    const pendingTransactions = cardTransactions.filter(
+    const pendingTransactions = expenseTransactions.filter(
       (t) => t.status === "pending"
     );
 
