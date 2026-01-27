@@ -239,15 +239,15 @@ export function useCreditCards() {
       // 2. Handle personal portion
       if (includePersonal && personalAmount > 0) {
         if (linkToTransactionId) {
-          // Link to existing transaction
+          // Link to existing transaction - also set credit_card_id for reconciliation
           const { error: linkError } = await supabase
             .from("transactions")
-            .update({ is_card_payment: true })
+            .update({ is_card_payment: true, credit_card_id: creditCardId })
             .eq("id", linkToTransactionId);
 
           if (linkError) throw linkError;
         } else if (personalPaymentType === "bank" && accountId) {
-          // Create bank debit transaction
+          // Create bank debit transaction - linked to card for reconciliation
           const { error: bankError } = await supabase.from("transactions").insert({
             user_id: user?.id,
             description: `Pagamento de fatura - ${creditCardName}`,
@@ -255,7 +255,7 @@ export function useCreditCards() {
             type: "expense",
             date,
             account_id: accountId,
-            credit_card_id: null,
+            credit_card_id: creditCardId,
             category_id: null,
             status: "completed",
             is_corporate_expense: false,
@@ -309,15 +309,15 @@ export function useCreditCards() {
       // 3. Handle residual balance portion
       if (includeResidual && residualAmount > 0) {
         if (residualLinkedTransactionId) {
-          // Link to existing transaction
+          // Link to existing transaction - also set credit_card_id for reconciliation
           const { error: linkError } = await supabase
             .from("transactions")
-            .update({ is_card_payment: true })
+            .update({ is_card_payment: true, credit_card_id: creditCardId })
             .eq("id", residualLinkedTransactionId);
 
           if (linkError) throw linkError;
         } else if (residualPaymentType === "bank" && residualAccountId) {
-          // Create bank debit transaction for residual
+          // Create bank debit transaction for residual - linked to card for reconciliation
           const { error: bankError } = await supabase.from("transactions").insert({
             user_id: user?.id,
             description: `Pagamento de saldo - ${creditCardName}`,
@@ -325,7 +325,7 @@ export function useCreditCards() {
             type: "expense",
             date,
             account_id: residualAccountId,
-            credit_card_id: null,
+            credit_card_id: creditCardId,
             category_id: null,
             status: "completed",
             is_corporate_expense: false,
