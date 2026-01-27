@@ -127,13 +127,24 @@ export function PayInvoiceModal({
 
   // Fetch bank payment candidates based on my payment amount
   const totalInvoice = Number(creditCard?.current_invoice || 0);
-  // Se current_invoice > 0 mas não há valores de transações para pagar, 
-  // é saldo residual (já pagou parcialmente, sobrou diferença)
-  const hasTransactionsToPay = corporateTotal > 0 || myTotalToPay > 0;
-  const calculatedResidual = hasTransactionsToPay 
-    ? Math.max(0, totalInvoice - (corporateTotal + myTotalToPay))
-    : totalInvoice; // Se não há transações, todo o saldo é residual
-  const hasResidualBalance = totalInvoice > 0 && calculatedResidual > 0;
+  const transactionsTotal = corporateTotal + myTotalToPay;
+  
+  // Detectar situação de pagamento parcial anterior:
+  // Se current_invoice < total das transações, significa que já pagou parte
+  // e o que sobra é residual (juros, taxas, ou diferença)
+  const isPartiallyPaid = totalInvoice < transactionsTotal && totalInvoice > 0;
+  
+  // Se parcialmente pago, TODO o saldo restante é residual
+  // Caso contrário, calcular diferença entre fatura e transações
+  const calculatedResidual = isPartiallyPaid 
+    ? totalInvoice 
+    : Math.max(0, totalInvoice - transactionsTotal);
+  
+  // Mostrar seção se há residual > 0
+  const hasResidualBalance = calculatedResidual > 0;
+  
+  // Quando é pagamento parcial, ocultar seções de transações (já foram pagas)
+  const shouldHideTransactionSections = isPartiallyPaid;
   
   const myPaymentAmount = parseFloat(personalAmount) || myTotalToPay;
   const { candidates: bankCandidates, isLoading: isLoadingCandidates } = useBankPaymentCandidates({
@@ -166,17 +177,26 @@ export function PayInvoiceModal({
       setCorporateOpen(corporateTotal > 0);
       setPersonalOpen(true);
       // Reset residual state
-      const hasTransactions = corporateTotal > 0 || myTotalToPay > 0;
-      const residual = hasTransactions 
-        ? Math.max(0, Number(creditCard.current_invoice) - corporateTotal - myTotalToPay)
-        : Number(creditCard.current_invoice);
+      const transTotal = corporateTotal + myTotalToPay;
+      const isPartiallyPaidInit = Number(creditCard.current_invoice) < transTotal && Number(creditCard.current_invoice) > 0;
+      
+      const residual = isPartiallyPaidInit 
+        ? Number(creditCard.current_invoice) 
+        : Math.max(0, Number(creditCard.current_invoice) - transTotal);
+      
       setResidualAmount(residual.toFixed(2));
-      // Marcar automaticamente se todo o saldo é residual
-      setIncludeResidual(residual > 0 && !hasTransactions);
+      // Marcar automaticamente se é pagamento parcial
+      setIncludeResidual(isPartiallyPaidInit && residual > 0);
       setResidualPaymentType("bank");
       setResidualAccountId("");
-      setResidualLinkToTransaction(false);
+      setResidualLinkToTransaction(isPartiallyPaidInit); // Pre-select link option
       setResidualLinkedTransactionId("");
+      
+      // Quando parcialmente pago, desmarcar seções de transações
+      if (isPartiallyPaidInit) {
+        setIncludeCorporate(false);
+        setIncludePersonal(false);
+      }
     }
   }, [open, creditCard, corporateTotal, myTotalToPay]);
 
@@ -382,7 +402,7 @@ export function PayInvoiceModal({
             </div>
 
             {/* Corporate Section */}
-            {corporateTotal > 0 && (
+            {corporateTotal > 0 && !shouldHideTransactionSections && (
               <Collapsible open={corporateOpen} onOpenChange={setCorporateOpen}>
                 <div className="rounded-lg border p-4 space-y-3">
                   <CollapsibleTrigger asChild>
@@ -450,6 +470,7 @@ export function PayInvoiceModal({
             )}
 
             {/* Personal Section */}
+            {!shouldHideTransactionSections && (
             <Collapsible open={personalOpen} onOpenChange={setPersonalOpen}>
               <div className="rounded-lg border p-4 space-y-3">
                 <CollapsibleTrigger asChild>
@@ -620,6 +641,7 @@ export function PayInvoiceModal({
                 </CollapsibleContent>
               </div>
             </Collapsible>
+            )}
 
             {/* Residual Balance Section */}
             {hasResidualBalance && (
