@@ -14,13 +14,13 @@ export interface BankPaymentCandidate {
 }
 
 interface UseBankPaymentCandidatesOptions {
-  invoiceAmount: number;
+  targetAmount: number;
   dueDate: Date;
   enabled?: boolean;
 }
 
 export function useBankPaymentCandidates({
-  invoiceAmount,
+  targetAmount,
   dueDate,
   enabled = true,
 }: UseBankPaymentCandidatesOptions) {
@@ -30,15 +30,15 @@ export function useBankPaymentCandidates({
   const startDate = format(subDays(dueDate, 10), "yyyy-MM-dd");
   const endDate = format(addDays(dueDate, 5), "yyyy-MM-dd");
 
-  // Amount tolerance: 50% to 150% of invoice amount (to catch partial payments too)
-  const minAmount = invoiceAmount * 0.3;
-  const maxAmount = invoiceAmount * 1.5;
+  // Amount tolerance: 20% to 200% of target amount (to catch partial payments too)
+  const minAmount = targetAmount * 0.2;
+  const maxAmount = targetAmount * 2.0;
 
   const { data: candidates = [], isLoading } = useQuery({
     queryKey: [
       "bank-payment-candidates",
       user?.id,
-      invoiceAmount,
+      targetAmount,
       startDate,
       endDate,
     ],
@@ -59,7 +59,6 @@ export function useBankPaymentCandidates({
         .not("account_id", "is", null)
         .is("credit_card_id", null)
         .eq("type", "expense")
-        .eq("is_card_payment", false)
         .gte("date", startDate)
         .lte("date", endDate)
         .gte("amount", minAmount)
@@ -78,7 +77,7 @@ export function useBankPaymentCandidates({
         is_card_payment: t.is_card_payment || false,
       })) as BankPaymentCandidate[];
     },
-    enabled: !!user && enabled && invoiceAmount > 0,
+    enabled: !!user && enabled && targetAmount > 0,
   });
 
   return {
