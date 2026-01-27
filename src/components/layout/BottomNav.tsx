@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Home, List, Plus, CreditCard, Menu, LogOut, TrendingUp, Wallet, Tag, Calculator, FileText, Building2, Receipt, Settings, Layers, LucideIcon } from "lucide-react";
+import { Home, List, Plus, CreditCard, Menu, LogOut, TrendingUp, Wallet, Tag, Calculator, FileText, Building2, Receipt, Settings, Layers, History, LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +48,7 @@ const secondaryNavItems: NavItemWithPath[] = [
   { icon: FileText, label: "Relatórios", path: "/reports" },
   { icon: Building2, label: "Despesas Empresa", path: "/corporate-expenses" },
   { icon: Receipt, label: "Reembolsos", path: "/reimbursements" },
+  { icon: History, label: "Atividades", path: "/activities" },
   { icon: Settings, label: "Configurações", path: "/settings" },
 ];
 

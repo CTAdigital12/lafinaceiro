@@ -13,6 +13,7 @@ import {
   TrendingUp,
   BookMarked,
   ReceiptText,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -31,6 +32,7 @@ const navItems = [
   { icon: BarChart3, label: "Relatórios", path: "/reports" },
   { icon: Briefcase, label: "Despesas Empresa", path: "/corporate-expenses" },
   { icon: ReceiptText, label: "Reembolsos", path: "/reimbursements" },
+  { icon: History, label: "Atividades", path: "/activities" },
   { icon: Settings, label: "Configurações", path: "/settings" },
 ];
 
