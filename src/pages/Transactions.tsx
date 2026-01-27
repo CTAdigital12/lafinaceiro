@@ -434,7 +434,7 @@ export default function Transactions() {
   
   const tabTotalExpense = filteredTransactions
     .filter((t) => 
-      (t.type === "expense" && !t.is_refund) ||
+      (t.type === "expense" && !t.is_refund && !t.is_card_payment) ||
       (t.type === "income" && t.is_refund)
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
