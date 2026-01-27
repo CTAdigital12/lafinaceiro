@@ -398,13 +398,15 @@ export function ReconciliationDetailModal({
             )}
           </TabsContent>
 
-          <TabsContent value="discrepancy" className="flex-1 min-h-0 mt-3">
-            <ScrollArea className="h-full">
-              <InvoiceDiscrepancyReport
-                transactions={transactions}
-                cardId={cardId}
-                cardName={cardName}
-              />
+          <TabsContent value="discrepancy" className="flex-1 min-h-0 mt-3 overflow-hidden">
+            <ScrollArea className="h-[calc(90vh-320px)]">
+              <div className="pr-4">
+                <InvoiceDiscrepancyReport
+                  transactions={transactions}
+                  cardId={cardId}
+                  cardName={cardName}
+                />
+              </div>
             </ScrollArea>
           </TabsContent>
 
