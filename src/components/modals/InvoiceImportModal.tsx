@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { useDate } from "@/contexts/DateContext";
+import { parseCSVInvoice, convertToImportedItems } from "@/lib/csvInvoiceParser";
 
 interface InvoiceImportModalProps {
   open: boolean;
@@ -133,11 +134,15 @@ export function InvoiceImportModal({
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'image/png',
-      'image/jpeg'
+      'image/jpeg',
+      'text/csv',
     ];
     
-    if (!validTypes.includes(file.type)) {
-      setError("Formato não suportado. Use PDF, Excel ou imagem (PNG/JPG).");
+    // Also accept .csv files by extension since MIME type can vary
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
+    
+    if (!validTypes.includes(file.type) && !isCSV) {
+      setError("Formato não suportado. Use PDF, Excel, CSV ou imagem (PNG/JPG).");
       return;
     }
 
@@ -149,6 +154,51 @@ export function InvoiceImportModal({
     setFile(file);
   };
 
+  const processCSVFile = async (file: File): Promise<void> => {
+    const text = await file.text();
+    const month = parseInt(invoiceMonth);
+    const year = parseInt(invoiceYear);
+    
+    const transactions = parseCSVInvoice(text, {
+      invoiceMonth: month,
+      invoiceYear: year,
+      closingDay: closingDay,
+    });
+    
+    if (transactions.length === 0) {
+      throw new Error("Nenhuma transação encontrada no CSV. Verifique se o formato está correto.");
+    }
+    
+    const { items, post_closing_count } = convertToImportedItems(
+      transactions,
+      month,
+      year,
+      closingDay
+    );
+    
+    // Calculate due date (15th of invoice month by default)
+    const dueDate = `${year}-${String(month).padStart(2, "0")}-15`;
+    
+    // Calculate totals
+    const calculatedTotal = items.reduce((sum, item) => sum + item.transaction_value, 0);
+    
+    onImportComplete({
+      items,
+      future_installments: [],
+      post_closing_count,
+      invoice_month: month,
+      invoice_year: year,
+      closing_day: closingDay,
+      due_date: dueDate,
+      invoice_total: null,
+      calculated_total: calculatedTotal,
+      validation_warning: null,
+    });
+    
+    onOpenChange(false);
+    resetState();
+  };
+
   const processFile = async () => {
     if (!file) return;
 
@@ -156,6 +206,15 @@ export function InvoiceImportModal({
     setError(null);
 
     try {
+      // Check if it's a CSV file - process locally
+      const isCSV = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
+      
+      if (isCSV) {
+        await processCSVFile(file);
+        return;
+      }
+      
+      // For PDF/Excel/Images - call edge function
       const formData = new FormData();
       formData.append('file', file);
       formData.append('credit_card_id', creditCardId);
@@ -246,8 +305,8 @@ export function InvoiceImportModal({
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar Fatura</DialogTitle>
-          <DialogDescription>
-            {creditCardName} - Envie a fatura em PDF, Excel ou imagem
+        <DialogDescription>
+            {creditCardName} - Envie a fatura em PDF, Excel, CSV ou imagem
           </DialogDescription>
         </DialogHeader>
 
@@ -345,7 +404,7 @@ export function InvoiceImportModal({
             >
               <input
                 type="file"
-                accept=".pdf,.xls,.xlsx,.png,.jpg,.jpeg"
+                accept=".pdf,.xls,.xlsx,.png,.jpg,.jpeg,.csv"
                 onChange={handleFileSelect}
                 className="hidden"
                 id="invoice-file"
@@ -356,7 +415,7 @@ export function InvoiceImportModal({
                   Arraste o arquivo aqui ou clique para selecionar
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  PDF, Excel ou imagem (máx. 10MB)
+                  PDF, Excel, CSV ou imagem (máx. 10MB)
                 </p>
               </label>
             </div>
