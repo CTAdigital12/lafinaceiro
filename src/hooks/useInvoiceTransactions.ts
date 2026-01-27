@@ -1,0 +1,112 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { startOfMonth, endOfMonth, format } from "date-fns";
+
+export interface InvoiceTransaction {
+  id: string;
+  description: string;
+  amount: number;
+  date: string;
+  due_date: string | null;
+  is_corporate_expense: boolean;
+  is_refund: boolean;
+  status: string;
+  category_name: string | null;
+  category_icon: string | null;
+}
+
+interface UseInvoiceTransactionsOptions {
+  creditCardId: string;
+  month: number;
+  year: number;
+  enabled?: boolean;
+}
+
+export function useInvoiceTransactions({
+  creditCardId,
+  month,
+  year,
+  enabled = true,
+}: UseInvoiceTransactionsOptions) {
+  const { user } = useAuth();
+
+  const periodStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+  const periodEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: ["invoice-transactions", creditCardId, month, year],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(
+          `
+          id,
+          description,
+          amount,
+          date,
+          due_date,
+          is_corporate_expense,
+          is_refund,
+          status,
+          categories(name, icon)
+        `
+        )
+        .eq("credit_card_id", creditCardId)
+        .eq("type", "expense")
+        .eq("status", "completed")
+        .or(
+          `and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`
+        )
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map((t) => ({
+        id: t.id,
+        description: t.description,
+        amount: Number(t.amount),
+        date: t.date,
+        due_date: t.due_date,
+        is_corporate_expense: t.is_corporate_expense,
+        is_refund: t.is_refund,
+        status: t.status,
+        category_name: (t.categories as { name: string } | null)?.name || null,
+        category_icon: (t.categories as { icon: string } | null)?.icon || null,
+      })) as InvoiceTransaction[];
+    },
+    enabled: !!user && !!creditCardId && enabled,
+  });
+
+  // Calculate totals
+  const normalTransactions = transactions.filter((t) => !t.is_refund);
+  const refundTransactions = transactions.filter((t) => t.is_refund);
+
+  const corporateNormal = normalTransactions
+    .filter((t) => t.is_corporate_expense)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const corporateRefunds = refundTransactions
+    .filter((t) => t.is_corporate_expense)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const personalNormal = normalTransactions
+    .filter((t) => !t.is_corporate_expense)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const personalRefunds = refundTransactions
+    .filter((t) => !t.is_corporate_expense)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const corporateTotal = corporateNormal - corporateRefunds;
+  const personalTotal = personalNormal - personalRefunds;
+  const transactionsTotal = corporateTotal + personalTotal;
+
+  return {
+    transactions,
+    isLoading,
+    corporateTotal,
+    personalTotal,
+    transactionsTotal,
+  };
+}

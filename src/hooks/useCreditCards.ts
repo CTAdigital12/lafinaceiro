@@ -27,6 +27,22 @@ interface PayInvoiceParams {
   date: string;
 }
 
+export interface SplitPaymentParams {
+  creditCardId: string;
+  creditCardName: string;
+  // Corporate section
+  corporateAmount: number;
+  includeCorporate: boolean;
+  // Personal section
+  personalAmount: number;
+  includePersonal: boolean;
+  personalPaymentType: "bank" | "external";
+  accountId: string | null;
+  linkToTransactionId: string | null;
+  // General
+  date: string;
+}
+
 export function useCreditCards() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -117,7 +133,7 @@ export function useCreditCards() {
         is_corporate_expense: false,
         is_reimbursable: false,
         is_refund: false,
-        is_card_payment: true, // This marks it as card payment - excluded from reports
+        is_card_payment: true,
       });
 
       if (txError) throw txError;
@@ -170,6 +186,148 @@ export function useCreditCards() {
     },
   });
 
+  const paySplitInvoice = useMutation({
+    mutationFn: async (params: SplitPaymentParams) => {
+      const {
+        creditCardId,
+        creditCardName,
+        corporateAmount,
+        includeCorporate,
+        personalAmount,
+        includePersonal,
+        personalPaymentType,
+        accountId,
+        linkToTransactionId,
+        date,
+      } = params;
+
+      let totalPaid = 0;
+
+      // 1. Handle corporate portion
+      if (includeCorporate && corporateAmount > 0) {
+        const { error: corpError } = await supabase.from("transactions").insert({
+          user_id: user?.id,
+          description: `Baixa Corporativa - ${creditCardName}`,
+          amount: corporateAmount,
+          type: "income",
+          date,
+          account_id: null,
+          credit_card_id: creditCardId,
+          category_id: null,
+          status: "completed",
+          is_corporate_expense: true,
+          is_reimbursable: false,
+          is_refund: false,
+          is_card_payment: true,
+        });
+
+        if (corpError) throw corpError;
+        totalPaid += corporateAmount;
+      }
+
+      // 2. Handle personal portion
+      if (includePersonal && personalAmount > 0) {
+        if (linkToTransactionId) {
+          // Link to existing transaction
+          const { error: linkError } = await supabase
+            .from("transactions")
+            .update({ is_card_payment: true })
+            .eq("id", linkToTransactionId);
+
+          if (linkError) throw linkError;
+        } else if (personalPaymentType === "bank" && accountId) {
+          // Create bank debit transaction
+          const { error: bankError } = await supabase.from("transactions").insert({
+            user_id: user?.id,
+            description: `Pagamento de fatura - ${creditCardName}`,
+            amount: personalAmount,
+            type: "expense",
+            date,
+            account_id: accountId,
+            credit_card_id: null,
+            category_id: null,
+            status: "completed",
+            is_corporate_expense: false,
+            is_reimbursable: false,
+            is_refund: false,
+            is_card_payment: true,
+          });
+
+          if (bankError) throw bankError;
+
+          // Update account balance
+          const { data: account, error: accFetchError } = await supabase
+            .from("accounts")
+            .select("current_balance")
+            .eq("id", accountId)
+            .single();
+
+          if (accFetchError) throw accFetchError;
+
+          const newBalance = Number(account.current_balance) - personalAmount;
+          const { error: accUpdateError } = await supabase
+            .from("accounts")
+            .update({ current_balance: newBalance })
+            .eq("id", accountId);
+
+          if (accUpdateError) throw accUpdateError;
+        } else if (personalPaymentType === "external") {
+          // Create external payment record (income on card, no bank debit)
+          const { error: extError } = await supabase.from("transactions").insert({
+            user_id: user?.id,
+            description: `Pagamento Externo - ${creditCardName}`,
+            amount: personalAmount,
+            type: "income",
+            date,
+            account_id: null,
+            credit_card_id: creditCardId,
+            category_id: null,
+            status: "completed",
+            is_corporate_expense: false,
+            is_reimbursable: false,
+            is_refund: false,
+            is_card_payment: true,
+          });
+
+          if (extError) throw extError;
+        }
+
+        totalPaid += personalAmount;
+      }
+
+      // 3. Update credit card invoice
+      if (totalPaid > 0) {
+        const { data: card, error: cardFetchError } = await supabase
+          .from("credit_cards")
+          .select("current_invoice")
+          .eq("id", creditCardId)
+          .single();
+
+        if (cardFetchError) throw cardFetchError;
+
+        const newInvoice = Math.max(0, Number(card.current_invoice) - totalPaid);
+        const { error: cardUpdateError } = await supabase
+          .from("credit_cards")
+          .update({
+            current_invoice: newInvoice,
+            status: newInvoice === 0 ? "paid" : "open",
+          })
+          .eq("id", creditCardId);
+
+        if (cardUpdateError) throw cardUpdateError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["credit_cards"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast({ title: "Fatura paga com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao pagar fatura", description: error.message, variant: "destructive" });
+    },
+  });
+
   const totalInvoice = creditCards.reduce((sum, card) => sum + Number(card.current_invoice), 0);
   const totalLimit = creditCards.reduce((sum, card) => sum + Number(card.credit_limit), 0);
   const totalAvailable = totalLimit - totalInvoice;
@@ -184,5 +342,6 @@ export function useCreditCards() {
     updateCreditCard,
     deleteCreditCard,
     payInvoice,
+    paySplitInvoice,
   };
 }
