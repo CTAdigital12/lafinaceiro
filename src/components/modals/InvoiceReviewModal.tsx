@@ -885,9 +885,11 @@ export function InvoiceReviewModal({
                     </div>
                   )}
 
-                  {item.include_in_import && (
-                    <>
-                      <div className="flex items-center gap-2 flex-wrap">
+                  {/* Editing controls - always visible, disabled for rejected items */}
+                  <div className={cn(
+                    item.duplicate_status === 'rejected' && "opacity-50 pointer-events-none"
+                  )}>
+                    <div className="flex items-center gap-2 flex-wrap">
                         {/* Combobox de Categoria com Busca e Criação */}
                         <Popover 
                           open={openCategoryPopoverIndex === index} 
@@ -1165,8 +1167,7 @@ export function InvoiceReviewModal({
                           )}
                         </div>
                       )}
-                    </>
-                  )}
+                    </div>
                 </div>
               );
             })}
