@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock, Trash2, RotateCcw, AlertOctagon } from "lucide-react";
 import { logError } from "@/lib/errorHandler";
 import { CATEGORY_COLOR_OPTIONS_COMPACT } from "@/lib/constants";
 import {
@@ -49,10 +49,14 @@ import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCreditCards } from "@/hooks/useCreditCards";
+import { useExistingInstallments, detectDuplicates } from "@/hooks/useExistingInstallments";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ImportedItem, ImportCompleteData } from "./InvoiceImportModal";
 import { format, addMonths, parse } from "date-fns";
+
+// Duplicate status for imported items
+type DuplicateStatus = 'new' | 'duplicate' | 'rejected';
 
 interface ReviewItem extends ImportedItem {
   category_id: string | null;
@@ -69,6 +73,9 @@ interface ReviewItem extends ImportedItem {
   amount: number;
   date: string;
   due_date: string;
+  // Deduplication fields
+  duplicate_status: DuplicateStatus;
+  matched_transaction_id: string | null;
 }
 
 interface InvoiceReviewModalProps {
@@ -108,16 +115,32 @@ export function InvoiceReviewModal({
   const invoiceYear = importData?.invoice_year;
   const closingDay = importData?.closing_day;
 
-  // Initialize review items with suggested categories and corporate status
+  // Fetch existing installments for deduplication
+  const { data: existingInstallments = [], isLoading: isLoadingExisting } = useExistingInstallments({
+    creditCardId,
+    month: invoiceMonth || 1,
+    year: invoiceYear || new Date().getFullYear(),
+    enabled: open && !!creditCardId && !!invoiceMonth && !!invoiceYear,
+  });
+
+  // Initialize review items with suggested categories, corporate status, and duplicate detection
   useEffect(() => {
-    if (items.length > 0 && open) {
+    if (items.length > 0 && open && !isLoadingExisting) {
       // Get due_date from import data
       const invoiceDueDate = importData?.due_date || "";
       
-      const itemsWithCategories = items.map((item) => {
+      // Detect duplicates
+      const duplicateMap = detectDuplicates(items, existingInstallments);
+      
+      const itemsWithCategories = items.map((item, index) => {
         const suggestedCategoryId = findCategoryForDescription(item.description);
         const suggestedCorporate = findCorporateForDescription(item.description);
         const isInstallment = !!(item.installment_current && item.installment_total && item.installment_current < item.installment_total);
+        
+        // Check if this item is a duplicate
+        const matchedTransaction = duplicateMap.get(index);
+        const isDuplicate = !!matchedTransaction;
+        
         return {
           ...item,
           // Map new structure to legacy fields for display
@@ -132,15 +155,18 @@ export function InvoiceReviewModal({
           remember_corporate: false,
           corporate_keyword: item.description.toUpperCase(),
           notes: "",
-          add_future_installments: isInstallment, // Auto-check for installments that have more to come
-          include_in_import: !item.is_post_closing, // Exclude post-closing by default
+          add_future_installments: isInstallment && !isDuplicate, // Don't auto-check for duplicates
+          include_in_import: isDuplicate ? false : !item.is_post_closing, // Exclude duplicates by default
+          // Deduplication fields
+          duplicate_status: isDuplicate ? 'duplicate' as DuplicateStatus : 'new' as DuplicateStatus,
+          matched_transaction_id: matchedTransaction?.id || null,
         };
       });
       setReviewItems(itemsWithCategories);
       setExpandedNotes(new Set());
       setShowPostClosingWarning(postClosingCount > 0);
     }
-  }, [items, open, findCategoryForDescription, findCorporateForDescription, postClosingCount, importData?.due_date]);
+  }, [items, open, findCategoryForDescription, findCorporateForDescription, postClosingCount, importData?.due_date, existingInstallments, isLoadingExisting]);
 
   const handleCategoryChange = (index: number, categoryId: string) => {
     setReviewItems((prev) =>
@@ -219,6 +245,57 @@ export function InvoiceReviewModal({
       prev.map((item, i) =>
         i === index ? { ...item, include_in_import: include } : item
       )
+    );
+  };
+
+  // Reject item (mark as ignored)
+  const handleRejectItem = (index: number) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? { ...item, duplicate_status: 'rejected' as DuplicateStatus, include_in_import: false }
+          : item
+      )
+    );
+  };
+
+  // Restore rejected item
+  const handleRestoreItem = (index: number) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        // Return to original status (new or duplicate)
+        const wasOriginallyDuplicate = !!item.matched_transaction_id;
+        return {
+          ...item,
+          duplicate_status: wasOriginallyDuplicate ? 'duplicate' as DuplicateStatus : 'new' as DuplicateStatus,
+          include_in_import: !wasOriginallyDuplicate && !item.is_post_closing,
+        };
+      })
+    );
+  };
+
+  // Force include a duplicate (user is sure it's not a duplicate)
+  const handleForceInclude = (index: number) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, include_in_import: true } : item
+      )
+    );
+  };
+
+  // Select/Deselect all items
+  const handleSelectAll = (selected: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item) => ({
+        ...item,
+        include_in_import:
+          selected && item.duplicate_status !== 'rejected'
+            ? item.duplicate_status === 'duplicate'
+              ? item.include_in_import // Keep duplicate's current state
+              : !item.is_post_closing // New items: check unless post-closing
+            : false,
+      }))
     );
   };
 
@@ -518,6 +595,18 @@ export function InvoiceReviewModal({
   const postClosingItems = reviewItems.filter(item => item.is_post_closing);
   const excludedCount = reviewItems.filter(item => !item.include_in_import).length;
 
+  // Status counts for UI
+  const statusCounts = useMemo(() => ({
+    new: reviewItems.filter((i) => i.duplicate_status === 'new').length,
+    duplicate: reviewItems.filter((i) => i.duplicate_status === 'duplicate').length,
+    rejected: reviewItems.filter((i) => i.duplicate_status === 'rejected').length,
+  }), [reviewItems]);
+
+  // Check if all non-rejected items are selected
+  const allSelectableSelected = reviewItems
+    .filter((item) => item.duplicate_status !== 'rejected')
+    .every((item) => item.include_in_import || item.duplicate_status === 'duplicate');
+
   // Format invoice period for display
   const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   const invoicePeriodStr = invoiceMonth && invoiceYear 
@@ -603,23 +692,63 @@ export function InvoiceReviewModal({
           </div>
         )}
 
+        {/* Bulk selection header */}
+        <div className="flex-shrink-0 flex items-center justify-between py-2 px-1 border-b">
+          <div className="flex items-center gap-3">
+            <Checkbox
+              checked={allSelectableSelected && reviewItems.length > 0}
+              onCheckedChange={(checked) => handleSelectAll(checked === true)}
+              disabled={isImporting || reviewItems.length === 0}
+            />
+            <span className="text-sm text-muted-foreground">
+              Importando <strong>{includedItems.length}</strong> de {reviewItems.length} itens
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {statusCounts.new > 0 && (
+              <Badge className="bg-income/10 text-income border-income/20 text-xs">
+                Novos: {statusCounts.new}
+              </Badge>
+            )}
+            {statusCounts.duplicate > 0 && (
+              <Badge className="bg-chart-4/10 text-chart-4 border-chart-4/20 text-xs">
+                Duplicados: {statusCounts.duplicate}
+              </Badge>
+            )}
+            {statusCounts.rejected > 0 && (
+              <Badge className="bg-muted text-muted-foreground text-xs">
+                Ignorados: {statusCounts.rejected}
+              </Badge>
+            )}
+          </div>
+        </div>
+
         <ScrollArea className={cn("h-[400px] -mx-6 px-6 pr-3", isImporting && "opacity-50 pointer-events-none")}>
           <div className="space-y-2 pr-3">
-            {reviewItems.map((item, index) => {
+            {isLoadingExisting ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                Verificando duplicatas...
+              </div>
+            ) : reviewItems.map((item, index) => {
               const categoryChanged = item.category_id !== item.original_category_id;
               const category = expenseCategories.find((c) => c.id === item.category_id);
               const hasInstallments = !!(item.installment_current && item.installment_total);
               const isNotesExpanded = expandedNotes.has(index);
               const remainingInstallments = hasInstallments ? item.installment_total! - item.installment_current! : 0;
+              const isRejected = item.duplicate_status === 'rejected';
+              const isDuplicate = item.duplicate_status === 'duplicate';
 
               return (
                 <div
                   key={index}
                   className={cn(
-                    "border rounded-lg p-3 space-y-2 transition-opacity",
+                    "border rounded-lg p-3 space-y-2 transition-all",
                     item.is_corporate && "bg-muted/30",
                     item.is_post_closing && "border-chart-4/50",
-                    !item.include_in_import && "opacity-50"
+                    isDuplicate && "bg-chart-4/5 border-chart-4/30",
+                    isRejected && "opacity-50 bg-muted/20",
+                    !item.include_in_import && !isRejected && "opacity-60"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -628,9 +757,28 @@ export function InvoiceReviewModal({
                         checked={item.include_in_import}
                         onCheckedChange={(checked) => handleIncludeChange(index, checked === true)}
                         className="mt-0.5"
+                        disabled={isRejected}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* Status Badge */}
+                          {item.duplicate_status === 'new' && (
+                            <Badge className="bg-income/10 text-income border-income/20 text-[10px] px-1.5 py-0">
+                              Novo
+                            </Badge>
+                          )}
+                          {isDuplicate && (
+                            <Badge className="bg-chart-4/10 text-chart-4 border-chart-4/20 text-[10px] px-1.5 py-0">
+                              <AlertOctagon className="h-3 w-3 mr-0.5" />
+                              Já Lançado
+                            </Badge>
+                          )}
+                          {isRejected && (
+                            <Badge className="bg-muted text-muted-foreground text-[10px] px-1.5 py-0">
+                              Ignorado
+                            </Badge>
+                          )}
+                          
                           {item.is_corporate && (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -654,8 +802,12 @@ export function InvoiceReviewModal({
                           <Input
                             value={item.description}
                             onChange={(e) => handleDescriptionChange(index, e.target.value)}
-                            className="h-7 text-sm font-medium flex-1 min-w-[200px]"
+                            className={cn(
+                              "h-7 text-sm font-medium flex-1 min-w-[200px]",
+                              isRejected && "line-through text-muted-foreground"
+                            )}
                             placeholder="Descrição"
+                            disabled={isRejected}
                           />
                           {hasInstallments && (
                             <Badge variant="outline" className="text-xs flex-shrink-0">
@@ -664,13 +816,74 @@ export function InvoiceReviewModal({
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">{item.date}</p>
+                        <p className={cn("text-xs text-muted-foreground", isRejected && "line-through")}>{item.date}</p>
                       </div>
                     </div>
-                    <p className="text-sm font-semibold text-expense whitespace-nowrap">
-                      R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className={cn(
+                        "text-sm font-semibold text-expense whitespace-nowrap",
+                        isRejected && "line-through text-muted-foreground"
+                      )}>
+                        R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </p>
+                      
+                      {/* Action buttons */}
+                      {isRejected ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={() => handleRestoreItem(index)}
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Restaurar item</TooltipContent>
+                        </Tooltip>
+                      ) : isDuplicate && !item.include_in_import ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-chart-4 hover:text-chart-4 hover:bg-chart-4/10"
+                              onClick={() => handleForceInclude(index)}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Forçar importação</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleRejectItem(index)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Ignorar item</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Duplicate warning */}
+                  {isDuplicate && (
+                    <div className="flex items-start gap-2 text-xs text-chart-4 bg-chart-4/5 rounded-md px-2 py-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Possível duplicata:</strong> Encontrada transação similar já cadastrada neste período.
+                        {item.include_in_import && " Você escolheu importar mesmo assim."}
+                      </span>
+                    </div>
+                  )}
 
                   {item.include_in_import && (
                     <>
