@@ -22,6 +22,7 @@ Este documento consolida toda a documentação técnica do sistema LA Financeiro
 10. [Edge Functions](#10-edge-functions)
 11. [Troubleshooting](#11-troubleshooting)
 12. [Memórias Arquiteturais](#12-memórias-arquiteturais)
+13. [Fluxos de UI e Interações](#13-fluxos-de-ui-e-interações-do-usuário)
 
 ---
 
@@ -1169,6 +1170,591 @@ Pagamento de fatura suporta split entre corporativo, reembolsável e pessoal.
 
 ### `architecture/data-integrity-standards`
 Transações com `is_card_payment: true` devem ter `credit_card_id` válido.
+
+---
+
+## 13. Fluxos de UI e Interações do Usuário
+
+### 13.1 Arquitetura de Navegação
+
+#### Desktop (≥768px)
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Header (DateContext selector + User menu)                  │
+├──────────────┬──────────────────────────────────────────────┤
+│              │                                              │
+│   Sidebar    │            Conteúdo Principal                │
+│   (240px)    │                                              │
+│              │                                              │
+│  • Dashboard │                                              │
+│  • Extrato   │                                              │
+│  • Cartões   │                                              │
+│  • Contas    │                                              │
+│  • Categ.    │                                              │
+│  • Orçamento │                                              │
+│  • Invest.   │                                              │
+│  • Relatórios│                                              │
+│  • Config.   │                                              │
+│              │                                              │
+└──────────────┴──────────────────────────────────────────────┘
+```
+
+#### Mobile (<768px)
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Header (Compacto - mês/ano + menu)                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│                  Conteúdo Principal                         │
+│                  (full width)                               │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  BottomNav                                                  │
+│  ┌──────┬──────┬──────┬──────┬──────┐                      │
+│  │ Home │Extrato│  +  │Cartões│ Mais │                      │
+│  │  🏠  │  📋  │ FAB │  💳  │  ≡   │                      │
+│  └──────┴──────┴──────┴──────┴──────┘                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Componentes de Layout:**
+| Componente | Arquivo | Responsabilidade |
+|------------|---------|------------------|
+| `MainLayout` | `src/components/layout/MainLayout.tsx` | Wrapper com Sidebar/BottomNav |
+| `AppSidebar` | `src/components/layout/AppSidebar.tsx` | Menu lateral desktop |
+| `BottomNav` | `src/components/layout/BottomNav.tsx` | Navegação mobile |
+| `Header` | `src/components/layout/Header.tsx` | Cabeçalho com seletor de data |
+
+---
+
+### 13.2 Padrão de Modais Responsivos
+
+O sistema usa `ResponsiveDialog` que renderiza:
+- **Desktop:** `Dialog` (modal centralizado)
+- **Mobile:** `Drawer` (bottom sheet deslizante)
+
+```typescript
+// src/components/ui/responsive-dialog.tsx
+export function ResponsiveDialog({ children, ...props }) {
+  const isMobile = useIsMobile();
+  
+  if (isMobile) {
+    return <Drawer {...props}>{children}</Drawer>;
+  }
+  
+  return <Dialog {...props}>{children}</Dialog>;
+}
+```
+
+**Modais Principais e Seus Triggers:**
+
+| Modal | Trigger | Arquivo |
+|-------|---------|---------|
+| `TransactionModal` | FAB (+), botão "Nova transação" | `src/components/modals/TransactionModal.tsx` |
+| `CreditCardModal` | Botão "Novo cartão" | `src/components/modals/CreditCardModal.tsx` |
+| `AccountModal` | Botão "Nova conta" | `src/components/modals/AccountModal.tsx` |
+| `InvoiceImportModal` | Botão "Importar fatura" no card do cartão | `src/components/modals/InvoiceImportModal.tsx` |
+| `PayInvoiceModal` | Botão "Pagar fatura" no card do cartão | `src/components/modals/PayInvoiceModal.tsx` |
+| `AccountImportModal` | Botão "Importar extrato" na conta | `src/components/modals/AccountImportModal.tsx` |
+
+---
+
+### 13.3 Fluxos de Usuário Detalhados
+
+#### 13.3.1 Fluxo: Criar Nova Transação
+
+```
+┌─────────────────┐
+│ Usuário clica   │
+│ no FAB (+)      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ TransactionModal│
+│ abre            │
+│                 │
+│ Campos:         │
+│ • Descrição     │
+│ • Valor         │
+│ • Tipo (toggle) │
+│ • Data          │
+│ • Conta/Cartão  │
+│ • Categoria     │
+│ • Parcelamento  │
+│ • Flags         │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Se Parcelado:   │
+│ • Qtd parcelas  │
+│ • Valor parcela │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Clica "Salvar"  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ createTransaction│
+│ mutation        │
+│                 │
+│ Se cartão:      │
+│ • Calcula       │
+│   due_date      │
+│ • Sync invoice  │
+│                 │
+│ Se parcelado:   │
+│ • Gera todas    │
+│   parcelas      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Toast "Sucesso" │
+│ Modal fecha     │
+│ Lista atualiza  │
+└─────────────────┘
+```
+
+**Estados do Toggle de Tipo:**
+```typescript
+// Tipo alterna entre income/expense
+<ToggleGroup type="single" value={type} onValueChange={setType}>
+  <ToggleGroupItem value="income" className="text-income">
+    Receita
+  </ToggleGroupItem>
+  <ToggleGroupItem value="expense" className="text-expense">
+    Despesa
+  </ToggleGroupItem>
+</ToggleGroup>
+```
+
+---
+
+#### 13.3.2 Fluxo: Importar Fatura de Cartão
+
+```
+┌─────────────────┐
+│ Página Cartões  │
+│                 │
+│ Clica no card   │
+│ do cartão       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Menu dropdown   │
+│ aparece         │
+│                 │
+│ • Ver itens     │
+│ • Importar      │◄── Clica aqui
+│ • Pagar fatura  │
+│ • Editar        │
+│ • Excluir       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│InvoiceImportModal│
+│                 │
+│ Seleciona       │
+│ arquivo:        │
+│ • PDF (OCR)     │
+│ • CSV           │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│ PDF selecionado │     │ CSV selecionado │
+│                 │     │                 │
+│ Envia para      │     │ Parser local    │
+│ Edge Function   │     │ processa        │
+│ (parse-invoice) │     │                 │
+└────────┬────────┘     └────────┬────────┘
+         │                       │
+         └───────────┬───────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────┐
+│ InvoiceReviewModal                       │
+│                                         │
+│ ┌─────────────────────────────────────┐ │
+│ │ Lista de Transações Importadas      │ │
+│ │                                     │ │
+│ │ [✓] Mercado Livre  R$ 150,00  🛒   │ │
+│ │ [✓] Netflix        R$ 45,90   🎬   │ │
+│ │ [ ] DUPLICADO      R$ 45,90   ⚠️   │ │
+│ │ [✓] Amazon 2/3     R$ 200,00  📦   │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ • Checkbox para selecionar              │
+│ • Detecta duplicatas                    │
+│ • Permite editar categoria              │
+│ • Mostra total selecionado              │
+│                                         │
+│ [Cancelar]           [Importar XX itens]│
+└────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────┐
+│ Para cada transação selecionada:        │
+│                                         │
+│ 1. Cria transação no DB                 │
+│ 2. Marca imported_at = now()            │
+│ 3. Calcula due_date baseado no cartão   │
+│ 4. Gera parcelas futuras se parcelado   │
+│ 5. Cria regra de categorização se nova  │
+└─────────────────────────────────────────┘
+```
+
+---
+
+#### 13.3.3 Fluxo: Pagar Fatura do Cartão
+
+```
+┌─────────────────┐
+│ Clica "Pagar    │
+│ fatura" no card │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│ PayInvoiceModal                          │
+│                                         │
+│ ┌─────────────────────────────────────┐ │
+│ │ Resumo da Fatura                    │ │
+│ │ Saldo atual: R$ 5.234,56            │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ ┌─────────────────────────────────────┐ │
+│ │ 💼 Despesas Corporativas            │ │
+│ │ R$ 1.500,00                         │ │
+│ │                                     │ │
+│ │ Conta: [Select - Empresa]           │ │
+│ │ [ ] Vincular transação existente    │ │
+│ │     └─ Busca transações candidatas  │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ ┌─────────────────────────────────────┐ │
+│ │ 💰 Despesas Reembolsáveis           │ │
+│ │ R$ 800,00                           │ │
+│ │                                     │ │
+│ │ Conta: [Select - Pessoal]           │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ ┌─────────────────────────────────────┐ │
+│ │ 🏠 Despesas Pessoais                │ │
+│ │ R$ 2.934,56                         │ │
+│ │                                     │ │
+│ │ Conta: [Select - Pessoal]           │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ [Cancelar]                  [Confirmar] │
+└────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────┐
+│ Para cada seção com conta selecionada:  │
+│                                         │
+│ 1. Cria transação de pagamento          │
+│    • type = "expense"                   │
+│    • is_card_payment = true             │
+│    • credit_card_id = cartão            │
+│    • account_id = conta selecionada     │
+│                                         │
+│ 2. Atualiza saldo da conta bancária     │
+│                                         │
+│ 3. Sync current_invoice do cartão       │
+│    (subtrai o pagamento do saldo)       │
+└─────────────────────────────────────────┘
+```
+
+**Estados do Modal de Pagamento:**
+
+| Estado | Condição | UI |
+|--------|----------|-----|
+| Fatura em aberto | `current_invoice > 0` | Mostra seções Corporate/Reembolsável/Pessoal |
+| Parcialmente paga | `current_invoice < transactionsTotal` | Mostra apenas "Saldo Residual" |
+| Fatura zerada | `current_invoice = 0` | Mostra mensagem "Fatura já paga" |
+
+---
+
+#### 13.3.4 Fluxo: Visualizar Reconciliação
+
+```
+┌─────────────────┐
+│ Página Cartões  │
+│                 │
+│ Clica no card   │
+│ "Reconciliação" │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│ ReconciliationDetailModal               │
+│                                         │
+│ ┌─────────────────────────────────────┐ │
+│ │ Grid de Resumo (4 cards)            │ │
+│ │                                     │ │
+│ │ ┌────────┐ ┌────────┐ ┌────────┐   │ │
+│ │ │ Fatura │ │ Lanç.  │ │ Difer. │   │ │
+│ │ │ Banco  │ │ Sistema│ │ +/-    │   │ │
+│ │ │R$5.234 │ │R$5.134 │ │+R$100  │   │ │
+│ │ └────────┘ └────────┘ └────────┘   │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ ┌─────────────────────────────────────┐ │
+│ │ Tabs                                │ │
+│ │ [Transações] [Divergência] [Cálculo]│ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ Tab "Transações":                       │
+│ • Tabela com todas as transações        │
+│ • Filtros por status, tipo, busca       │
+│ • Badges: Importada/Manual, Estorno     │
+│                                         │
+│ Tab "Divergência":                      │
+│ • InvoiceDiscrepancyReport              │
+│ • Breakdown Corporate vs Pessoal        │
+│                                         │
+│ Tab "Cálculo":                          │
+│ • InvoiceBreakdownCard                  │
+│ • Mostra fórmula visual                 │
+└─────────────────────────────────────────┘
+```
+
+---
+
+### 13.4 Padrões de Formulário
+
+#### Input Monetário (Mobile-First)
+```typescript
+// Padrão para inputs de valor
+<Input
+  type="number"
+  inputMode="decimal"    // Teclado numérico com decimais no mobile
+  step="0.01"            // Permite centavos
+  min="0"
+  placeholder="0,00"
+/>
+```
+
+#### Seleção de Categoria
+```typescript
+// CategorySelector - componente reutilizável
+<CategorySelector
+  value={categoryId}
+  onChange={setCategoryId}
+  type="expense"         // Filtra por tipo
+  allowSubcategories     // Mostra hierarquia
+/>
+
+// Renderiza como:
+// 🛒 Alimentação
+//    └ 🍕 Delivery
+//    └ 🛍️ Supermercado
+// 🎬 Entretenimento
+//    └ 📺 Streaming
+```
+
+#### Seleção de Data
+```typescript
+// Usa react-day-picker com locale pt-BR
+<Popover>
+  <PopoverTrigger>
+    <Button variant="outline">
+      {format(date, "dd/MM/yyyy", { locale: ptBR })}
+    </Button>
+  </PopoverTrigger>
+  <PopoverContent>
+    <Calendar
+      mode="single"
+      selected={date}
+      onSelect={setDate}
+      locale={ptBR}
+    />
+  </PopoverContent>
+</Popover>
+```
+
+---
+
+### 13.5 Feedbacks Visuais
+
+#### Toasts (Sonner)
+```typescript
+// Sucesso
+toast.success("Transação criada com sucesso");
+
+// Erro
+toast.error("Erro ao criar transação", {
+  description: error.message
+});
+
+// Com ação
+toast("Transação excluída", {
+  action: {
+    label: "Desfazer",
+    onClick: () => undoDelete()
+  }
+});
+```
+
+#### Loading States
+```typescript
+// Skeleton durante carregamento
+{isLoading ? (
+  <Skeleton className="h-20 w-full" />
+) : (
+  <Card>{content}</Card>
+)}
+
+// Botão com loading
+<Button disabled={isPending}>
+  {isPending ? (
+    <><Loader2 className="animate-spin" /> Salvando...</>
+  ) : (
+    "Salvar"
+  )}
+</Button>
+```
+
+#### Badges de Status
+| Status | Cor | Uso |
+|--------|-----|-----|
+| `completed` | `bg-income/10 text-income` | Transação concluída |
+| `pending` | `bg-primary/10 text-primary` | Transação pendente |
+| `is_refund` | `bg-income/10 text-income` | Estorno |
+| `is_corporate` | `bg-muted` | Gasto corporativo |
+| Importada | `border-primary/30` | Via importação |
+| Manual | `border-muted-foreground/30` | Criada manualmente |
+
+---
+
+### 13.6 Interações por Página
+
+#### Dashboard (`/`)
+| Elemento | Interação | Resultado |
+|----------|-----------|-----------|
+| SummaryCard | Clique | Abre sheet com detalhes |
+| CategoryChart (pizza) | Clique em fatia | Abre `CategoryDetailSheet` |
+| BalanceChart (linha) | Hover | Tooltip com valores do dia |
+| BudgetEvolutionChart | Hover | Tooltip com planejado vs real |
+| Card de categoria | Clique | Abre `CategoryDetailSheet` |
+| Subcategoria | Clique | Abre `ParentCategoryDetailSheet` |
+
+#### Transações (`/transactions`)
+| Elemento | Interação | Resultado |
+|----------|-----------|-----------|
+| Tabs (Geral/Banco/Cartão) | Clique | Filtra transações |
+| Linha da tabela | Clique | Abre `TransactionModal` (edição) |
+| Botão filtros | Clique | Abre `TransactionFiltersModal` |
+| Botão "Carregar mais" | Clique | Busca próxima página |
+| Checkbox "Mostrar pendentes" | Toggle | Alterna filtro |
+
+#### Cartões de Crédito (`/credit-cards`)
+| Elemento | Interação | Resultado |
+|----------|-----------|-----------|
+| Card do cartão | Clique | Abre dropdown menu |
+| Menu > Ver itens | Clique | Abre `InvoiceItemsModal` |
+| Menu > Importar | Clique | Abre `InvoiceImportModal` |
+| Menu > Pagar fatura | Clique | Abre `PayInvoiceModal` |
+| Menu > Editar | Clique | Abre `CreditCardModal` |
+| Card Reconciliação | Clique | Abre `ReconciliationDetailModal` |
+| InstallmentsDashboard | Clique em parcela | Abre `InstallmentDetailsSheet` |
+
+#### Investimentos (`/investments`)
+| Elemento | Interação | Resultado |
+|----------|-----------|-----------|
+| AllocationChart (donut) | Hover | Tooltip com % e valor |
+| Linha da AssetTable | Clique | Abre `AssetModal` (edição) |
+| Botão operação | Clique | Abre `OperationModal` |
+| Card instituição | Clique | Abre `InstitutionModal` |
+| Botão atualizar preços | Clique | Abre `UpdatePricesModal` |
+
+---
+
+### 13.7 Responsividade Mobile
+
+#### Tabelas → Cards
+```typescript
+// Desktop: Table normal
+<Table>
+  <TableHeader>...</TableHeader>
+  <TableBody>
+    {items.map(item => <TableRow>...</TableRow>)}
+  </TableBody>
+</Table>
+
+// Mobile: Card layout
+{isMobile ? (
+  <div className="space-y-3">
+    {items.map(item => (
+      <Card className="p-4">
+        <div className="flex justify-between">
+          <span>{item.description}</span>
+          <span>{formatCurrency(item.amount)}</span>
+        </div>
+      </Card>
+    ))}
+  </div>
+) : (
+  <Table>...</Table>
+)}
+```
+
+#### Dialogs → Drawers
+```typescript
+// Usa hook useIsMobile
+const isMobile = useIsMobile();
+
+// Renderização condicional
+return isMobile ? (
+  <Drawer open={open} onOpenChange={setOpen}>
+    <DrawerContent className="h-[85vh]">
+      {content}
+    </DrawerContent>
+  </Drawer>
+) : (
+  <Dialog open={open} onOpenChange={setOpen}>
+    <DialogContent className="max-w-lg">
+      {content}
+    </DialogContent>
+  </Dialog>
+);
+```
+
+#### Grids Adaptativos
+```typescript
+// Grid responsivo
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  {cards.map(card => <Card>{card}</Card>)}
+</div>
+```
+
+---
+
+### 13.8 Atalhos de Teclado
+
+| Atalho | Ação | Contexto |
+|--------|------|----------|
+| `Escape` | Fecha modal | Qualquer modal aberto |
+| `Enter` | Confirma/Submete | Formulários |
+| `Tab` | Navega entre campos | Formulários |
+
+---
+
+### 13.9 Acessibilidade
+
+- **ARIA Labels:** Todos os botões de ícone têm `aria-label`
+- **Focus Management:** Modais capturam foco
+- **Keyboard Navigation:** Menus navegáveis por teclado
+- **Color Contrast:** Tokens de cor respeitam contraste mínimo
+- **Screen Reader:** Badges e status têm texto alternativo
 
 ---
 
