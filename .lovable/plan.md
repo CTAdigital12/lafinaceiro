@@ -1,103 +1,109 @@
 
 
-# Correção: Erro de RLS ao Criar Transação
+# Correção: Edição de Parcelas Individuais
 
 ## Problema Identificado
 
-Ao tentar criar uma transação, o erro **"new row violates row-level security policy for table 'transactions'"** ocorre porque o código envia `user_id: undefined` quando o contexto de autenticação não está sincronizado.
+Quando o usuário tenta editar uma parcela individual clicando em "Editar Parcela" no menu (três pontos) dentro do `InstallmentDetailsSheet`, **nada acontece** porque a prop `onEditTransaction` não está sendo passada.
 
-### Causa Raiz
+### Fluxo Atual (Quebrado)
 
-Em `src/hooks/useTransactions.ts` (linha 132), o código usa:
-
-```typescript
-user_id: user?.id
+```text
+1. Usuário clica na transação parcelada "MERCADOLIVRE*PROD 3/3"
+2. InstallmentDetailsSheet abre mostrando todas as parcelas
+3. Usuário clica no menu (⋮) da parcela 3/3
+4. Usuário clica em "Editar Parcela"
+5. handleEditSingle() é chamado
+6. Verifica: if (onEditTransaction) → FALSE (prop não passada)
+7. Nada acontece!
 ```
 
-Se `user` for `undefined` (sessão expirada, erro de sincronização, etc.), o Supabase recebe `user_id: undefined` que não corresponde ao `auth.uid()` exigido pela política RLS de INSERT.
+### Código Atual (Errado)
 
-O mesmo problema existe em 8 outros hooks que também usam `user?.id` sem validação prévia.
+```typescript
+// src/pages/Transactions.tsx - linhas 1224-1228
+<InstallmentDetailsSheet
+  open={!!selectedInstallmentGroupId}
+  onOpenChange={(open) => !open && setSelectedInstallmentGroupId(null)}
+  groupId={selectedInstallmentGroupId}
+  // FALTANDO: onEditTransaction={handleEdit}
+/>
+```
 
 ---
 
 ## Solução
 
-Adicionar verificação de autenticação antes de qualquer operação de INSERT em todos os hooks afetados.
+Adicionar a prop `onEditTransaction` ao `InstallmentDetailsSheet` e criar um handler que:
+1. Fecha o sheet de parcelas
+2. Abre o modal de transação com a parcela selecionada
 
-### Arquivos a Modificar
+### Arquivo: `src/pages/Transactions.tsx`
 
-| Arquivo | Mutations Afetadas |
-|---------|-------------------|
-| `src/hooks/useTransactions.ts` | createTransaction |
-| `src/hooks/useCategories.ts` | createCategory |
-| `src/hooks/useAccounts.ts` | createAccount |
-| `src/hooks/useCreditCards.ts` | createCard, payInvoice |
-| `src/hooks/useBudgets.ts` | createBudget |
-| `src/hooks/useInvestments.ts` | createAsset, createTransaction |
-| `src/hooks/useInstitutions.ts` | createInstitution |
-| `src/hooks/useCategorizationRules.ts` | createRule |
-| `src/hooks/useInvitations.ts` | acceptInvitation |
-
----
-
-## Implementação Detalhada
-
-### 1. `src/hooks/useTransactions.ts`
-
-Adicionar verificação no início da mutation `createTransaction`:
+**Modificar linhas 1224-1228:**
 
 ```typescript
-const createTransaction = useMutation({
-  mutationFn: async (transaction: ...) => {
-    // Adicionar esta verificação
-    if (!user?.id) {
-      throw new Error("Usuário não autenticado");
-    }
-    
-    const { silent, ...transactionData } = transaction;
-    const sanitizedTransaction = {
-      ...transactionData,
-      user_id: user.id, // Agora seguro, sem operador opcional
-      // ... resto do código
-    };
+// Handler para editar parcela individual
+const handleEditInstallment = (transaction: Transaction) => {
+  setSelectedInstallmentGroupId(null); // Fecha o sheet de parcelas
+  handleEdit(transaction); // Abre o modal de edição
+};
+
+// Na renderização:
+<InstallmentDetailsSheet
+  open={!!selectedInstallmentGroupId}
+  onOpenChange={(open) => !open && setSelectedInstallmentGroupId(null)}
+  groupId={selectedInstallmentGroupId}
+  onEditTransaction={handleEditInstallment}
+/>
 ```
-
-### 2. Aplicar o mesmo padrão em todos os hooks
-
-Para cada hook, adicionar no início de cada mutation que faz INSERT:
-
-```typescript
-if (!user?.id) {
-  throw new Error("Usuário não autenticado");
-}
-```
-
-E alterar de `user?.id` para `user.id` após a verificação.
 
 ---
 
-## Benefícios
+## Resultado Esperado
 
-1. **Erro claro**: Mensagem "Usuário não autenticado" em vez de erro genérico de RLS
-2. **Prevenção**: Evita enviar dados inválidos ao banco
-3. **Consistência**: Mesmo padrão em todos os hooks
-4. **Debug facilitado**: Fácil identificar problemas de autenticação
-
----
-
-## Hooks a Modificar (Resumo Técnico)
+### Fluxo Corrigido
 
 ```text
-src/hooks/useTransactions.ts    - linha 132
-src/hooks/useCategories.ts      - linha 111
-src/hooks/useAccounts.ts        - linha 41
-src/hooks/useCreditCards.ts     - linhas 75, 130, 220, 252, 288, 322, 358
-src/hooks/useBudgets.ts         - linha 46
-src/hooks/useInvestments.ts     - linhas 111, 179, 218
-src/hooks/useInstitutions.ts    - linha 39
-src/hooks/useCategorizationRules.ts - linha 42
-src/hooks/useInvitations.ts     - linhas 161, 173
+1. Usuário clica na transação parcelada "MERCADOLIVRE*PROD 3/3"
+2. InstallmentDetailsSheet abre mostrando todas as parcelas
+3. Usuário clica no menu (⋮) da parcela 3/3
+4. Usuário clica em "Editar Parcela"
+5. handleEditSingle() é chamado
+6. Verifica: if (onEditTransaction) → TRUE
+7. Sheet fecha e TransactionModal abre com os dados da parcela
+8. Usuário edita valor/descrição/categoria
+9. Salva e atualização reflete no sistema
 ```
 
-Total: ~15 pontos de correção distribuídos em 9 arquivos.
+---
+
+## Detalhes Técnicos
+
+### Localização da Alteração
+
+| Arquivo | Linha | Modificação |
+|---------|-------|-------------|
+| `src/pages/Transactions.tsx` | ~475 | Adicionar função `handleEditInstallment` |
+| `src/pages/Transactions.tsx` | ~1224-1228 | Passar prop `onEditTransaction` |
+
+### Código Completo da Correção
+
+```typescript
+// Adicionar após handleTransactionClick (~linha 478)
+const handleEditInstallment = (transaction: Transaction) => {
+  setSelectedInstallmentGroupId(null);
+  handleEdit(transaction);
+};
+
+// Modificar o InstallmentDetailsSheet (~linha 1224)
+<InstallmentDetailsSheet
+  open={!!selectedInstallmentGroupId}
+  onOpenChange={(open) => !open && setSelectedInstallmentGroupId(null)}
+  groupId={selectedInstallmentGroupId}
+  onEditTransaction={handleEditInstallment}
+/>
+```
+
+Esta é uma correção simples de uma linha que conecta a funcionalidade já existente.
 
