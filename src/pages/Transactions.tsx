@@ -432,12 +432,18 @@ export default function Transactions() {
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
   
-  const tabTotalExpense = filteredTransactions
-    .filter((t) => 
-      (t.type === "expense" && !t.is_refund && !t.is_card_payment) ||
-      (t.type === "income" && t.is_refund)
-    )
+  // Calcular despesas normais (excluindo estornos e pagamentos de fatura)
+  const normalExpenses = filteredTransactions
+    .filter((t) => t.type === "expense" && !t.is_refund && !t.is_card_payment)
     .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // Calcular estornos de despesas (devem ser subtraídos)
+  const expenseRefunds = filteredTransactions
+    .filter((t) => t.type === "expense" && t.is_refund)
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // Total = Despesas - Estornos (mesma lógica do useCreditCardReconciliation)
+  const tabTotalExpense = normalExpenses - expenseRefunds;
 
   const toggleTransaction = (id: string) => {
     setSelectedTransactions((prev) =>
