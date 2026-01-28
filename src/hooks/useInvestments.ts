@@ -106,9 +106,13 @@ export function useInvestments() {
   // Create asset
   const createAsset = useMutation({
     mutationFn: async (asset: Omit<InvestmentAsset, "id" | "user_id" | "created_at" | "updated_at">) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { data, error } = await supabase
         .from("investment_assets")
-        .insert([{ ...asset, user_id: user?.id }])
+        .insert([{ ...asset, user_id: user.id }])
         .select()
         .single();
 
@@ -171,12 +175,16 @@ export function useInvestments() {
         categoryId?: string;
       }
     ) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { createExpenseTransaction, accountId, categoryId, ...txData } = transaction;
 
       // Insert investment transaction
       const { data: investmentTx, error: txError } = await supabase
         .from("investment_transactions")
-        .insert([{ ...txData, user_id: user?.id }])
+        .insert([{ ...txData, user_id: user.id }])
         .select()
         .single();
 
@@ -215,7 +223,7 @@ export function useInvestments() {
           .from("transactions")
           .insert([
             {
-              user_id: user?.id,
+              user_id: user.id,
               account_id: accountId,
               category_id: categoryId || null,
               description: `Investimento: ${asset?.ticker || "Ativo"}`,

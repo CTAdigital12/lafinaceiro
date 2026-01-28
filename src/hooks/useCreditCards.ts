@@ -70,9 +70,13 @@ export function useCreditCards() {
 
   const createCreditCard = useMutation({
     mutationFn: async (card: Omit<CreditCard, "id" | "user_id" | "created_at" | "updated_at">) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { data, error } = await supabase
         .from("credit_cards")
-        .insert([{ ...card, user_id: user?.id }])
+        .insert([{ ...card, user_id: user.id }])
         .select()
         .single();
 
@@ -125,9 +129,13 @@ export function useCreditCards() {
 
   const payInvoice = useMutation({
     mutationFn: async ({ creditCardId, creditCardName, accountId, amount, date }: PayInvoiceParams) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       // 1. Create transaction in account (marked as card payment - won't appear in expense charts)
       const { error: txError } = await supabase.from("transactions").insert({
-        user_id: user?.id,
+        user_id: user.id,
         description: `Pagamento de fatura - ${creditCardName}`,
         amount,
         type: "expense",
@@ -194,6 +202,10 @@ export function useCreditCards() {
 
   const paySplitInvoice = useMutation({
     mutationFn: async (params: SplitPaymentParams) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const {
         creditCardId,
         creditCardName,
@@ -217,7 +229,7 @@ export function useCreditCards() {
       // 1. Handle corporate portion
       if (includeCorporate && corporateAmount > 0) {
         const { error: corpError } = await supabase.from("transactions").insert({
-          user_id: user?.id,
+          user_id: user.id,
           description: `Baixa Corporativa - ${creditCardName}`,
           amount: corporateAmount,
           type: "income",
@@ -249,7 +261,7 @@ export function useCreditCards() {
         } else if (personalPaymentType === "bank" && accountId) {
           // Create bank debit transaction - linked to card for reconciliation
           const { error: bankError } = await supabase.from("transactions").insert({
-            user_id: user?.id,
+            user_id: user.id,
             description: `Pagamento de fatura - ${creditCardName}`,
             amount: personalAmount,
             type: "expense",
@@ -285,7 +297,7 @@ export function useCreditCards() {
         } else if (personalPaymentType === "external") {
           // Create external payment record (income on card, no bank debit)
           const { error: extError } = await supabase.from("transactions").insert({
-            user_id: user?.id,
+            user_id: user.id,
             description: `Pagamento Externo - ${creditCardName}`,
             amount: personalAmount,
             type: "income",
@@ -319,7 +331,7 @@ export function useCreditCards() {
         } else if (residualPaymentType === "bank" && residualAccountId) {
           // Create bank debit transaction for residual - linked to card for reconciliation
           const { error: bankError } = await supabase.from("transactions").insert({
-            user_id: user?.id,
+            user_id: user.id,
             description: `Pagamento de saldo - ${creditCardName}`,
             amount: residualAmount,
             type: "expense",
@@ -355,7 +367,7 @@ export function useCreditCards() {
         } else if (residualPaymentType === "external") {
           // Create external payment record for residual
           const { error: extError } = await supabase.from("transactions").insert({
-            user_id: user?.id,
+            user_id: user.id,
             description: `Pagamento Externo (Saldo) - ${creditCardName}`,
             amount: residualAmount,
             type: "income",

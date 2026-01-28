@@ -34,9 +34,13 @@ export function useInstitutions() {
 
   const createInstitution = useMutation({
     mutationFn: async (institution: Omit<InvestmentInstitution, "id" | "user_id" | "created_at" | "updated_at">) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { data, error } = await supabase
         .from("investment_institutions")
-        .insert([{ ...institution, user_id: user?.id }])
+        .insert([{ ...institution, user_id: user.id }])
         .select()
         .single();
 

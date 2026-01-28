@@ -125,11 +125,15 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   const createTransaction = useMutation({
     mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; silent?: boolean }) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       // Sanitize UUID fields - convert empty strings to null
       const { silent, ...transactionData } = transaction;
       const sanitizedTransaction = {
         ...transactionData,
-        user_id: user?.id,
+        user_id: user.id,
         category_id: transactionData.category_id && transactionData.category_id.trim() !== "" ? transactionData.category_id : null,
         account_id: transactionData.account_id && transactionData.account_id.trim() !== "" ? transactionData.account_id : null,
         credit_card_id: transactionData.credit_card_id && transactionData.credit_card_id.trim() !== "" ? transactionData.credit_card_id : null,
