@@ -35,11 +35,15 @@ export function useCategorizationRules() {
 
   const createRule = useMutation({
     mutationFn: async (rule: { keyword: string; category_id: string | null; is_corporate?: boolean }) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { data, error } = await supabase
         .from("categorization_rules")
         .upsert([{ 
           ...rule, 
-          user_id: user?.id,
+          user_id: user.id,
           keyword: rule.keyword.toUpperCase(),
           category_id: rule.category_id || null,
           is_corporate: rule.is_corporate ?? false

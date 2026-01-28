@@ -123,9 +123,13 @@ export function useInvitations() {
         throw new Error("Este usuário já tem acesso");
       }
 
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { data, error } = await supabase
         .from("invitations")
-        .insert([{ owner_id: user?.id, invited_email: email }])
+        .insert([{ owner_id: user.id, invited_email: email }])
         .select()
         .single();
 
@@ -144,6 +148,10 @@ export function useInvitations() {
   // Accept invitation
   const acceptInvitation = useMutation({
     mutationFn: async (invitationId: string) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       // Get invitation details
       const { data: invitation, error: fetchError } = await supabase
         .from("invitations")
@@ -158,7 +166,7 @@ export function useInvitations() {
         .from("invitations")
         .update({ 
           status: "accepted", 
-          invited_user_id: user?.id,
+          invited_user_id: user.id,
           accepted_at: new Date().toISOString() 
         })
         .eq("id", invitationId);
@@ -170,7 +178,7 @@ export function useInvitations() {
         .from("shared_access")
         .insert([{ 
           owner_id: invitation.owner_id, 
-          shared_with_user_id: user?.id 
+          shared_with_user_id: user.id 
         }]);
 
       if (accessError) throw accessError;

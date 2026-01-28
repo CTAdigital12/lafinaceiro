@@ -36,9 +36,13 @@ export function useAccounts() {
 
   const createAccount = useMutation({
     mutationFn: async (account: Omit<Account, "id" | "user_id" | "created_at" | "updated_at">) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { data, error } = await supabase
         .from("accounts")
-        .insert([{ ...account, user_id: user?.id }])
+        .insert([{ ...account, user_id: user.id }])
         .select()
         .single();
 

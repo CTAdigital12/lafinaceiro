@@ -106,9 +106,13 @@ export function useCategories() {
 
   const createCategory = useMutation({
     mutationFn: async (category: { name: string; icon: string; color: string; type: "income" | "expense"; parent_id?: string | null }) => {
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { data, error } = await supabase
         .from("categories")
-        .insert([{ ...category, user_id: user?.id }])
+        .insert([{ ...category, user_id: user.id }])
         .select()
         .single();
 
