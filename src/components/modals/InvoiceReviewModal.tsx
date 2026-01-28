@@ -802,6 +802,7 @@ export function InvoiceReviewModal({
                           <Input
                             value={item.description}
                             onChange={(e) => handleDescriptionChange(index, e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
                             className={cn(
                               "h-7 text-sm font-medium flex-1 min-w-[200px]",
                               isRejected && "line-through text-muted-foreground"
