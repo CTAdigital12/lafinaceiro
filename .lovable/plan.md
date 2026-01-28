@@ -1,149 +1,245 @@
-# Implementação de Ciclos de Fatura
 
-## Status: ✅ Fases 1-5 Implementadas
+# Correção: Conciliação de Faturas - Modal Desaparecendo e Botões Invisíveis
 
----
+## Diagnóstico
 
-## Fase 1: Schema do Banco de Dados ✅
+### Problema 1: Modal desaparece ao mudar de mês
 
-### Tabela Criada: `credit_card_invoices`
-- `id`, `user_id`, `credit_card_id` (FK)
-- `month` (1-12), `year` (≥2020)
-- `status`: 'open' | 'closed' | 'paid'
-- `closed_amount`, `due_date`, `closing_date`, `closed_at`
-- RLS policies configuradas
-- Trigger para `updated_at`
+**Causa raiz**: O estado `selectedCardForAction` é definido como um objeto `CardReconciliation` que vem do array `reconciliation.cards`. Quando o usuário muda de mês:
 
----
+1. O hook `useCreditCardReconciliation` dispara um refetch
+2. Novos objetos `CardReconciliation` são criados
+3. O React re-renderiza o componente
+4. A condição `{selectedCardForAction && ...}` pode falhar brevemente durante a transição
+5. O modal é desmontado
 
-## Fase 2: Hook useInvoiceCycles ✅
+**Problema adicional**: Os modais são renderizados condicionalmente com `{selectedCardForAction && <Modal ...>}`. Quando `selectedCardForAction` muda para `null` durante a transição, os modais desaparecem.
 
-### Arquivo: `src/hooks/useInvoiceCycles.ts`
+### Problema 2: Botões de fechar/abrir não aparecem
 
-Funcionalidades implementadas:
-- `getInvoiceStatus(cardId, month, year)` - Retorna status da fatura
-- `isInvoiceClosed(cardId, month, year)` - Verifica se fechada
-- `closeInvoice.mutateAsync({...})` - Fecha a fatura
-- `reopenInvoice.mutateAsync({...})` - Reabre a fatura
-- `markInvoicePaid.mutateAsync({...})` - Marca como paga
-- `validateTransactionModification()` - Valida se pode modificar
-- `checkInvoiceStatusForImport()` - Verifica para importação
+Analisando o código em `ReconciliationCard.tsx` (linhas 294-314), os botões **estão sendo renderizados**:
 
----
+```tsx
+{isClosed ? (
+  <Button onClick={() => handleReopenInvoice(card)}>
+    <Unlock /> Reabrir
+  </Button>
+) : (
+  <Button onClick={() => handleCloseInvoice(card)}>
+    <Lock /> Fechar Fatura
+  </Button>
+)}
+```
 
-## Fase 3: Integração com Transações ✅
-
-### Arquivo: `src/hooks/useTransactions.ts`
-
-Modificações implementadas:
-- Função `checkInvoiceClosed()` para validar status
-- `createTransaction`: Valida antes de inserir (com flag `skipInvoiceCheck` para imports)
-- `updateTransaction`: Valida fatura original e destino
-- `deleteTransaction`: Valida antes de excluir
-
-Erro amigável retornado:
-> "Esta fatura está fechada. Por segurança, você precisa reabri-la antes de modificar lançamentos."
+**Possível causa**: O layout flexível pode estar escondendo os botões em telas menores, ou os botões estão sendo renderizados mas não visíveis devido ao espaço disponível.
 
 ---
 
-## Fase 4: Interface de Usuário ✅
+## Solucao Proposta
 
-### Componentes Criados:
+### Correcao 1: Preservar estado do modal durante mudanca de periodo
 
-| Componente | Descrição |
-|------------|-----------|
-| `InvoiceStatusBadge.tsx` | Badge visual (Aberta/Fechada/Paga) |
-| `CloseInvoiceModal.tsx` | Modal de confirmação para fechar |
-| `ReopenInvoiceModal.tsx` | Modal de confirmação para reabrir |
-| `ClosedInvoiceBanner.tsx` | Banner de aviso em faturas fechadas |
+O problema e que o estado `closeModalOpen` e `reopenModalOpen` sao resetados quando o periodo muda. Precisamos:
 
-### ReconciliationCard Atualizado:
-- Badge de status por cartão
-- Botão "Fechar Fatura" (🔒) quando aberta
-- Botão "Reabrir" (🔓) quando fechada
-- Banner visual quando fatura está fechada
+1. Manter os modais abertos com valores de `month` e `year` capturados no momento do clique
+2. Nao depender de `selectedCardForAction` para a renderizacao condicional do modal
 
----
+**Modificar `ReconciliationCard.tsx`:**
 
-## Fase 5: Fluxo de Fechamento ✅
-
-Ao clicar "Fechar Fatura":
-1. Calcula somatório das transações do período
-2. Cria/atualiza registro em `credit_card_invoices`
-3. Exibe modal de confirmação com valor total
-4. Atualiza UI para estado "Fechada"
-
----
-
-## Fase 6: Integração com Importação 📋 (Pendente)
-
-### Próximos Passos:
-
-Modificar `InvoiceReviewModal.tsx` para:
-1. Verificar se a competência da transação cai em fatura fechada
-2. Acumular itens de faturas fechadas
-3. Perguntar ao usuário: "Deseja reabrir a fatura para incluir?"
-4. Opções: "Reabrir e Importar" | "Ignorar Itens" | "Cancelar"
-
----
-
-## Tipos Adicionados
-
-### `src/types/index.ts`:
-```typescript
-export type InvoiceCycleStatus = "open" | "closed" | "paid";
-
-export interface InvoiceCycle {
-  id: string;
-  user_id: string;
-  credit_card_id: string;
+```tsx
+// Ao inves de guardar o card inteiro, guardar os dados necessarios
+const [closeModalData, setCloseModalData] = useState<{
+  open: boolean;
+  creditCardId: string;
+  creditCardName: string;
   month: number;
   year: number;
-  status: InvoiceCycleStatus;
-  closed_amount: number | null;
-  due_date: string | null;
-  closing_date: string | null;
-  closed_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
+  totalAmount: number;
+} | null>(null);
+
+const [reopenModalData, setReopenModalData] = useState<{
+  open: boolean;
+  creditCardId: string;
+  creditCardName: string;
+  month: number;
+  year: number;
+} | null>(null);
+
+const handleCloseInvoice = (card: CardReconciliation) => {
+  // Capturar month/year ATUAIS no momento do clique
+  setCloseModalData({
+    open: true,
+    creditCardId: card.creditCardId,
+    creditCardName: card.creditCardName,
+    month, // do props
+    year,  // do props
+    totalAmount: card.transactionsTotal,
+  });
+};
+
+// E renderizar assim:
+{closeModalData && (
+  <CloseInvoiceModal
+    open={closeModalData.open}
+    onOpenChange={(open) => !open && setCloseModalData(null)}
+    creditCardId={closeModalData.creditCardId}
+    creditCardName={closeModalData.creditCardName}
+    month={closeModalData.month}
+    year={closeModalData.year}
+    totalAmount={closeModalData.totalAmount}
+  />
+)}
+```
+
+### Correcao 2: Garantir visibilidade dos botoes
+
+O layout atual usa `flex-wrap` mas pode nao estar acomodando os botoes corretamente. 
+
+**Modificar o layout dos botoes:**
+
+```tsx
+<div className="flex items-center justify-between gap-2 flex-wrap">
+  <div className="flex items-center gap-2">
+    <InvoiceStatusBadge status={invoiceStatus} />
+    <span className="text-sm font-medium">{card.creditCardName}</span>
+  </div>
+  {/* Mover botoes para linha separada em mobile */}
+  <div className="flex items-center gap-2 flex-shrink-0">
+    {isClosed ? (
+      <Button ...>Reabrir</Button>
+    ) : (
+      <Button ...>Fechar Fatura</Button>
+    )}
+    <Button ...>Detalhes</Button>
+  </div>
+</div>
+```
+
+### Correcao 3: Sincronizar periodo no hook useInvoiceCycles
+
+O hook `useInvoiceCycles` no `ReconciliationCard.tsx` esta sendo chamado **sem parametros de periodo**:
+
+```tsx
+const { getInvoiceStatus } = useInvoiceCycles(); // SEM month/year!
+```
+
+Isso faz com que ele busque TODOS os ciclos de fatura e filtre localmente. Quando o usuario muda de mes, o hook pode retornar status incorreto temporariamente.
+
+**Correcao:**
+
+```tsx
+const { getInvoiceStatus } = useInvoiceCycles({ month, year });
 ```
 
 ---
 
-## Experiência do Usuário
+## Arquivos a Modificar
 
-```text
-Fluxo Típico:
-1. Usuário importa fatura de janeiro
-2. Categoriza todas as transações
-3. Confere totais (reconciliação)
-4. Clica "Fechar Fatura" ✓
-5. Sistema trava alterações
-6. Próximo mês, usuário repete processo
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/components/credit-cards/ReconciliationCard.tsx` | Refatorar estado dos modais para capturar dados no momento do clique; adicionar month/year ao useInvoiceCycles; melhorar layout dos botoes |
 
-Se precisar corrigir:
-1. Usuário tenta editar transação de janeiro
-2. Sistema mostra erro: "Fatura fechada. Reabra para editar."
-3. Usuário clica "Reabrir Fatura"
-4. Sistema exibe aviso amarelo
-5. Usuário faz correção
-6. Usuário fecha fatura novamente
+---
+
+## Mudancas Especificas
+
+### ReconciliationCard.tsx
+
+**Linha 146-149**: Substituir estados separados por objetos completos:
+
+```tsx
+// ANTES
+const [closeModalOpen, setCloseModalOpen] = useState(false);
+const [reopenModalOpen, setReopenModalOpen] = useState(false);
+const [selectedCardForAction, setSelectedCardForAction] = useState<CardReconciliation | null>(null);
+
+// DEPOIS
+const [closeModalData, setCloseModalData] = useState<{
+  creditCardId: string;
+  creditCardName: string;
+  month: number;
+  year: number;
+  totalAmount: number;
+} | null>(null);
+
+const [reopenModalData, setReopenModalData] = useState<{
+  creditCardId: string;
+  creditCardName: string;
+  month: number;
+  year: number;
+} | null>(null);
+```
+
+**Linha 151**: Passar periodo para o hook:
+
+```tsx
+// ANTES
+const { getInvoiceStatus } = useInvoiceCycles();
+
+// DEPOIS  
+const { getInvoiceStatus } = useInvoiceCycles({ month, year });
+```
+
+**Linhas 165-173**: Atualizar handlers:
+
+```tsx
+const handleCloseInvoice = (card: CardReconciliation) => {
+  setCloseModalData({
+    creditCardId: card.creditCardId,
+    creditCardName: card.creditCardName,
+    month,
+    year,
+    totalAmount: card.transactionsTotal,
+  });
+};
+
+const handleReopenInvoice = (card: CardReconciliation) => {
+  setReopenModalData({
+    creditCardId: card.creditCardId,
+    creditCardName: card.creditCardName,
+    month,
+    year,
+  });
+};
+```
+
+**Linhas 376-398**: Atualizar renderizacao dos modais:
+
+```tsx
+{/* Close Invoice Modal */}
+{closeModalData && (
+  <CloseInvoiceModal
+    open={true}
+    onOpenChange={(open) => !open && setCloseModalData(null)}
+    creditCardId={closeModalData.creditCardId}
+    creditCardName={closeModalData.creditCardName}
+    month={closeModalData.month}
+    year={closeModalData.year}
+    totalAmount={closeModalData.totalAmount}
+  />
+)}
+
+{/* Reopen Invoice Modal */}
+{reopenModalData && (
+  <ReopenInvoiceModal
+    open={true}
+    onOpenChange={(open) => !open && setReopenModalData(null)}
+    creditCardId={reopenModalData.creditCardId}
+    creditCardName={reopenModalData.creditCardName}
+    month={reopenModalData.month}
+    year={reopenModalData.year}
+  />
+)}
 ```
 
 ---
 
-## Arquivos Modificados/Criados
+## Teste Esperado
 
-| Arquivo | Status |
-|---------|--------|
-| `supabase/migrations/` | ✅ Tabela criada |
-| `src/hooks/useInvoiceCycles.ts` | ✅ Criado |
-| `src/hooks/useTransactions.ts` | ✅ Modificado |
-| `src/types/index.ts` | ✅ Modificado |
-| `src/components/credit-cards/InvoiceStatusBadge.tsx` | ✅ Criado |
-| `src/components/credit-cards/CloseInvoiceModal.tsx` | ✅ Criado |
-| `src/components/credit-cards/ReopenInvoiceModal.tsx` | ✅ Criado |
-| `src/components/credit-cards/ClosedInvoiceBanner.tsx` | ✅ Criado |
-| `src/components/credit-cards/ReconciliationCard.tsx` | ✅ Modificado |
-| `src/components/modals/InvoiceReviewModal.tsx` | 📋 Pendente |
+1. Navegar para /credit-cards
+2. Na seção "Conciliacao de Faturas", ver os botoes "Fechar Fatura" ao lado de cada cartao
+3. Clicar em "Fechar Fatura" - modal deve abrir
+4. Enquanto modal esta aberto, clicar nas setas para mudar de mes
+5. O modal deve permanecer aberto com os dados do mes original
+6. Fechar o modal e verificar que os dados foram salvos no mes correto
+
