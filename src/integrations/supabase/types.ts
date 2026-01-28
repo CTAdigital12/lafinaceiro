@@ -167,6 +167,59 @@ export type Database = {
           },
         ]
       }
+      credit_card_invoices: {
+        Row: {
+          closed_amount: number | null
+          closed_at: string | null
+          closing_date: string | null
+          created_at: string
+          credit_card_id: string
+          due_date: string | null
+          id: string
+          month: number
+          status: string
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          closed_amount?: number | null
+          closed_at?: string | null
+          closing_date?: string | null
+          created_at?: string
+          credit_card_id: string
+          due_date?: string | null
+          id?: string
+          month: number
+          status?: string
+          updated_at?: string
+          user_id: string
+          year: number
+        }
+        Update: {
+          closed_amount?: number | null
+          closed_at?: string | null
+          closing_date?: string | null
+          created_at?: string
+          credit_card_id?: string
+          due_date?: string | null
+          id?: string
+          month?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_card_invoices_credit_card_id_fkey"
+            columns: ["credit_card_id"]
+            isOneToOne: false
+            referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_cards: {
         Row: {
           brand: string
