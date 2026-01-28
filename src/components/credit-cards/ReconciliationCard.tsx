@@ -144,11 +144,21 @@ export function ReconciliationCard({
   onPeriodChange,
 }: ReconciliationCardProps) {
   const [selectedCard, setSelectedCard] = useState<CardReconciliation | null>(null);
-  const [closeModalOpen, setCloseModalOpen] = useState(false);
-  const [reopenModalOpen, setReopenModalOpen] = useState(false);
-  const [selectedCardForAction, setSelectedCardForAction] = useState<CardReconciliation | null>(null);
+  const [closeModalData, setCloseModalData] = useState<{
+    creditCardId: string;
+    creditCardName: string;
+    month: number;
+    year: number;
+    totalAmount: number;
+  } | null>(null);
+  const [reopenModalData, setReopenModalData] = useState<{
+    creditCardId: string;
+    creditCardName: string;
+    month: number;
+    year: number;
+  } | null>(null);
 
-  const { getInvoiceStatus } = useInvoiceCycles();
+  const { getInvoiceStatus } = useInvoiceCycles({ month, year });
 
   const currentDate = new Date(year, month - 1);
 
@@ -163,13 +173,22 @@ export function ReconciliationCard({
   };
 
   const handleCloseInvoice = (card: CardReconciliation) => {
-    setSelectedCardForAction(card);
-    setCloseModalOpen(true);
+    setCloseModalData({
+      creditCardId: card.creditCardId,
+      creditCardName: card.creditCardName,
+      month,
+      year,
+      totalAmount: card.transactionsTotal,
+    });
   };
 
   const handleReopenInvoice = (card: CardReconciliation) => {
-    setSelectedCardForAction(card);
-    setReopenModalOpen(true);
+    setReopenModalData({
+      creditCardId: card.creditCardId,
+      creditCardName: card.creditCardName,
+      month,
+      year,
+    });
   };
   if (isLoading) {
     return (
@@ -373,27 +392,27 @@ export function ReconciliationCard({
       )}
 
       {/* Close Invoice Modal */}
-      {selectedCardForAction && (
+      {closeModalData && (
         <CloseInvoiceModal
-          open={closeModalOpen}
-          onOpenChange={setCloseModalOpen}
-          creditCardId={selectedCardForAction.creditCardId}
-          creditCardName={selectedCardForAction.creditCardName}
-          month={month}
-          year={year}
-          totalAmount={selectedCardForAction.transactionsTotal}
+          open={true}
+          onOpenChange={(open) => !open && setCloseModalData(null)}
+          creditCardId={closeModalData.creditCardId}
+          creditCardName={closeModalData.creditCardName}
+          month={closeModalData.month}
+          year={closeModalData.year}
+          totalAmount={closeModalData.totalAmount}
         />
       )}
 
       {/* Reopen Invoice Modal */}
-      {selectedCardForAction && (
+      {reopenModalData && (
         <ReopenInvoiceModal
-          open={reopenModalOpen}
-          onOpenChange={setReopenModalOpen}
-          creditCardId={selectedCardForAction.creditCardId}
-          creditCardName={selectedCardForAction.creditCardName}
-          month={month}
-          year={year}
+          open={true}
+          onOpenChange={(open) => !open && setReopenModalData(null)}
+          creditCardId={reopenModalData.creditCardId}
+          creditCardName={reopenModalData.creditCardName}
+          month={reopenModalData.month}
+          year={reopenModalData.year}
         />
       )}
     </>
