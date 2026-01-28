@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { format, subMonths, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText, Lock, Unlock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { ReconciliationSummary, CardReconciliation, ReconciliationTransaction } from "@/hooks/useCreditCardReconciliation";
 import { ReconciliationDetailModal } from "./ReconciliationDetailModal";
+import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
+import { CloseInvoiceModal } from "./CloseInvoiceModal";
+import { ReopenInvoiceModal } from "./ReopenInvoiceModal";
+import { ClosedInvoiceBanner } from "./ClosedInvoiceBanner";
+import { useInvoiceCycles, type InvoiceStatus } from "@/hooks/useInvoiceCycles";
 
 interface ReconciliationCardProps {
   reconciliation: ReconciliationSummary;
@@ -139,6 +144,11 @@ export function ReconciliationCard({
   onPeriodChange,
 }: ReconciliationCardProps) {
   const [selectedCard, setSelectedCard] = useState<CardReconciliation | null>(null);
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
+  const [reopenModalOpen, setReopenModalOpen] = useState(false);
+  const [selectedCardForAction, setSelectedCardForAction] = useState<CardReconciliation | null>(null);
+
+  const { getInvoiceStatus } = useInvoiceCycles();
 
   const currentDate = new Date(year, month - 1);
 
@@ -150,6 +160,16 @@ export function ReconciliationCard({
   const handleNextMonth = () => {
     const next = addMonths(currentDate, 1);
     onPeriodChange(next.getMonth() + 1, next.getFullYear());
+  };
+
+  const handleCloseInvoice = (card: CardReconciliation) => {
+    setSelectedCardForAction(card);
+    setCloseModalOpen(true);
+  };
+
+  const handleReopenInvoice = (card: CardReconciliation) => {
+    setSelectedCardForAction(card);
+    setReopenModalOpen(true);
   };
   if (isLoading) {
     return (
@@ -254,19 +274,69 @@ export function ReconciliationCard({
 
         {/* Card Details */}
         {reconciliation.cards.filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0).length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium text-muted-foreground">Por Cartão (clique para detalhes)</h4>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {reconciliation.cards
-                .filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0)
-                .map((card) => (
-                  <CardReconciliationItem 
-                    key={card.creditCardId} 
-                    card={card} 
-                    onViewDetails={() => setSelectedCard(card)}
-                  />
-                ))}
-            </div>
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-muted-foreground">Por Cartão</h4>
+            {reconciliation.cards
+              .filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0)
+              .map((card) => {
+                const invoiceStatus = getInvoiceStatus(card.creditCardId, month, year);
+                const isClosed = invoiceStatus === "closed";
+
+                return (
+                  <div key={card.creditCardId} className="space-y-2">
+                    {/* Card Item */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <InvoiceStatusBadge status={invoiceStatus} />
+                        <span className="text-sm font-medium">{card.creditCardName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isClosed ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs border-chart-4 text-chart-4 hover:bg-chart-4/10"
+                            onClick={() => handleReopenInvoice(card)}
+                          >
+                            <Unlock className="h-3 w-3 mr-1" />
+                            Reabrir
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => handleCloseInvoice(card)}
+                          >
+                            <Lock className="h-3 w-3 mr-1" />
+                            Fechar Fatura
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setSelectedCard(card)}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          Detalhes
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Closed Invoice Banner */}
+                    {isClosed && (
+                      <ClosedInvoiceBanner onReopen={() => handleReopenInvoice(card)} />
+                    )}
+
+                    {/* Card Reconciliation Details */}
+                    <CardReconciliationItem 
+                      card={card} 
+                      onViewDetails={() => setSelectedCard(card)}
+                    />
+                  </div>
+                );
+              })}
           </div>
         )}
 
@@ -299,6 +369,31 @@ export function ReconciliationCard({
           transactionsTotal={selectedCard.transactionsTotal}
           difference={selectedCard.difference}
           transactions={transactions}
+        />
+      )}
+
+      {/* Close Invoice Modal */}
+      {selectedCardForAction && (
+        <CloseInvoiceModal
+          open={closeModalOpen}
+          onOpenChange={setCloseModalOpen}
+          creditCardId={selectedCardForAction.creditCardId}
+          creditCardName={selectedCardForAction.creditCardName}
+          month={month}
+          year={year}
+          totalAmount={selectedCardForAction.transactionsTotal}
+        />
+      )}
+
+      {/* Reopen Invoice Modal */}
+      {selectedCardForAction && (
+        <ReopenInvoiceModal
+          open={reopenModalOpen}
+          onOpenChange={setReopenModalOpen}
+          creditCardId={selectedCardForAction.creditCardId}
+          creditCardName={selectedCardForAction.creditCardName}
+          month={month}
+          year={year}
         />
       )}
     </>

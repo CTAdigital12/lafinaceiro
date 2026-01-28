@@ -58,3 +58,22 @@ export interface TransactionWithRelations extends DbTransaction {
   accounts?: Pick<DbAccount, "name"> | null;
   credit_cards?: Pick<DbCreditCard, "id" | "name" | "last_digits" | "color"> | null;
 }
+
+// ============= Tipos de Ciclos de Fatura =============
+
+export type InvoiceCycleStatus = "open" | "closed" | "paid";
+
+export interface InvoiceCycle {
+  id: string;
+  user_id: string;
+  credit_card_id: string;
+  month: number;
+  year: number;
+  status: InvoiceCycleStatus;
+  closed_amount: number | null;
+  due_date: string | null;
+  closing_date: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

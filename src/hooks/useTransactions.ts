@@ -3,8 +3,41 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
+
+// Utility to check if invoice is closed for a given card/month/year
+async function checkInvoiceClosed(creditCardId: string | null | undefined, dueDate: string | null | undefined): Promise<{ isClosed: boolean; message?: string }> {
+  if (!creditCardId || !dueDate) {
+    return { isClosed: false };
+  }
+
+  const dateObj = new Date(dueDate);
+  const month = dateObj.getMonth() + 1;
+  const year = dateObj.getFullYear();
+
+  const { data, error } = await supabase
+    .from("credit_card_invoices")
+    .select("status")
+    .eq("credit_card_id", creditCardId)
+    .eq("month", month)
+    .eq("year", year)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error checking invoice status:", error);
+    return { isClosed: false };
+  }
+
+  if (data?.status === "closed") {
+    return {
+      isClosed: true,
+      message: "Esta fatura está fechada. Por segurança, você precisa reabri-la antes de modificar lançamentos.",
+    };
+  }
+
+  return { isClosed: false };
+}
 
 export interface Transaction {
   id: string;
@@ -124,13 +157,13 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const hasMore = transactions.length < totalCount;
 
   const createTransaction = useMutation({
-    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; silent?: boolean }) => {
+    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; silent?: boolean; skipInvoiceCheck?: boolean }) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
       
       // Sanitize UUID fields - convert empty strings to null
-      const { silent, ...transactionData } = transaction;
+      const { silent, skipInvoiceCheck, ...transactionData } = transaction;
       const sanitizedTransaction = {
         ...transactionData,
         user_id: user.id,
@@ -141,6 +174,17 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         imported_at: transactionData.imported_at || null,
         reimbursement_status: transactionData.reimbursement_status || null,
       };
+
+      // Check if invoice is closed (skip for imports that already handled this)
+      if (!skipInvoiceCheck) {
+        const { isClosed, message } = await checkInvoiceClosed(
+          sanitizedTransaction.credit_card_id,
+          sanitizedTransaction.due_date
+        );
+        if (isClosed) {
+          throw new Error(message);
+        }
+      }
       
       const { data, error } = await supabase
         .from("transactions")
@@ -173,12 +217,34 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   const updateTransaction = useMutation({
     mutationFn: async ({ id, ...transaction }: Partial<Transaction> & { id: string }) => {
-      // First, get the original transaction to check for credit card changes
+      // First, get the original transaction to check for credit card changes and invoice status
       const { data: original } = await supabase
         .from("transactions")
-        .select("credit_card_id")
+        .select("credit_card_id, due_date")
         .eq("id", id)
         .maybeSingle();
+
+      // Check if original invoice is closed
+      if (original) {
+        const { isClosed, message } = await checkInvoiceClosed(
+          original.credit_card_id,
+          original.due_date
+        );
+        if (isClosed) {
+          throw new Error(message);
+        }
+      }
+
+      // If moving to a different card/period, check that one too
+      if (transaction.credit_card_id && transaction.due_date) {
+        const { isClosed, message } = await checkInvoiceClosed(
+          transaction.credit_card_id,
+          transaction.due_date
+        );
+        if (isClosed) {
+          throw new Error(message);
+        }
+      }
 
       const { data, error } = await supabase
         .from("transactions")
@@ -217,16 +283,27 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   const deleteTransaction = useMutation({
     mutationFn: async (id: string) => {
-      // First, get the transaction to know which credit card to sync
+      // First, get the transaction to check invoice status and know which credit card to sync
       const { data: original } = await supabase
         .from("transactions")
-        .select("credit_card_id")
+        .select("credit_card_id, due_date")
         .eq("id", id)
         .maybeSingle();
 
+      // Check if invoice is closed
+      if (original) {
+        const { isClosed, message } = await checkInvoiceClosed(
+          original.credit_card_id,
+          original.due_date
+        );
+        if (isClosed) {
+          throw new Error(message);
+        }
+      }
+
       const { error } = await supabase.from("transactions").delete().eq("id", id);
       if (error) throw error;
-      
+
       return { creditCardId: original?.credit_card_id };
     },
     onSuccess: async (result) => {
