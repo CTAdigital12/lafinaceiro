@@ -1,99 +1,112 @@
 
-# Solução Definitiva para Edição do Campo Descrição
+
+# Correção: Memoizar Funções do Hook useCategorizationRules
 
 ## Diagnóstico Final
 
-Após investigação aprofundada e pesquisa sobre o Radix UI Dialog, o problema é causado por:
+O problema é causado por um **bug clássico de dependência do useEffect**:
 
-1. **Focus Trap do Dialog** - O Radix Dialog tem um mecanismo de focus trap que pode interceptar eventos
-2. **Event Listeners na Fase de Captura** - O `stopPropagation()` só funciona na fase de bubbling, não na captura
-3. **Possível Interferência do Command** - O componente `cmdk` usado no seletor de categoria pode ter listeners globais
+1. As funções `findCategoryForDescription` e `findCorporateForDescription` são recriadas a cada render
+2. Elas estão no array de dependências do useEffect que inicializa `reviewItems`
+3. Quando o usuário digita, o componente re-renderiza
+4. O useEffect detecta "novas" funções e reseta todo o estado com os dados originais
 
-## Solução: Input Nativo com Ref e Capture Phase Listener
+## Solução
 
-A solução mais robusta é usar um `ref` para adicionar listeners diretamente no DOM na fase de captura:
-
-```tsx
-// Criar ref para o input
-const inputRef = useRef<HTMLInputElement>(null);
-
-// Usar useEffect para adicionar listener na fase de captura
-useEffect(() => {
-  const input = inputRef.current;
-  if (!input) return;
-  
-  const stopCapture = (e: Event) => {
-    e.stopPropagation();
-  };
-  
-  input.addEventListener('keydown', stopCapture, true); // true = capture phase
-  input.addEventListener('keyup', stopCapture, true);
-  
-  return () => {
-    input.removeEventListener('keydown', stopCapture, true);
-    input.removeEventListener('keyup', stopCapture, true);
-  };
-}, []);
-```
-
-## Abordagem Alternativa (Mais Simples)
-
-Uma solução mais simples que costuma funcionar é usar um `<input>` HTML nativo em vez do componente `<Input>`:
+Memoizar as funções no hook `useCategorizationRules` usando `useCallback`:
 
 ```tsx
-<input
-  type="text"
-  value={item.description}
-  onChange={(e) => handleDescriptionChange(index, e.target.value)}
-  className={cn(
-    "h-7 text-sm font-medium flex-1 min-w-[200px] px-2 rounded border border-input bg-background",
-    isRejected && "line-through text-muted-foreground"
-  )}
-  placeholder="Descrição"
-  disabled={isRejected}
-/>
+const findCategoryForDescription = useCallback((description: string): string | null => {
+  const upperDesc = description.toUpperCase();
+  
+  for (const rule of rules) {
+    if (upperDesc.includes(rule.keyword.toUpperCase())) {
+      return rule.category_id;
+    }
+  }
+  
+  return null;
+}, [rules]);
+
+const findCorporateForDescription = useCallback((description: string): boolean => {
+  const upperDesc = description.toUpperCase();
+  
+  for (const rule of rules) {
+    if (upperDesc.includes(rule.keyword.toUpperCase())) {
+      return rule.is_corporate || false;
+    }
+  }
+  
+  return false;
+}, [rules]);
 ```
 
-## Plano de Implementação
+## Arquivo a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/modals/InvoiceReviewModal.tsx` | Substituir `<Input>` por `<input>` HTML nativo com estilos compatíveis |
+| `src/hooks/useCategorizationRules.ts` | Importar `useCallback` e envolver as funções `findCategoryForDescription` e `findCorporateForDescription` |
 
-## Mudança Específica
+## Mudanças Específicas
 
-**Linha 802-820** - Substituir o componente Input por input nativo:
-
+**Linha 1** - Adicionar `useCallback` ao import:
 ```tsx
-<input
-  type="text"
-  value={item.description}
-  onChange={(e) => handleDescriptionChange(index, e.target.value)}
-  className={cn(
-    "flex h-7 w-full rounded-md border border-input bg-background px-2 py-1 text-sm font-medium flex-1 min-w-[200px] ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-    isRejected && "line-through text-muted-foreground"
-  )}
-  placeholder="Descrição"
-  disabled={isRejected}
-/>
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { useState, useCallback } from "react";
+```
+
+**Linhas 112-122** - Memoizar `findCategoryForDescription`:
+```tsx
+const findCategoryForDescription = useCallback((description: string): string | null => {
+  const upperDesc = description.toUpperCase();
+  
+  for (const rule of rules) {
+    if (upperDesc.includes(rule.keyword.toUpperCase())) {
+      return rule.category_id;
+    }
+  }
+  
+  return null;
+}, [rules]);
+```
+
+**Linhas 125-135** - Memoizar `findCorporateForDescription`:
+```tsx
+const findCorporateForDescription = useCallback((description: string): boolean => {
+  const upperDesc = description.toUpperCase();
+  
+  for (const rule of rules) {
+    if (upperDesc.includes(rule.keyword.toUpperCase())) {
+      return rule.is_corporate || false;
+    }
+  }
+  
+  return false;
+}, [rules]);
 ```
 
 ## Por que isso funciona?
 
-O componente `<Input>` do shadcn usa `React.forwardRef` e pode ter comportamentos herdados ou wrapper elements que interferem. Usando o `<input>` HTML nativo, eliminamos qualquer possível interferência de componentes intermediários.
+`useCallback` garante que a função só seja recriada quando `rules` mudar. Isso significa que:
+- Quando o usuário digita, as funções mantêm a mesma referência
+- O useEffect não detecta mudança nas dependências
+- O estado `reviewItems` não é sobrescrito
 
 ## Teste Esperado
 
 1. Abrir modal de revisão de fatura
-2. Clicar no campo "IFD*EMPREENDIMENTOS PA"
-3. Usar Backspace para apagar caracteres
-4. Digitar novo texto
-5. Verificar que as alterações são aplicadas em tempo real
+2. Clicar no campo de descrição
+3. Digitar/apagar texto
+4. O texto deve ser atualizado em tempo real sem reverter
 
 ---
 
 ### Seção Técnica
 
-**Causa raiz**: O Radix Dialog usa internamente um `FocusScope` que pode capturar eventos de teclado na fase de captura (antes de chegarem aos elementos filhos). O `stopPropagation()` em React só funciona na fase de bubbling.
+**Causa raiz**: Funções não-memoizadas em hooks customizados causam re-execução de useEffect em componentes consumidores quando usadas como dependências.
 
-**Solução escolhida**: Usar elemento `<input>` HTML nativo evita qualquer wrapper ou comportamento adicional que o componente `<Input>` possa ter, garantindo que o navegador trate o input de forma padrão.
+**Padrão recomendado**: Sempre usar `useCallback` para funções retornadas por hooks customizados que possam ser usadas em arrays de dependências.
+
