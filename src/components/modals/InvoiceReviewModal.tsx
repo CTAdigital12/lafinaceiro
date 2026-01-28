@@ -802,13 +802,21 @@ export function InvoiceReviewModal({
                           <Input
                             value={item.description}
                             onChange={(e) => handleDescriptionChange(index, e.target.value)}
-                            onKeyDown={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              e.nativeEvent.stopImmediatePropagation();
+                            }}
+                            onKeyUp={(e) => e.stopPropagation()}
+                            onKeyPress={(e) => e.stopPropagation()}
+                            onFocus={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
                             className={cn(
                               "h-7 text-sm font-medium flex-1 min-w-[200px]",
                               isRejected && "line-through text-muted-foreground"
                             )}
                             placeholder="Descrição"
                             disabled={isRejected}
+                            style={{ pointerEvents: 'auto', userSelect: 'text' }}
                           />
                           {hasInstallments && (
                             <Badge variant="outline" className="text-xs flex-shrink-0">
