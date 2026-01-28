@@ -477,6 +477,12 @@ export default function Transactions() {
     }
   };
 
+  // Handle editing a single installment from the InstallmentDetailsSheet
+  const handleEditInstallment = (transaction: Transaction) => {
+    setSelectedInstallmentGroupId(null); // Close the sheet
+    handleEdit(transaction); // Open the edit modal
+  };
+
   const handleModalClose = (open: boolean) => {
     setIsModalOpen(open);
     if (!open) {
@@ -1225,6 +1231,7 @@ export default function Transactions() {
         open={!!selectedInstallmentGroupId}
         onOpenChange={(open) => !open && setSelectedInstallmentGroupId(null)}
         groupId={selectedInstallmentGroupId}
+        onEditTransaction={handleEditInstallment}
       />
 
       {/* Filters Modal */}
