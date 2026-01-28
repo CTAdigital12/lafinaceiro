@@ -1,109 +1,90 @@
 
-
-# Correção: Edição de Parcelas Individuais
+# Correção: Discrepância no Cálculo de Despesas do Cartão
 
 ## Problema Identificado
 
-Quando o usuário tenta editar uma parcela individual clicando em "Editar Parcela" no menu (três pontos) dentro do `InstallmentDetailsSheet`, **nada acontece** porque a prop `onEditTransaction` não está sendo passada.
+A soma de despesas exibida na aba "Cartão de Crédito" da página de Transações (R$ 40.834,57) não bate com o total de lançamentos da reconciliação (R$ 40.733,78).
 
-### Fluxo Atual (Quebrado)
+**Causa:** O cálculo de `tabTotalExpense` na página de Transações simplesmente **ignora** os estornos ao invés de **subtraí-los** do total.
 
-```text
-1. Usuário clica na transação parcelada "MERCADOLIVRE*PROD 3/3"
-2. InstallmentDetailsSheet abre mostrando todas as parcelas
-3. Usuário clica no menu (⋮) da parcela 3/3
-4. Usuário clica em "Editar Parcela"
-5. handleEditSingle() é chamado
-6. Verifica: if (onEditTransaction) → FALSE (prop não passada)
-7. Nada acontece!
-```
+**Prova matemática:**
+- Total Transações: R$ 40.834,57
+- Total Reconciliação: R$ 40.733,78
+- Diferença: **R$ 100,79** (exatamente o valor dos estornos!)
 
-### Código Atual (Errado)
+---
+
+## Análise Técnica
+
+### Cálculo ATUAL (Incorreto) - `src/pages/Transactions.tsx` linha 435-440
 
 ```typescript
-// src/pages/Transactions.tsx - linhas 1224-1228
-<InstallmentDetailsSheet
-  open={!!selectedInstallmentGroupId}
-  onOpenChange={(open) => !open && setSelectedInstallmentGroupId(null)}
-  groupId={selectedInstallmentGroupId}
-  // FALTANDO: onEditTransaction={handleEdit}
-/>
+const tabTotalExpense = filteredTransactions
+  .filter((t) => 
+    (t.type === "expense" && !t.is_refund && !t.is_card_payment) ||
+    (t.type === "income" && t.is_refund)  // ← Não subtrai estornos de expense
+  )
+  .reduce((sum, t) => sum + Number(t.amount), 0);
+```
+
+Este filtro:
+- Soma despesas normais (`expense && !is_refund`) 
+- Soma estornos de receita (`income && is_refund`)
+- **Problema:** Não subtrai estornos de despesa!
+
+### Cálculo CORRETO (Reconciliação) - `useCreditCardReconciliation.ts`
+
+```typescript
+const normalTotal = normalTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
+const refundTotal = refundTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
+const transactionsTotal = normalTotal - refundTotal;  // ← Subtrai estornos
 ```
 
 ---
 
 ## Solução
 
-Adicionar a prop `onEditTransaction` ao `InstallmentDetailsSheet` e criar um handler que:
-1. Fecha o sheet de parcelas
-2. Abre o modal de transação com a parcela selecionada
+Modificar o cálculo de `tabTotalExpense` para subtrair os estornos corretamente:
 
 ### Arquivo: `src/pages/Transactions.tsx`
 
-**Modificar linhas 1224-1228:**
+**Modificar linhas 435-440:**
 
 ```typescript
-// Handler para editar parcela individual
-const handleEditInstallment = (transaction: Transaction) => {
-  setSelectedInstallmentGroupId(null); // Fecha o sheet de parcelas
-  handleEdit(transaction); // Abre o modal de edição
-};
+// Calcular despesas normais
+const normalExpenses = filteredTransactions
+  .filter((t) => 
+    t.type === "expense" && !t.is_refund && !t.is_card_payment
+  )
+  .reduce((sum, t) => sum + Number(t.amount), 0);
 
-// Na renderização:
-<InstallmentDetailsSheet
-  open={!!selectedInstallmentGroupId}
-  onOpenChange={(open) => !open && setSelectedInstallmentGroupId(null)}
-  groupId={selectedInstallmentGroupId}
-  onEditTransaction={handleEditInstallment}
-/>
+// Calcular estornos (devem ser subtraídos)
+const expenseRefunds = filteredTransactions
+  .filter((t) => 
+    t.type === "expense" && t.is_refund
+  )
+  .reduce((sum, t) => sum + Number(t.amount), 0);
+
+// Total = Despesas - Estornos
+const tabTotalExpense = normalExpenses - expenseRefunds;
 ```
 
 ---
 
 ## Resultado Esperado
 
-### Fluxo Corrigido
+Após a correção:
+- **Página de Transações (aba Cartão):** R$ 40.733,78
+- **Página de Cartões (Total Lançamentos):** R$ 40.733,78 (mesma formula)
 
-```text
-1. Usuário clica na transação parcelada "MERCADOLIVRE*PROD 3/3"
-2. InstallmentDetailsSheet abre mostrando todas as parcelas
-3. Usuário clica no menu (⋮) da parcela 3/3
-4. Usuário clica em "Editar Parcela"
-5. handleEditSingle() é chamado
-6. Verifica: if (onEditTransaction) → TRUE
-7. Sheet fecha e TransactionModal abre com os dados da parcela
-8. Usuário edita valor/descrição/categoria
-9. Salva e atualização reflete no sistema
-```
+Os valores serão idênticos porque ambos aplicarão a mesma lógica:
+`Total = Despesas Brutas - Estornos`
 
 ---
 
-## Detalhes Técnicos
+## Resumo da Mudança
 
-### Localização da Alteração
-
-| Arquivo | Linha | Modificação |
-|---------|-------|-------------|
-| `src/pages/Transactions.tsx` | ~475 | Adicionar função `handleEditInstallment` |
-| `src/pages/Transactions.tsx` | ~1224-1228 | Passar prop `onEditTransaction` |
-
-### Código Completo da Correção
-
-```typescript
-// Adicionar após handleTransactionClick (~linha 478)
-const handleEditInstallment = (transaction: Transaction) => {
-  setSelectedInstallmentGroupId(null);
-  handleEdit(transaction);
-};
-
-// Modificar o InstallmentDetailsSheet (~linha 1224)
-<InstallmentDetailsSheet
-  open={!!selectedInstallmentGroupId}
-  onOpenChange={(open) => !open && setSelectedInstallmentGroupId(null)}
-  groupId={selectedInstallmentGroupId}
-  onEditTransaction={handleEditInstallment}
-/>
-```
-
-Esta é uma correção simples de uma linha que conecta a funcionalidade já existente.
-
+| Local | Antes | Depois |
+|-------|-------|--------|
+| Transações.tsx linha 435-440 | Ignora estornos | Subtrai estornos |
+| Valor exibido | R$ 40.834,57 | R$ 40.733,78 |
