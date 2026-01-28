@@ -1,31 +1,52 @@
 
-# Correção Robusta da Edição do Campo Descrição
+# Solução Definitiva para Edição do Campo Descrição
 
-## Diagnóstico Aprofundado
+## Diagnóstico Final
 
-O problema persiste porque:
+Após investigação aprofundada e pesquisa sobre o Radix UI Dialog, o problema é causado por:
 
-1. **FocusScope do Dialog** - O Radix Dialog usa `FocusScope` que pode interceptar eventos de teclado antes que cheguem ao Input
-2. **Capture phase listeners** - O `stopPropagation()` só para eventos na fase de bubbling, não na fase de captura
-3. **Command component** - Mesmo que o Popover da categoria esteja fechado, pode haver interferência de event handlers globais
+1. **Focus Trap do Dialog** - O Radix Dialog tem um mecanismo de focus trap que pode interceptar eventos
+2. **Event Listeners na Fase de Captura** - O `stopPropagation()` só funciona na fase de bubbling, não na captura
+3. **Possível Interferência do Command** - O componente `cmdk` usado no seletor de categoria pode ter listeners globais
 
-## Solução Robusta
+## Solução: Input Nativo com Ref e Capture Phase Listener
 
-Precisamos de uma abordagem mais agressiva para garantir que o Input receba e processe os eventos:
-
-### 1. Múltiplos Handlers de Eventos
+A solução mais robusta é usar um `ref` para adicionar listeners diretamente no DOM na fase de captura:
 
 ```tsx
-<Input
+// Criar ref para o input
+const inputRef = useRef<HTMLInputElement>(null);
+
+// Usar useEffect para adicionar listener na fase de captura
+useEffect(() => {
+  const input = inputRef.current;
+  if (!input) return;
+  
+  const stopCapture = (e: Event) => {
+    e.stopPropagation();
+  };
+  
+  input.addEventListener('keydown', stopCapture, true); // true = capture phase
+  input.addEventListener('keyup', stopCapture, true);
+  
+  return () => {
+    input.removeEventListener('keydown', stopCapture, true);
+    input.removeEventListener('keyup', stopCapture, true);
+  };
+}, []);
+```
+
+## Abordagem Alternativa (Mais Simples)
+
+Uma solução mais simples que costuma funcionar é usar um `<input>` HTML nativo em vez do componente `<Input>`:
+
+```tsx
+<input
+  type="text"
   value={item.description}
   onChange={(e) => handleDescriptionChange(index, e.target.value)}
-  onKeyDown={(e) => e.stopPropagation()}
-  onKeyUp={(e) => e.stopPropagation()}
-  onKeyPress={(e) => e.stopPropagation()}
-  onFocus={(e) => e.stopPropagation()}
-  onClick={(e) => e.stopPropagation()}
   className={cn(
-    "h-7 text-sm font-medium flex-1 min-w-[200px]",
+    "h-7 text-sm font-medium flex-1 min-w-[200px] px-2 rounded border border-input bg-background",
     isRejected && "line-through text-muted-foreground"
   )}
   placeholder="Descrição"
@@ -33,79 +54,46 @@ Precisamos de uma abordagem mais agressiva para garantir que o Input receba e pr
 />
 ```
 
-### 2. Se Ainda Não Funcionar - Usar nativeEvent
-
-Se os handlers básicos não funcionarem, precisamos parar o evento imediatamente:
-
-```tsx
-const stopAllPropagation = (e: React.SyntheticEvent) => {
-  e.stopPropagation();
-  e.nativeEvent.stopImmediatePropagation();
-};
-
-<Input
-  value={item.description}
-  onChange={(e) => handleDescriptionChange(index, e.target.value)}
-  onKeyDown={stopAllPropagation}
-  onKeyUp={stopAllPropagation}
-  onKeyPress={stopAllPropagation}
-  // ...
-/>
-```
-
-### 3. Verificar se o Input Tem `readOnly` Implícito
-
-Outra causa possível é CSS ou atributo que torne o input não-editável:
-
-```tsx
-// Adicionar style explícito para garantir editabilidade
-style={{ pointerEvents: 'auto', userSelect: 'text' }}
-```
-
----
-
-## Arquivo a Modificar
+## Plano de Implementação
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/modals/InvoiceReviewModal.tsx` | Adicionar múltiplos event handlers no Input de descrição e criar função `stopAllPropagation` |
-
----
+| `src/components/modals/InvoiceReviewModal.tsx` | Substituir `<Input>` por `<input>` HTML nativo com estilos compatíveis |
 
 ## Mudança Específica
 
-**Linha ~802-812** - Substituir o Input atual por:
+**Linha 802-820** - Substituir o componente Input por input nativo:
 
 ```tsx
-<Input
+<input
+  type="text"
   value={item.description}
   onChange={(e) => handleDescriptionChange(index, e.target.value)}
-  onKeyDown={(e) => {
-    e.stopPropagation();
-    e.nativeEvent.stopImmediatePropagation();
-  }}
-  onKeyUp={(e) => e.stopPropagation()}
-  onKeyPress={(e) => e.stopPropagation()}
-  onFocus={(e) => e.stopPropagation()}
-  onClick={(e) => e.stopPropagation()}
   className={cn(
-    "h-7 text-sm font-medium flex-1 min-w-[200px]",
+    "flex h-7 w-full rounded-md border border-input bg-background px-2 py-1 text-sm font-medium flex-1 min-w-[200px] ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
     isRejected && "line-through text-muted-foreground"
   )}
   placeholder="Descrição"
   disabled={isRejected}
-  style={{ pointerEvents: 'auto', userSelect: 'text' }}
 />
 ```
 
----
+## Por que isso funciona?
+
+O componente `<Input>` do shadcn usa `React.forwardRef` e pode ter comportamentos herdados ou wrapper elements que interferem. Usando o `<input>` HTML nativo, eliminamos qualquer possível interferência de componentes intermediários.
 
 ## Teste Esperado
 
 1. Abrir modal de revisão de fatura
-2. Clicar no campo de descrição (ex: "IFD*EMPREENDIMENTOS PA")
-3. Tentar apagar caracteres com Backspace/Delete
-4. Tentar digitar novos caracteres
-5. Verificar que o texto é atualizado em tempo real
+2. Clicar no campo "IFD*EMPREENDIMENTOS PA"
+3. Usar Backspace para apagar caracteres
+4. Digitar novo texto
+5. Verificar que as alterações são aplicadas em tempo real
 
-Se ainda não funcionar, a próxima investigação seria verificar se há um overlay CSS bloqueando o input ou se o Dialog precisa de configuração especial.
+---
+
+### Seção Técnica
+
+**Causa raiz**: O Radix Dialog usa internamente um `FocusScope` que pode capturar eventos de teclado na fase de captura (antes de chegarem aos elementos filhos). O `stopPropagation()` em React só funciona na fase de bubbling.
+
+**Solução escolhida**: Usar elemento `<input>` HTML nativo evita qualquer wrapper ou comportamento adicional que o componente `<Input>` possa ter, garantindo que o navegador trate o input de forma padrão.
