@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 export interface CategorizationRule {
   id: string;
@@ -109,7 +109,7 @@ export function useCategorizationRules() {
   });
 
   // Function to find matching category and corporate status for a description
-  const findCategoryForDescription = (description: string): string | null => {
+  const findCategoryForDescription = useCallback((description: string): string | null => {
     const upperDesc = description.toUpperCase();
     
     for (const rule of rules) {
@@ -119,10 +119,10 @@ export function useCategorizationRules() {
     }
     
     return null;
-  };
+  }, [rules]);
 
   // Function to find if a description matches a corporate rule
-  const findCorporateForDescription = (description: string): boolean => {
+  const findCorporateForDescription = useCallback((description: string): boolean => {
     const upperDesc = description.toUpperCase();
     
     for (const rule of rules) {
@@ -132,7 +132,7 @@ export function useCategorizationRules() {
     }
     
     return false;
-  };
+  }, [rules]);
 
   // State for bulk apply operation
   const [isApplyingRules, setIsApplyingRules] = useState(false);
