@@ -799,24 +799,16 @@ export function InvoiceReviewModal({
                               <TooltipContent>Compra pós-fechamento (próxima fatura)</TooltipContent>
                             </Tooltip>
                           )}
-                          <Input
+                          <input
+                            type="text"
                             value={item.description}
                             onChange={(e) => handleDescriptionChange(index, e.target.value)}
-                            onKeyDown={(e) => {
-                              e.stopPropagation();
-                              e.nativeEvent.stopImmediatePropagation();
-                            }}
-                            onKeyUp={(e) => e.stopPropagation()}
-                            onKeyPress={(e) => e.stopPropagation()}
-                            onFocus={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
                             className={cn(
-                              "h-7 text-sm font-medium flex-1 min-w-[200px]",
+                              "flex h-7 w-full rounded-md border border-input bg-background px-2 py-1 text-sm font-medium flex-1 min-w-[200px] ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
                               isRejected && "line-through text-muted-foreground"
                             )}
                             placeholder="Descrição"
                             disabled={isRejected}
-                            style={{ pointerEvents: 'auto', userSelect: 'text' }}
                           />
                           {hasInstallments && (
                             <Badge variant="outline" className="text-xs flex-shrink-0">
