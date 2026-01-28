@@ -1,51 +1,49 @@
 
-# Mostrar Controles de Edição Sempre Visíveis
+# Corrigir Edição do Campo Descrição
 
-## Problema
-Os controles de edição (categoria, corporate, notas) estão ocultos quando um item não está marcado para importação (`include_in_import = false`). Isso impede o usuário de:
-- Escolher categoria para duplicatas antes de forçar a inclusão
-- Adicionar notas a qualquer item
-- Marcar itens como corporativos independente do status
+## Diagnóstico
+
+O Input de descrição está na linha 802-811 com a configuração correta:
+```tsx
+<Input
+  value={item.description}
+  onChange={(e) => handleDescriptionChange(index, e.target.value)}
+  disabled={isRejected}  // Só desabilita para itens rejeitados
+/>
+```
+
+Porém, o usuário não consegue digitar. Possíveis causas:
+1. **Evento `onKeyDown` capturado** pelo Dialog ou ScrollArea
+2. **CSS `user-select: none`** herdado de algum parent
+3. **Conflito de foco** com o Command/Popover da categoria
 
 ## Solução
-Remover a condição `{item.include_in_import && ...}` que oculta os controles, mantendo-os sempre visíveis com comportamento ajustado:
 
-| Status | Controles |
-|--------|-----------|
-| **Novo** (incluído) | Visíveis, habilitados |
-| **Duplicado** (desmarcado) | Visíveis, habilitados |
-| **Rejeitado** | Visíveis, desabilitados (cinza) |
+Adicionar propriedades explícitas para garantir que o Input seja editável:
 
-## Mudança Técnica
-
-### Antes (linha 888)
 ```tsx
-{item.include_in_import && (
-  <>
-    <div className="flex items-center gap-2 flex-wrap">
-      {/* Categoria, Corporate, Notes */}
-    </div>
-  </>
-)}
+<Input
+  value={item.description}
+  onChange={(e) => handleDescriptionChange(index, e.target.value)}
+  onKeyDown={(e) => e.stopPropagation()} // Prevenir que Dialog capture eventos
+  className={cn(
+    "h-7 text-sm font-medium flex-1 min-w-[200px]",
+    isRejected && "line-through text-muted-foreground"
+  )}
+  placeholder="Descrição"
+  disabled={isRejected}
+/>
 ```
 
-### Depois
-```tsx
-<div className={cn(
-  "flex items-center gap-2 flex-wrap",
-  isRejected && "opacity-50 pointer-events-none"
-)}>
-  {/* Categoria, Corporate, Notes - sempre visíveis */}
-</div>
-```
+A chave é `onKeyDown={(e) => e.stopPropagation()}` que previne o Dialog de capturar os eventos de teclado.
 
 ## Arquivo a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/modals/InvoiceReviewModal.tsx` | Remover condição `item.include_in_import &&`, adicionar classe condicional para itens rejeitados |
+| `src/components/modals/InvoiceReviewModal.tsx` | Adicionar `onKeyDown={(e) => e.stopPropagation()}` no Input de descrição (linha ~804) |
 
-## Resultado Esperado
-- Usuário pode editar categoria/notas de QUALQUER item
-- Itens rejeitados mostram controles desabilitados (não clicáveis)
-- Workflow: editar primeiro → depois marcar para importar
+## Teste Esperado
+- Clicar no campo de descrição
+- Digitar/apagar texto
+- Verificar que o texto é atualizado em tempo real
