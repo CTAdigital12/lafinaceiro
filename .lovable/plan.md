@@ -1,90 +1,62 @@
 
 
-# Correção: Seletor de Mês e Dados Zerados nos Cartões
+# Correção: Seletor Global de Mês na Página de Cartões
 
-## Diagnóstico
+## Problema
 
-### Problema 1: Seletor de mês "não funciona" (Fevereiro)
+A página de Cartões de Crédito (`CreditCards.tsx`) usa estado local próprio para o mês/ano:
 
-O seletor está DENTRO do componente `ReconciliationCard`. Quando não há dados visíveis, o componente inteiro retorna `null` (linha ~217 do ReconciliationCard), fazendo o seletor de mês desaparecer junto.
+```typescript
+const now = new Date();
+const [reconciliationMonth, setReconciliationMonth] = useState(now.getMonth() + 1);
+const [reconciliationYear, setReconciliationYear] = useState(now.getFullYear());
+```
 
-Para Fevereiro/2026, todas as 17 transações de cartão têm `status: "pending"`. O hook de reconciliação só conta transações "completed" no `transactionsTotal`. Como resultado:
-- `bankInvoice = 0` (current_invoice do cartão é 0)
-- `transactionsTotal = 0` (nenhuma transação "completed" em fev)
-- `hasData = false` -> componente retorna `null` -> seletor some
-
-### Problema 2: Janeiro mostra tudo zerado
-
-Janeiro tem 162 transações "completed" totalizando R$ 40.935,36 no banco. O `transactionsTotal` deveria estar correto. Porém:
-- `bankInvoice = 0` porque usa `card.current_invoice` que é o saldo ATUAL do cartão (já está pago), não o valor histórico daquele mês
-- Os cards de resumo no topo da página ("Fatura Banco") usam `totalInvoice` do hook `useCreditCards`, que é o saldo atual e não muda com o mês selecionado
+Enquanto o seletor do cabeçalho atualiza o contexto global `DateContext` via `useDate()`. Os dois não estão conectados.
 
 ## Solução
 
-### 1. Sempre exibir o ReconciliationCard (com seletor de mês)
+Substituir o estado local pelo contexto global `useDate()`. O seletor de mês **dentro** do `ReconciliationCard` continuará funcionando como override local (para navegação rápida dentro da conciliação), mas o estado inicial virá do cabeçalho.
 
-Remover a condição `if (!hasData) return null`. Quando não houver dados, mostrar uma mensagem informativa ao invés de esconder o componente inteiro.
+## Mudanças
 
-### 2. Incluir transações pendentes no cálculo de visibilidade
+### `src/pages/CreditCards.tsx`
 
-Modificar a verificação `hasData` para considerar também `pendingTotal`:
+1. Importar `useDate` do contexto global
+2. Remover as variáveis locais `reconciliationMonth`, `reconciliationYear` e `handlePeriodChange`
+3. Usar `month` e `year` do `useDate()` diretamente
+4. Passar para o `ReconciliationCard` e para o hook `useCreditCardReconciliation`
+
 ```typescript
-const hasData = reconciliation.cards.some(
-  c => c.bankInvoice > 0 || c.transactionsTotal > 0 || c.pendingTotal > 0
-);
+// ANTES
+const now = new Date();
+const [reconciliationMonth, setReconciliationMonth] = useState(now.getMonth() + 1);
+const [reconciliationYear, setReconciliationYear] = useState(now.getFullYear());
+
+// DEPOIS
+import { useDate } from "@/contexts/DateContext";
+const { month, year } = useDate();
 ```
 
-### 3. Sincronizar os cards de resumo com o mês selecionado
+O `ReconciliationCard` já possui seu próprio seletor de mês interno que permite navegar entre períodos independentemente. A mudança é apenas que o **valor inicial** e o **seletor do cabeçalho** agora estarão sincronizados.
 
-Os 5 cards de resumo no topo da página CreditCards.tsx devem usar os dados de `reconciliation` (que já acompanha o mês) ao invés de `totalInvoice` do `useCreditCards`.
+Para manter a funcionalidade do seletor interno do ReconciliationCard (que permite o usuário mudar o mês só dentro da conciliação), vamos manter o estado local mas inicializá-lo a partir do contexto global e sincronizá-lo quando o cabeçalho mudar:
 
-## Arquivos a Modificar
+```typescript
+const { month: globalMonth, year: globalYear } = useDate();
+const [reconciliationMonth, setReconciliationMonth] = useState(globalMonth);
+const [reconciliationYear, setReconciliationYear] = useState(globalYear);
+
+// Sincronizar quando o cabeçalho mudar
+useEffect(() => {
+  setReconciliationMonth(globalMonth);
+  setReconciliationYear(globalYear);
+}, [globalMonth, globalYear]);
+```
+
+### Arquivo a modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/credit-cards/ReconciliationCard.tsx` | Sempre exibir o componente; incluir pendingTotal na verificação hasData; mostrar mensagem quando não há transações |
-| `src/pages/CreditCards.tsx` | Sincronizar card "Fatura Banco" com o mês selecionado (usar reconciliation.totalBankInvoice que já acompanha o período) |
-
-## Mudanças Específicas
-
-### ReconciliationCard.tsx
-
-**Condição hasData (linha ~217)**: Ao invés de retornar null, sempre renderizar o card com o seletor de mês. Quando não houver dados, exibir mensagem dentro do card:
-
-```tsx
-const hasData = reconciliation.cards.some(
-  c => c.bankInvoice > 0 || c.transactionsTotal > 0 || c.pendingTotal > 0
-);
-
-// Remover: if (!hasData) return null;
-
-// No JSX, envolver a seção de detalhes com:
-{hasData ? (
-  // ... conteúdo existente (summary cards, card details, etc)
-) : (
-  <div className="text-center py-6 text-muted-foreground">
-    <p>Nenhum lançamento encontrado para este período.</p>
-  </div>
-)}
-```
-
-O header com o seletor de mês ficará FORA desta condição, sempre visível.
-
-### CreditCards.tsx
-
-**Card "Fatura Banco" (linhas 248-253)**: O valor já usa `totalInvoice` do `useCreditCards`, que reflete o saldo atual. Isso é correto para mostrar o saldo atual do banco. Porém, vale verificar que os outros cards (Fatura Lançada, Meu Custo, A Reembolsar) já usam `reconciliation.*` que acompanha o mês -- e estes já estão corretos.
-
-O foco principal é garantir que o ReconciliationCard (e seu seletor de mês) esteja sempre visível.
-
----
-
-### Seção Técnica
-
-**Causa raiz principal**: A verificação `hasData` no ReconciliationCard esconde o componente inteiro (incluindo o seletor de mês) quando:
-- Todas transações são "pending" (fevereiro)
-- O `current_invoice` do cartão é 0 (já pago)
-
-**Impacto**: O seletor de mês é renderizado dentro do componente que desaparece, tornando impossível navegar para meses com dados.
-
-**Correção**: Separar a renderização do header (sempre visível) do conteúdo de dados (condicional), e ampliar a verificação de `hasData` para incluir pendentes.
+| `src/pages/CreditCards.tsx` | Importar `useDate`, sincronizar estado local com contexto global via `useEffect` |
 
