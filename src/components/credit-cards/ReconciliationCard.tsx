@@ -190,6 +190,7 @@ export function ReconciliationCard({
       year,
     });
   };
+
   if (isLoading) {
     return (
       <div className="bg-card rounded-xl border border-border p-6 shadow-card animate-pulse">
@@ -199,24 +200,21 @@ export function ReconciliationCard({
     );
   }
 
-  const hasData = reconciliation.cards.some(c => c.bankInvoice > 0 || c.transactionsTotal > 0);
-  
-  if (!hasData) {
-    return null;
-  }
+  const hasData = reconciliation.cards.some(c => c.bankInvoice > 0 || c.transactionsTotal > 0 || c.pendingTotal > 0);
 
   return (
     <>
       <div className="bg-card rounded-xl border border-border p-6 shadow-card space-y-4">
+        {/* Header - always visible with month selector */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <div className={cn(
               "h-10 w-10 rounded-lg flex items-center justify-center",
-              reconciliation.hasAnyDiscrepancy ? "bg-chart-4/10" : "bg-income/10"
+              hasData && reconciliation.hasAnyDiscrepancy ? "bg-chart-4/10" : "bg-income/10"
             )}>
               <Scale className={cn(
                 "h-5 w-5",
-                reconciliation.hasAnyDiscrepancy ? "text-chart-4" : "text-income"
+                hasData && reconciliation.hasAnyDiscrepancy ? "text-chart-4" : "text-income"
               )} />
             </div>
             <div>
@@ -228,152 +226,148 @@ export function ReconciliationCard({
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Period Selector */}
             <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={handlePrevMonth}
-              >
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevMonth}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="px-3 font-medium text-sm min-w-[100px] text-center capitalize">
                 {format(currentDate, "MMM yyyy", { locale: ptBR })}
               </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={handleNextMonth}
-              >
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextMonth}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
 
-            {reconciliation.hasAnyDiscrepancy ? (
-              <Badge className="bg-chart-4/10 text-chart-4 border-chart-4/20">
-                <AlertTriangle className="h-3 w-3 mr-1" />
-                Há divergências
-              </Badge>
-            ) : (
-              <Badge className="bg-income/10 text-income border-income/20">
-                <CheckCircle className="h-3 w-3 mr-1" />
-                Tudo conciliado
-              </Badge>
+            {hasData && (
+              reconciliation.hasAnyDiscrepancy ? (
+                <Badge className="bg-chart-4/10 text-chart-4 border-chart-4/20">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  Há divergências
+                </Badge>
+              ) : (
+                <Badge className="bg-income/10 text-income border-income/20">
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Tudo conciliado
+                </Badge>
+              )
             )}
           </div>
         </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-muted/30 rounded-lg p-3">
-          <p className="text-xs text-muted-foreground">Total Banco</p>
-          <p className="text-lg font-bold">{formatCurrency(reconciliation.totalBankInvoice)}</p>
-        </div>
-        <div className="bg-muted/30 rounded-lg p-3">
-          <p className="text-xs text-muted-foreground">Total Lançamentos</p>
-          <p className="text-lg font-bold">{formatCurrency(reconciliation.totalTransactions)}</p>
-        </div>
-        <div className="bg-muted/30 rounded-lg p-3">
-          <div className="flex items-center gap-1">
-            <User className="h-3 w-3 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">Pessoal</p>
-          </div>
-          <p className="text-lg font-bold text-expense">{formatCurrency(reconciliation.totalPersonal)}</p>
-        </div>
-        <div className="bg-muted/30 rounded-lg p-3">
-          <div className="flex items-center gap-1">
-            <Briefcase className="h-3 w-3 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">Empresa</p>
-          </div>
-          <p className="text-lg font-bold text-muted-foreground">{formatCurrency(reconciliation.totalCorporate)}</p>
-        </div>
-      </div>
+        {hasData ? (
+          <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-xs text-muted-foreground">Total Banco</p>
+                <p className="text-lg font-bold">{formatCurrency(reconciliation.totalBankInvoice)}</p>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-xs text-muted-foreground">Total Lançamentos</p>
+                <p className="text-lg font-bold">{formatCurrency(reconciliation.totalTransactions)}</p>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-3">
+                <div className="flex items-center gap-1">
+                  <User className="h-3 w-3 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">Pessoal</p>
+                </div>
+                <p className="text-lg font-bold text-expense">{formatCurrency(reconciliation.totalPersonal)}</p>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-3">
+                <div className="flex items-center gap-1">
+                  <Briefcase className="h-3 w-3 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">Empresa</p>
+                </div>
+                <p className="text-lg font-bold text-muted-foreground">{formatCurrency(reconciliation.totalCorporate)}</p>
+              </div>
+            </div>
 
-        {/* Card Details */}
-        {reconciliation.cards.filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0).length > 0 && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-muted-foreground">Por Cartão</h4>
-            {reconciliation.cards
-              .filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0)
-              .map((card) => {
-                const invoiceStatus = getInvoiceStatus(card.creditCardId, month, year);
-                const isClosed = invoiceStatus === "closed";
+            {/* Card Details */}
+            {reconciliation.cards.filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0 || c.pendingTotal > 0).length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-muted-foreground">Por Cartão</h4>
+                {reconciliation.cards
+                  .filter(c => c.bankInvoice > 0 || c.transactionsTotal > 0 || c.pendingTotal > 0)
+                  .map((card) => {
+                    const invoiceStatus = getInvoiceStatus(card.creditCardId, month, year);
+                    const isClosed = invoiceStatus === "closed";
 
-                return (
-                  <div key={card.creditCardId} className="space-y-2">
-                    {/* Card Item */}
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <InvoiceStatusBadge status={invoiceStatus} />
-                        <span className="text-sm font-medium">{card.creditCardName}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isClosed ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs border-chart-4 text-chart-4 hover:bg-chart-4/10"
-                            onClick={() => handleReopenInvoice(card)}
-                          >
-                            <Unlock className="h-3 w-3 mr-1" />
-                            Reabrir
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => handleCloseInvoice(card)}
-                          >
-                            <Lock className="h-3 w-3 mr-1" />
-                            Fechar Fatura
-                          </Button>
+                    return (
+                      <div key={card.creditCardId} className="space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <InvoiceStatusBadge status={invoiceStatus} />
+                            <span className="text-sm font-medium">{card.creditCardName}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {isClosed ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs border-chart-4 text-chart-4 hover:bg-chart-4/10"
+                                onClick={() => handleReopenInvoice(card)}
+                              >
+                                <Unlock className="h-3 w-3 mr-1" />
+                                Reabrir
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => handleCloseInvoice(card)}
+                              >
+                                <Lock className="h-3 w-3 mr-1" />
+                                Fechar Fatura
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => setSelectedCard(card)}
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              Detalhes
+                            </Button>
+                          </div>
+                        </div>
+
+                        {isClosed && (
+                          <ClosedInvoiceBanner onReopen={() => handleReopenInvoice(card)} />
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => setSelectedCard(card)}
-                        >
-                          <FileText className="h-3 w-3 mr-1" />
-                          Detalhes
-                        </Button>
+
+                        <CardReconciliationItem 
+                          card={card} 
+                          onViewDetails={() => setSelectedCard(card)}
+                        />
                       </div>
-                    </div>
+                    );
+                  })}
+              </div>
+            )}
 
-                    {/* Closed Invoice Banner */}
-                    {isClosed && (
-                      <ClosedInvoiceBanner onReopen={() => handleReopenInvoice(card)} />
-                    )}
-
-                    {/* Card Reconciliation Details */}
-                    <CardReconciliationItem 
-                      card={card} 
-                      onViewDetails={() => setSelectedCard(card)}
-                    />
-                  </div>
-                );
-              })}
+            {/* Discrepancy alert */}
+            {reconciliation.cards.some(c => c.hasDiscrepancy && !c.isPaid) && Math.abs(reconciliation.totalDifference) > 0.01 && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-sm">
+                <AlertTriangle className="h-4 w-4 text-chart-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-chart-4">
+                    Diferença total: {formatCurrency(Math.abs(reconciliation.totalDifference))}
+                  </p>
+                  <p className="text-muted-foreground text-xs mt-1">
+                    {reconciliation.totalDifference > 0 
+                      ? "O valor no banco é maior que os lançamentos registrados. Pode haver transações faltando."
+                      : "Os lançamentos são maiores que o valor no banco. Verifique se há transações duplicadas ou já pagas."}
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-6 text-muted-foreground">
+            <p>Nenhum lançamento encontrado para este período.</p>
           </div>
-        )}
-
-      {/* Only show discrepancy alert if there are cards with real discrepancies (not paid) */}
-      {reconciliation.cards.some(c => c.hasDiscrepancy && !c.isPaid) && Math.abs(reconciliation.totalDifference) > 0.01 && (
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-sm">
-          <AlertTriangle className="h-4 w-4 text-chart-4 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="font-medium text-chart-4">
-              Diferença total: {formatCurrency(Math.abs(reconciliation.totalDifference))}
-            </p>
-            <p className="text-muted-foreground text-xs mt-1">
-              {reconciliation.totalDifference > 0 
-                ? "O valor no banco é maior que os lançamentos registrados. Pode haver transações faltando."
-                : "Os lançamentos são maiores que o valor no banco. Verifique se há transações duplicadas ou já pagas."}
-            </p>
-          </div>
-        </div>
         )}
       </div>
 

@@ -247,7 +247,7 @@ export default function CreditCards() {
             <div>
               <p className="text-xs text-muted-foreground">Fatura Banco</p>
               <p className="text-lg font-bold text-foreground">
-                R$ {totalInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                R$ {reconciliation.totalBankInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-muted-foreground">Valor informado</p>
             </div>
