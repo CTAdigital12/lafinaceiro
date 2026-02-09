@@ -1,245 +1,90 @@
 
-# Correção: Conciliação de Faturas - Modal Desaparecendo e Botões Invisíveis
+
+# Correção: Seletor de Mês e Dados Zerados nos Cartões
 
 ## Diagnóstico
 
-### Problema 1: Modal desaparece ao mudar de mês
+### Problema 1: Seletor de mês "não funciona" (Fevereiro)
 
-**Causa raiz**: O estado `selectedCardForAction` é definido como um objeto `CardReconciliation` que vem do array `reconciliation.cards`. Quando o usuário muda de mês:
+O seletor está DENTRO do componente `ReconciliationCard`. Quando não há dados visíveis, o componente inteiro retorna `null` (linha ~217 do ReconciliationCard), fazendo o seletor de mês desaparecer junto.
 
-1. O hook `useCreditCardReconciliation` dispara um refetch
-2. Novos objetos `CardReconciliation` são criados
-3. O React re-renderiza o componente
-4. A condição `{selectedCardForAction && ...}` pode falhar brevemente durante a transição
-5. O modal é desmontado
+Para Fevereiro/2026, todas as 17 transações de cartão têm `status: "pending"`. O hook de reconciliação só conta transações "completed" no `transactionsTotal`. Como resultado:
+- `bankInvoice = 0` (current_invoice do cartão é 0)
+- `transactionsTotal = 0` (nenhuma transação "completed" em fev)
+- `hasData = false` -> componente retorna `null` -> seletor some
 
-**Problema adicional**: Os modais são renderizados condicionalmente com `{selectedCardForAction && <Modal ...>}`. Quando `selectedCardForAction` muda para `null` durante a transição, os modais desaparecem.
+### Problema 2: Janeiro mostra tudo zerado
 
-### Problema 2: Botões de fechar/abrir não aparecem
+Janeiro tem 162 transações "completed" totalizando R$ 40.935,36 no banco. O `transactionsTotal` deveria estar correto. Porém:
+- `bankInvoice = 0` porque usa `card.current_invoice` que é o saldo ATUAL do cartão (já está pago), não o valor histórico daquele mês
+- Os cards de resumo no topo da página ("Fatura Banco") usam `totalInvoice` do hook `useCreditCards`, que é o saldo atual e não muda com o mês selecionado
 
-Analisando o código em `ReconciliationCard.tsx` (linhas 294-314), os botões **estão sendo renderizados**:
+## Solução
 
-```tsx
-{isClosed ? (
-  <Button onClick={() => handleReopenInvoice(card)}>
-    <Unlock /> Reabrir
-  </Button>
-) : (
-  <Button onClick={() => handleCloseInvoice(card)}>
-    <Lock /> Fechar Fatura
-  </Button>
-)}
+### 1. Sempre exibir o ReconciliationCard (com seletor de mês)
+
+Remover a condição `if (!hasData) return null`. Quando não houver dados, mostrar uma mensagem informativa ao invés de esconder o componente inteiro.
+
+### 2. Incluir transações pendentes no cálculo de visibilidade
+
+Modificar a verificação `hasData` para considerar também `pendingTotal`:
+```typescript
+const hasData = reconciliation.cards.some(
+  c => c.bankInvoice > 0 || c.transactionsTotal > 0 || c.pendingTotal > 0
+);
 ```
 
-**Possível causa**: O layout flexível pode estar escondendo os botões em telas menores, ou os botões estão sendo renderizados mas não visíveis devido ao espaço disponível.
+### 3. Sincronizar os cards de resumo com o mês selecionado
 
----
-
-## Solucao Proposta
-
-### Correcao 1: Preservar estado do modal durante mudanca de periodo
-
-O problema e que o estado `closeModalOpen` e `reopenModalOpen` sao resetados quando o periodo muda. Precisamos:
-
-1. Manter os modais abertos com valores de `month` e `year` capturados no momento do clique
-2. Nao depender de `selectedCardForAction` para a renderizacao condicional do modal
-
-**Modificar `ReconciliationCard.tsx`:**
-
-```tsx
-// Ao inves de guardar o card inteiro, guardar os dados necessarios
-const [closeModalData, setCloseModalData] = useState<{
-  open: boolean;
-  creditCardId: string;
-  creditCardName: string;
-  month: number;
-  year: number;
-  totalAmount: number;
-} | null>(null);
-
-const [reopenModalData, setReopenModalData] = useState<{
-  open: boolean;
-  creditCardId: string;
-  creditCardName: string;
-  month: number;
-  year: number;
-} | null>(null);
-
-const handleCloseInvoice = (card: CardReconciliation) => {
-  // Capturar month/year ATUAIS no momento do clique
-  setCloseModalData({
-    open: true,
-    creditCardId: card.creditCardId,
-    creditCardName: card.creditCardName,
-    month, // do props
-    year,  // do props
-    totalAmount: card.transactionsTotal,
-  });
-};
-
-// E renderizar assim:
-{closeModalData && (
-  <CloseInvoiceModal
-    open={closeModalData.open}
-    onOpenChange={(open) => !open && setCloseModalData(null)}
-    creditCardId={closeModalData.creditCardId}
-    creditCardName={closeModalData.creditCardName}
-    month={closeModalData.month}
-    year={closeModalData.year}
-    totalAmount={closeModalData.totalAmount}
-  />
-)}
-```
-
-### Correcao 2: Garantir visibilidade dos botoes
-
-O layout atual usa `flex-wrap` mas pode nao estar acomodando os botoes corretamente. 
-
-**Modificar o layout dos botoes:**
-
-```tsx
-<div className="flex items-center justify-between gap-2 flex-wrap">
-  <div className="flex items-center gap-2">
-    <InvoiceStatusBadge status={invoiceStatus} />
-    <span className="text-sm font-medium">{card.creditCardName}</span>
-  </div>
-  {/* Mover botoes para linha separada em mobile */}
-  <div className="flex items-center gap-2 flex-shrink-0">
-    {isClosed ? (
-      <Button ...>Reabrir</Button>
-    ) : (
-      <Button ...>Fechar Fatura</Button>
-    )}
-    <Button ...>Detalhes</Button>
-  </div>
-</div>
-```
-
-### Correcao 3: Sincronizar periodo no hook useInvoiceCycles
-
-O hook `useInvoiceCycles` no `ReconciliationCard.tsx` esta sendo chamado **sem parametros de periodo**:
-
-```tsx
-const { getInvoiceStatus } = useInvoiceCycles(); // SEM month/year!
-```
-
-Isso faz com que ele busque TODOS os ciclos de fatura e filtre localmente. Quando o usuario muda de mes, o hook pode retornar status incorreto temporariamente.
-
-**Correcao:**
-
-```tsx
-const { getInvoiceStatus } = useInvoiceCycles({ month, year });
-```
-
----
+Os 5 cards de resumo no topo da página CreditCards.tsx devem usar os dados de `reconciliation` (que já acompanha o mês) ao invés de `totalInvoice` do `useCreditCards`.
 
 ## Arquivos a Modificar
 
-| Arquivo | Mudanca |
+| Arquivo | Mudança |
 |---------|---------|
-| `src/components/credit-cards/ReconciliationCard.tsx` | Refatorar estado dos modais para capturar dados no momento do clique; adicionar month/year ao useInvoiceCycles; melhorar layout dos botoes |
+| `src/components/credit-cards/ReconciliationCard.tsx` | Sempre exibir o componente; incluir pendingTotal na verificação hasData; mostrar mensagem quando não há transações |
+| `src/pages/CreditCards.tsx` | Sincronizar card "Fatura Banco" com o mês selecionado (usar reconciliation.totalBankInvoice que já acompanha o período) |
 
----
-
-## Mudancas Especificas
+## Mudanças Específicas
 
 ### ReconciliationCard.tsx
 
-**Linha 146-149**: Substituir estados separados por objetos completos:
+**Condição hasData (linha ~217)**: Ao invés de retornar null, sempre renderizar o card com o seletor de mês. Quando não houver dados, exibir mensagem dentro do card:
 
 ```tsx
-// ANTES
-const [closeModalOpen, setCloseModalOpen] = useState(false);
-const [reopenModalOpen, setReopenModalOpen] = useState(false);
-const [selectedCardForAction, setSelectedCardForAction] = useState<CardReconciliation | null>(null);
+const hasData = reconciliation.cards.some(
+  c => c.bankInvoice > 0 || c.transactionsTotal > 0 || c.pendingTotal > 0
+);
 
-// DEPOIS
-const [closeModalData, setCloseModalData] = useState<{
-  creditCardId: string;
-  creditCardName: string;
-  month: number;
-  year: number;
-  totalAmount: number;
-} | null>(null);
+// Remover: if (!hasData) return null;
 
-const [reopenModalData, setReopenModalData] = useState<{
-  creditCardId: string;
-  creditCardName: string;
-  month: number;
-  year: number;
-} | null>(null);
-```
-
-**Linha 151**: Passar periodo para o hook:
-
-```tsx
-// ANTES
-const { getInvoiceStatus } = useInvoiceCycles();
-
-// DEPOIS  
-const { getInvoiceStatus } = useInvoiceCycles({ month, year });
-```
-
-**Linhas 165-173**: Atualizar handlers:
-
-```tsx
-const handleCloseInvoice = (card: CardReconciliation) => {
-  setCloseModalData({
-    creditCardId: card.creditCardId,
-    creditCardName: card.creditCardName,
-    month,
-    year,
-    totalAmount: card.transactionsTotal,
-  });
-};
-
-const handleReopenInvoice = (card: CardReconciliation) => {
-  setReopenModalData({
-    creditCardId: card.creditCardId,
-    creditCardName: card.creditCardName,
-    month,
-    year,
-  });
-};
-```
-
-**Linhas 376-398**: Atualizar renderizacao dos modais:
-
-```tsx
-{/* Close Invoice Modal */}
-{closeModalData && (
-  <CloseInvoiceModal
-    open={true}
-    onOpenChange={(open) => !open && setCloseModalData(null)}
-    creditCardId={closeModalData.creditCardId}
-    creditCardName={closeModalData.creditCardName}
-    month={closeModalData.month}
-    year={closeModalData.year}
-    totalAmount={closeModalData.totalAmount}
-  />
-)}
-
-{/* Reopen Invoice Modal */}
-{reopenModalData && (
-  <ReopenInvoiceModal
-    open={true}
-    onOpenChange={(open) => !open && setReopenModalData(null)}
-    creditCardId={reopenModalData.creditCardId}
-    creditCardName={reopenModalData.creditCardName}
-    month={reopenModalData.month}
-    year={reopenModalData.year}
-  />
+// No JSX, envolver a seção de detalhes com:
+{hasData ? (
+  // ... conteúdo existente (summary cards, card details, etc)
+) : (
+  <div className="text-center py-6 text-muted-foreground">
+    <p>Nenhum lançamento encontrado para este período.</p>
+  </div>
 )}
 ```
+
+O header com o seletor de mês ficará FORA desta condição, sempre visível.
+
+### CreditCards.tsx
+
+**Card "Fatura Banco" (linhas 248-253)**: O valor já usa `totalInvoice` do `useCreditCards`, que reflete o saldo atual. Isso é correto para mostrar o saldo atual do banco. Porém, vale verificar que os outros cards (Fatura Lançada, Meu Custo, A Reembolsar) já usam `reconciliation.*` que acompanha o mês -- e estes já estão corretos.
+
+O foco principal é garantir que o ReconciliationCard (e seu seletor de mês) esteja sempre visível.
 
 ---
 
-## Teste Esperado
+### Seção Técnica
 
-1. Navegar para /credit-cards
-2. Na seção "Conciliacao de Faturas", ver os botoes "Fechar Fatura" ao lado de cada cartao
-3. Clicar em "Fechar Fatura" - modal deve abrir
-4. Enquanto modal esta aberto, clicar nas setas para mudar de mes
-5. O modal deve permanecer aberto com os dados do mes original
-6. Fechar o modal e verificar que os dados foram salvos no mes correto
+**Causa raiz principal**: A verificação `hasData` no ReconciliationCard esconde o componente inteiro (incluindo o seletor de mês) quando:
+- Todas transações são "pending" (fevereiro)
+- O `current_invoice` do cartão é 0 (já pago)
+
+**Impacto**: O seletor de mês é renderizado dentro do componente que desaparece, tornando impossível navegar para meses com dados.
+
+**Correção**: Separar a renderização do header (sempre visível) do conteúdo de dados (condicional), e ampliar a verificação de `hasData` para incluir pendentes.
 
