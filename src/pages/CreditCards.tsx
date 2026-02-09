@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, CreditCard, Calendar, Wallet, MoreVertical, Upload, Briefcase, Banknote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,7 @@ import { InvoiceReviewModal } from "@/components/modals/InvoiceReviewModal";
 import { PayInvoiceModal } from "@/components/modals/PayInvoiceModal";
 import { InstallmentsDashboard } from "@/components/credit-cards/InstallmentsDashboard";
 import { ReconciliationCard } from "@/components/credit-cards/ReconciliationCard";
+import { useDate } from "@/contexts/DateContext";
 
 const statusConfig = {
   open: { label: "Fatura Aberta", variant: "default" as const, className: "bg-balance text-balance-foreground" },
@@ -180,10 +181,15 @@ export default function CreditCards() {
   const [reviewCardId, setReviewCardId] = useState<string>("");
   const [reviewCardName, setReviewCardName] = useState<string>("");
   
-  // Period state for reconciliation
-  const now = new Date();
-  const [reconciliationMonth, setReconciliationMonth] = useState(now.getMonth() + 1);
-  const [reconciliationYear, setReconciliationYear] = useState(now.getFullYear());
+  // Period state for reconciliation - synced with global header selector
+  const { month: globalMonth, year: globalYear } = useDate();
+  const [reconciliationMonth, setReconciliationMonth] = useState(globalMonth);
+  const [reconciliationYear, setReconciliationYear] = useState(globalYear);
+
+  useEffect(() => {
+    setReconciliationMonth(globalMonth);
+    setReconciliationYear(globalYear);
+  }, [globalMonth, globalYear]);
   
   const { creditCards, isLoading, totalInvoice, totalAvailable, deleteCreditCard } = useCreditCards();
   const { reconciliation, isLoading: isReconciliationLoading, transactions } = useCreditCardReconciliation({
