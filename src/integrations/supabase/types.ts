@@ -616,7 +616,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      add_shared_access_by_email: {
+        Args: { target_email: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
