@@ -85,7 +85,7 @@ function parseAmount(value: string | undefined): number {
   }
   
   const parsed = parseFloat(normalized);
-  return isNaN(parsed) ? 0 : Math.abs(parsed);
+  return isNaN(parsed) ? 0 : parsed;
 }
 
 // Detect installments from description
@@ -230,7 +230,7 @@ export function parseCSVInvoice(content: string, options: CSVInvoiceParseOptions
     const amount = parseAmount(amountVal);
     
     // Skip rows without valid date or amount
-    if (!parsedDate || amount <= 0 || !descVal) continue;
+    if (!parsedDate || amount === 0 || !descVal) continue;
     
     // Detect installments
     const installments = detectInstallments(descVal);
