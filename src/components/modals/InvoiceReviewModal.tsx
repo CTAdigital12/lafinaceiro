@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock, Trash2, RotateCcw, AlertOctagon } from "lucide-react";
 import { logError } from "@/lib/errorHandler";
+import { supabase } from "@/integrations/supabase/client";
 import { CATEGORY_COLOR_OPTIONS_COMPACT } from "@/lib/constants";
 import {
   Dialog,
@@ -534,6 +535,25 @@ export function InvoiceReviewModal({
           errorCount++;
         }
         setImportProgress({ current: i + 1, total: totalTransactions });
+      }
+
+      // Activate pending installments that were detected as duplicates
+      const pendingIdsToActivate = reviewItems
+        .filter(item => item.duplicate_status === 'duplicate' && !item.include_in_import && item.matched_transaction_id)
+        .map(item => item.matched_transaction_id as string);
+
+      if (pendingIdsToActivate.length > 0) {
+        const { error: activateError } = await supabase
+          .from("transactions")
+          .update({ status: "completed" })
+          .in("id", pendingIdsToActivate)
+          .eq("status", "pending");
+
+        if (activateError) {
+          console.error("Error activating pending installments:", activateError);
+        } else {
+          console.log(`Activated ${pendingIdsToActivate.length} pending installments`);
+        }
       }
 
       // Calculate total of completed transactions (current invoice items)
