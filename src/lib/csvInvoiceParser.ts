@@ -90,26 +90,27 @@ function parseAmount(value: string | undefined): number {
 
 // Detect installments from description
 function detectInstallments(description: string): { current: number; total: number } | null {
-  // Match patterns like: "3/10", "03/10", "PARC 3/10", "(3/10)", "3 DE 10", "PARCELA 3 DE 10"
   const patterns = [
-    /\b(\d{1,2})\s*\/\s*(\d{1,2})\b/,         // 3/10 or 03/10
-    /\bPARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})\b/i, // PARC 3/10 or PARCELA 3/10
-    /\((\d{1,2})\s*\/\s*(\d{1,2})\)/,          // (3/10)
-    /\b(\d{1,2})\s*DE\s*(\d{1,2})\b/i,         // 3 DE 10
+    /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/,                        // 04/10 no final da string
+    /(\d{1,2})\s*\/\s*(\d{1,2})(?=\s|\)|$)/,                  // 04/10 seguido de espaço, ) ou fim
+    /(?:^|[^\/\d])(\d{1,2})\s*\/\s*(\d{1,2})(?:[^\/\d]|$)/,   // DD/DD não precedido/seguido por / ou dígito
+    /\bPARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})\b/i,         // PARC 3/10 or PARCELA 3/10
+    /\((\d{1,2})\s*\/\s*(\d{1,2})\)/,                         // (3/10)
+    /\b(\d{1,2})\s*DE\s*(\d{1,2})\b/i,                        // 3 DE 10
   ];
-  
+
   for (const pattern of patterns) {
     const match = description.match(pattern);
     if (match) {
-      const current = parseInt(match[1], 10);
-      const total = parseInt(match[2], 10);
-      // Validate: current <= total, both > 0, total <= 99
+      const groups = match.filter((_, i) => i > 0 && match[i] !== undefined);
+      const current = parseInt(groups[0], 10);
+      const total = parseInt(groups[1], 10);
       if (current > 0 && total > 0 && current <= total && total <= 99) {
         return { current, total };
       }
     }
   }
-  
+
   return null;
 }
 
