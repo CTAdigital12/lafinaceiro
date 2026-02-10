@@ -1,62 +1,59 @@
 
 
-# Correção: Seletor Global de Mês na Página de Cartões
+# Correção: Erro ao Importar Fatura (RLS em categorization_rules)
 
 ## Problema
 
-A página de Cartões de Crédito (`CreditCards.tsx`) usa estado local próprio para o mês/ano:
+O erro `"new row violates row-level security policy for table categorization_rules"` ocorre durante a criação de regras de categorização no fluxo de importação de fatura.
+
+Na função `handleImport` do `InvoiceReviewModal.tsx` (linha 418-424), a criação de regras acontece **antes** da criação das transações e dentro do mesmo bloco `try/catch`:
 
 ```typescript
-const now = new Date();
-const [reconciliationMonth, setReconciliationMonth] = useState(now.getMonth() + 1);
-const [reconciliationYear, setReconciliationYear] = useState(now.getFullYear());
+// Linha 418-424 - se falha aqui, toda a importação é abortada
+for (const rule of rulesToCreate) {
+  if (!seenKeywords.has(rule.keyword)) {
+    seenKeywords.add(rule.keyword);
+    await createRule.mutateAsync(rule);  // ERRO AQUI -> mata tudo
+  }
+}
 ```
 
-Enquanto o seletor do cabeçalho atualiza o contexto global `DateContext` via `useDate()`. Os dois não estão conectados.
+Quando a criação de qualquer regra falha, o erro propaga para o `catch` da linha 574 e **toda a importação é abortada** -- nenhuma transação é criada.
 
-## Solução
+## Causa Raiz
 
-Substituir o estado local pelo contexto global `useDate()`. O seletor de mês **dentro** do `ReconciliationCard` continuará funcionando como override local (para navegação rápida dentro da conciliação), mas o estado inicial virá do cabeçalho.
+O `upsert` com `onConflict: 'user_id,keyword'` no hook `useCategorizationRules.ts` pode falhar quando:
+- Uma regra com a mesma keyword já existe mas o PostgreSQL RLS bloqueia o UPDATE implícito do upsert
+- Ou quando há alguma inconsistência no contexto de autenticação
 
-## Mudanças
+## Solucao
 
-### `src/pages/CreditCards.tsx`
+Tornar a criação de regras **tolerante a falhas** -- se uma regra não puder ser criada, a importação das transações deve continuar normalmente.
 
-1. Importar `useDate` do contexto global
-2. Remover as variáveis locais `reconciliationMonth`, `reconciliationYear` e `handlePeriodChange`
-3. Usar `month` e `year` do `useDate()` diretamente
-4. Passar para o `ReconciliationCard` e para o hook `useCreditCardReconciliation`
+### Arquivo: `src/components/modals/InvoiceReviewModal.tsx`
+
+**Modificar linhas 418-424** -- envolver cada criação de regra em seu próprio try/catch:
 
 ```typescript
-// ANTES
-const now = new Date();
-const [reconciliationMonth, setReconciliationMonth] = useState(now.getMonth() + 1);
-const [reconciliationYear, setReconciliationYear] = useState(now.getFullYear());
-
-// DEPOIS
-import { useDate } from "@/contexts/DateContext";
-const { month, year } = useDate();
+const seenKeywords = new Set<string>();
+let rulesCreated = 0;
+for (const rule of rulesToCreate) {
+  if (!seenKeywords.has(rule.keyword)) {
+    seenKeywords.add(rule.keyword);
+    try {
+      await createRule.mutateAsync(rule);
+      rulesCreated++;
+    } catch (ruleError) {
+      console.warn("Falha ao criar regra para:", rule.keyword, ruleError);
+      // Continuar com a importação mesmo se a regra falhar
+    }
+  }
+}
 ```
 
-O `ReconciliationCard` já possui seu próprio seletor de mês interno que permite navegar entre períodos independentemente. A mudança é apenas que o **valor inicial** e o **seletor do cabeçalho** agora estarão sincronizados.
+E atualizar a referência na mensagem de sucesso (linha 563) para usar `rulesCreated` ao invés de `rulesToCreate.length`.
 
-Para manter a funcionalidade do seletor interno do ReconciliationCard (que permite o usuário mudar o mês só dentro da conciliação), vamos manter o estado local mas inicializá-lo a partir do contexto global e sincronizá-lo quando o cabeçalho mudar:
+### Resumo
 
-```typescript
-const { month: globalMonth, year: globalYear } = useDate();
-const [reconciliationMonth, setReconciliationMonth] = useState(globalMonth);
-const [reconciliationYear, setReconciliationYear] = useState(globalYear);
-
-// Sincronizar quando o cabeçalho mudar
-useEffect(() => {
-  setReconciliationMonth(globalMonth);
-  setReconciliationYear(globalYear);
-}, [globalMonth, globalYear]);
-```
-
-### Arquivo a modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/CreditCards.tsx` | Importar `useDate`, sincronizar estado local com contexto global via `useEffect` |
+Apenas 1 arquivo precisa ser modificado. A mudanca e pequena: envolver a criacao de regras em try/catch individual para que falhas nao bloqueiem a importacao das transacoes.
 
