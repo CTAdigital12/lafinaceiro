@@ -1,85 +1,54 @@
 
 
-# Acesso imediato ao adicionar usuario por e-mail
+# Correção de erros e performance em atualizações em massa
 
-## Resumo
+## Problema 1: Erro "Cannot coerce the result to a single JSON object"
 
-Substituir o fluxo atual de convite (criar convite -> usuario aceita) por um fluxo direto: ao digitar o e-mail, o acesso e concedido imediatamente. O sistema vai buscar o usuario pelo e-mail no banco e criar o registro de acesso compartilhado na hora.
+A mutation `updateTransaction` no hook `useTransactions.ts` usa `.select().single()` após o update. Quando a query de update não retorna exatamente 1 registro (pode acontecer por timing ou RLS), o Supabase lança esse erro. A correção é trocar `.single()` por `.maybeSingle()`.
 
-## Problema tecnico
+## Problema 2: Atualizações em massa lentas (uma por uma)
 
-A tabela `profiles` tem RLS que so permite cada usuario ver seu proprio perfil. Entao nao e possivel buscar outro usuario pelo e-mail diretamente do frontend. Precisamos de uma funcao no banco de dados para fazer essa busca de forma segura.
+As funções de bulk no `Transactions.tsx` (`handleBulkCorporateToggle`, `handleBulkCategoryUpdate`, `handleBulkDelete`) fazem um loop sequencial com `await` para cada transação. Com 100 lançamentos, são 100 requests HTTP sequenciais.
 
-## Etapas
+A solução é fazer uma única query SQL para atualizar todos os registros de uma vez, usando `.in("id", ids)`.
 
-### 1. Criar funcao no banco de dados
+## Alterações
 
-Uma funcao `add_shared_access_by_email` que:
-- Recebe o e-mail do usuario a ser adicionado
-- Busca o `id` na tabela `profiles` pelo e-mail
-- Retorna erro se o e-mail nao for encontrado (usuario nao cadastrado)
-- Retorna erro se o acesso ja existir
-- Cria o registro na tabela `shared_access` automaticamente
-- Usa `SECURITY DEFINER` para poder consultar profiles de outros usuarios
+### 1. `src/hooks/useTransactions.ts` - Corrigir `.single()`
 
-### 2. Simplificar o hook `useInvitations`
+Na mutation `updateTransaction`, trocar `.select().single()` por `.select().maybeSingle()` para evitar o erro quando o resultado não pode ser convertido em um único objeto JSON.
 
-- Remover as funcoes de convite (createInvitation, acceptInvitation, rejectInvitation, deleteInvitation)
-- Remover as queries de convites enviados e recebidos
-- Adicionar uma mutation `addMember` que chama a funcao RPC `add_shared_access_by_email`
-- Manter a query de membros ativos e a funcao `revokeAccess`
+### 2. `src/pages/Transactions.tsx` - Bulk updates com query única
 
-### 3. Simplificar o componente `MembersSection`
+Substituir os loops sequenciais por operações batch:
 
-- Remover a secao de "Convites recebidos"
-- Remover a secao de "Convites pendentes"
-- Remover o dialog de confirmacao de cancelar convite
-- Manter o formulario de adicionar membro (agora com acao imediata)
-- Manter a lista de membros ativos com opcao de revogar
-- Atualizar mensagens de feedback (ex: "Membro adicionado!" em vez de "Convite enviado!")
+- **`handleBulkCorporateToggle`**: Uma única chamada `supabase.from("transactions").update({ is_corporate_expense }).in("id", selectedTransactions)` em vez de N chamadas individuais.
 
-## Detalhes tecnicos
+- **`handleBulkCategoryUpdate`**: Uma única chamada `supabase.from("transactions").update({ category_id }).in("id", selectedTransactions)` em vez de N chamadas individuais.
 
-```sql
--- Funcao para adicionar acesso compartilhado por e-mail
-CREATE OR REPLACE FUNCTION public.add_shared_access_by_email(target_email text)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  target_user_id uuid;
-  new_access_id uuid;
-BEGIN
-  -- Buscar usuario pelo e-mail
-  SELECT id INTO target_user_id FROM profiles WHERE email = target_email;
-  
-  IF target_user_id IS NULL THEN
-    RAISE EXCEPTION 'Usuario com este e-mail nao encontrado';
-  END IF;
-  
-  IF target_user_id = auth.uid() THEN
-    RAISE EXCEPTION 'Voce nao pode adicionar a si mesmo';
-  END IF;
-  
-  -- Verificar se ja tem acesso
-  IF EXISTS (
-    SELECT 1 FROM shared_access 
-    WHERE owner_id = auth.uid() AND shared_with_user_id = target_user_id
-  ) THEN
-    RAISE EXCEPTION 'Este usuario ja tem acesso';
-  END IF;
-  
-  -- Criar acesso
-  INSERT INTO shared_access (owner_id, shared_with_user_id)
-  VALUES (auth.uid(), target_user_id)
-  RETURNING id INTO new_access_id;
-  
-  RETURN new_access_id;
-END;
-$$;
+- **`handleBulkDelete`**: Uma única chamada `supabase.from("transactions").delete().in("id", selectedTransactions)` em vez de N chamadas individuais.
+
+Após cada operação batch, invalidar as queries de transactions e accounts manualmente (já que não passam pela mutation do hook).
+
+### Detalhes técnicos
+
+**Antes (lento):**
+```typescript
+for (const id of selectedTransactions) {
+  await updateTransaction.mutateAsync({ id, is_corporate_expense: true });
+}
 ```
 
-A tabela `invitations` permanece no banco (sem alteracoes destrutivas), mas deixa de ser utilizada pelo sistema.
+**Depois (rápido):**
+```typescript
+const { error } = await supabase
+  .from("transactions")
+  .update({ is_corporate_expense: true })
+  .in("id", selectedTransactions);
+
+if (error) throw error;
+queryClient.invalidateQueries({ queryKey: ["transactions"] });
+```
+
+Isso reduz de N requests para 1 request, independente da quantidade de transações selecionadas.
 
