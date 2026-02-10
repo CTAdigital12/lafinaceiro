@@ -25,23 +25,32 @@ interface GroupInfo {
 
 // Extract installment info from description like "AMAZON BR 02/10" or "Compra 3/12"
 function extractInstallmentInfo(description: string): { baseDescription: string; current: number; total: number } | null {
-  // Match patterns like "X/Y" where X and Y are numbers
-  const match = description.match(/(\d+)\s*\/\s*(\d+)/);
-  if (!match) return null;
-  
-  const current = parseInt(match[1], 10);
-  const total = parseInt(match[2], 10);
-  
-  // Validate: current should be <= total and total should be reasonable (2-48)
-  if (current <= 0 || total <= 1 || current > total || total > 48) return null;
-  
-  // Extract base description by removing the installment pattern and trailing spaces
-  const baseDescription = description
-    .replace(/\s*\d+\s*\/\s*\d+.*$/, '')
-    .trim()
-    .toUpperCase();
-  
-  return { baseDescription, current, total };
+  // Try multiple patterns to find installment info (DD/DD)
+  const patterns = [
+    /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/,                        // 04/10 at end of string
+    /(\d{1,2})\s*\/\s*(\d{1,2})(?=\s|\)|$)/,                  // 04/10 followed by space, ) or end
+    /(?:^|[^\/\d])(\d{1,2})\s*\/\s*(\d{1,2})(?:[^\/\d]|$)/,   // DD/DD not preceded/followed by / or digit
+  ];
+
+  for (const pattern of patterns) {
+    const match = description.match(pattern);
+    if (match) {
+      const groups = match.filter((_, i) => i > 0 && match[i] !== undefined);
+      const current = parseInt(groups[0], 10);
+      const total = parseInt(groups[1], 10);
+
+      if (current <= 0 || total <= 1 || current > total || total > 48) continue;
+
+      const baseDescription = description
+        .replace(/\s*\d+\s*\/\s*\d+.*$/, '')
+        .trim()
+        .toUpperCase();
+
+      return { baseDescription, current, total };
+    }
+  }
+
+  return null;
 }
 
 // Create a grouping key for identifying related installments
