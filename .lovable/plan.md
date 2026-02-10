@@ -1,59 +1,88 @@
 
 
-# Correção: Erro ao Importar Fatura (RLS em categorization_rules)
+# Correção: Parcelas não reconhecidas na importação de fatura
 
 ## Problema
 
-O erro `"new row violates row-level security policy for table categorization_rules"` ocorre durante a criação de regras de categorização no fluxo de importação de fatura.
+O regex de detecção de parcelas usa `\b` (word boundary) que **não funciona** quando os números estão colados em letras:
 
-Na função `handleImport` do `InvoiceReviewModal.tsx` (linha 418-424), a criação de regras acontece **antes** da criação das transações e dentro do mesmo bloco `try/catch`:
+- `electro04/10` -- entre `o` e `0` não há word boundary (ambos são `\w`)
+- `COMER03/03` -- entre `R` e `0`, mesmo problema
+- `E01/06` -- entre `E` e `0`, mesmo problema
+
+O `\b` só detecta transição entre caractere alfanumérico e não-alfanumérico (espaço, pontuação, etc). Como letra e dígito são ambos alfanuméricos, o padrão falha silenciosamente.
+
+## Solução
+
+Substituir o primeiro padrão regex para não depender de `\b` antes dos dígitos. Usar um lookbehind ou simplesmente capturar os dígitos no final da string seguidos de `/`:
 
 ```typescript
-// Linha 418-424 - se falha aqui, toda a importação é abortada
-for (const rule of rulesToCreate) {
-  if (!seenKeywords.has(rule.keyword)) {
-    seenKeywords.add(rule.keyword);
-    await createRule.mutateAsync(rule);  // ERRO AQUI -> mata tudo
-  }
-}
+const patterns = [
+  /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/,              // 04/10 no final da string
+  /(\d{1,2})\s*\/\s*(\d{1,2})(?:\s|$|\))/,        // 04/10 seguido de espaço ou fim
+  /\bPARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})\b/i,
+  /\((\d{1,2})\s*\/\s*(\d{1,2})\)/,
+  /\b(\d{1,2})\s*DE\s*(\d{1,2})\b/i,
+];
 ```
 
-Quando a criação de qualquer regra falha, o erro propaga para o `catch` da linha 574 e **toda a importação é abortada** -- nenhuma transação é criada.
+A estratégia principal e mais segura: procurar o padrão `DD/DD` **no final da descrição** (com `$`), pois nas faturas de cartão o padrão de parcela quase sempre aparece no final. Isso evita falsos positivos com datas no meio da string.
 
-## Causa Raiz
+Adicionalmente, aplicar a mesma correção no `extractInstallmentInfo` do edge function `migrate-installments` que tem o mesmo problema com `\b`.
 
-O `upsert` com `onConflict: 'user_id,keyword'` no hook `useCategorizationRules.ts` pode falhar quando:
-- Uma regra com a mesma keyword já existe mas o PostgreSQL RLS bloqueia o UPDATE implícito do upsert
-- Ou quando há alguma inconsistência no contexto de autenticação
+## Arquivo a modificar
 
-## Solucao
+| Arquivo | Mudança |
+|---------|---------|
+| `src/lib/csvInvoiceParser.ts` | Atualizar os padrões regex na função `detectInstallments` para capturar parcelas coladas em texto |
 
-Tornar a criação de regras **tolerante a falhas** -- se uma regra não puder ser criada, a importação das transações deve continuar normalmente.
+## Mudança específica
 
-### Arquivo: `src/components/modals/InvoiceReviewModal.tsx`
+### `src/lib/csvInvoiceParser.ts` - função `detectInstallments` (linhas 92-110)
 
-**Modificar linhas 418-424** -- envolver cada criação de regra em seu próprio try/catch:
+Substituir os padrões por versões que funcionam sem word boundary:
 
 ```typescript
-const seenKeywords = new Set<string>();
-let rulesCreated = 0;
-for (const rule of rulesToCreate) {
-  if (!seenKeywords.has(rule.keyword)) {
-    seenKeywords.add(rule.keyword);
-    try {
-      await createRule.mutateAsync(rule);
-      rulesCreated++;
-    } catch (ruleError) {
-      console.warn("Falha ao criar regra para:", rule.keyword, ruleError);
-      // Continuar com a importação mesmo se a regra falhar
+function detectInstallments(description: string): { current: number; total: number } | null {
+  const patterns = [
+    /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/,                    // 04/10 no final da string
+    /(\d{1,2})\s*\/\s*(\d{1,2})(?=\s|\)|$)/,              // 04/10 seguido de espaço, ) ou fim
+    /(?:^|[^\/\d])(\d{1,2})\s*\/\s*(\d{1,2})(?:[^\/\d]|$)/,  // DD/DD não precedido/seguido por / ou dígito
+    /\bPARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})\b/i,
+    /\((\d{1,2})\s*\/\s*(\d{1,2})\)/,
+    /\b(\d{1,2})\s*DE\s*(\d{1,2})\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = description.match(pattern);
+    if (match) {
+      // Encontrar os grupos de captura corretos (pular grupos não-capturantes)
+      const groups = match.filter((_, i) => i > 0 && match[i] !== undefined);
+      const current = parseInt(groups[0], 10);
+      const total = parseInt(groups[1], 10);
+      if (current > 0 && total > 0 && current <= total && total <= 99) {
+        return { current, total };
+      }
     }
   }
+
+  return null;
 }
 ```
 
-E atualizar a referência na mensagem de sucesso (linha 563) para usar `rulesCreated` ao invés de `rulesToCreate.length`.
+### Exemplos de validação
 
-### Resumo
+| Descrição | Regex atual | Regex corrigido |
+|-----------|------------|-----------------|
+| `ELECTROLUX electro04/10` | Nao detecta | 04/10 |
+| `AMAZONMKTPLC*COMER03/03` | Nao detecta | 03/03 |
+| `TURQUEZA TECIDOS E01/06` | Nao detecta | 01/06 |
+| `Compra 3/10` | Detecta | Detecta |
+| `PARC 5/12` | Detecta | Detecta |
 
-Apenas 1 arquivo precisa ser modificado. A mudanca e pequena: envolver a criacao de regras em try/catch individual para que falhas nao bloqueiem a importacao das transacoes.
+## Seção Técnica
+
+**Causa raiz**: O metacaractere `\b` em regex define uma transição entre `\w` (letras, dígitos, underscore) e `\W` (tudo o resto). Como tanto letras quanto dígitos são `\w`, não há boundary entre `o` e `0` em `electro04`. O regex simplesmente não encontra match.
+
+**Risco de falso positivo**: Ao remover `\b`, poderíamos capturar datas (ex: `15/01/2025` capturaria `15/01`). A mitigação é priorizar matches no **final da string** e validar que `current <= total`.
 
