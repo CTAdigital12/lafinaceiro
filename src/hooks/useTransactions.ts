@@ -251,7 +251,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         .update(transaction)
         .eq("id", id)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
       
