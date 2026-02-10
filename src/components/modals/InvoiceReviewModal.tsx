@@ -416,10 +416,16 @@ export function InvoiceReviewModal({
         }));
 
       const seenKeywords = new Set<string>();
+      let rulesCreated = 0;
       for (const rule of rulesToCreate) {
         if (!seenKeywords.has(rule.keyword)) {
           seenKeywords.add(rule.keyword);
-          await createRule.mutateAsync(rule);
+          try {
+            await createRule.mutateAsync(rule);
+            rulesCreated++;
+          } catch (ruleError) {
+            console.warn("Falha ao criar regra para:", rule.keyword, ruleError);
+          }
         }
       }
 
@@ -560,8 +566,8 @@ export function InvoiceReviewModal({
       if (excludedCount > 0) {
         description += ` • ${excludedCount} ignoradas`;
       }
-      if (rulesToCreate.length > 0) {
-        description += ` • ${rulesToCreate.length} regras criadas`;
+      if (rulesCreated > 0) {
+        description += ` • ${rulesCreated} regras criadas`;
       }
 
       toast({
