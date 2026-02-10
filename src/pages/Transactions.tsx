@@ -178,35 +178,60 @@ export default function Transactions() {
 
   // Bulk delete handler
   const handleBulkDelete = async () => {
-    for (const id of selectedTransactions) {
-      await deleteTransaction.mutateAsync(id);
+    const count = selectedTransactions.length;
+    try {
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .in("id", selectedTransactions);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      setSelectedTransactions([]);
+      setShowDeleteDialog(false);
+      toast({ title: `${count} transações excluídas!` });
+    } catch (error: any) {
+      toast({ title: "Erro ao excluir transações", description: error.message, variant: "destructive" });
     }
-    setSelectedTransactions([]);
-    setShowDeleteDialog(false);
-    toast({ title: `${selectedTransactions.length} transações excluídas!` });
   };
 
   // Bulk category update handler
   const handleBulkCategoryUpdate = async (categoryId: string) => {
-    for (const id of selectedTransactions) {
-      await updateTransaction.mutateAsync({ id, category_id: categoryId });
+    const count = selectedTransactions.length;
+    try {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ category_id: categoryId })
+        .in("id", selectedTransactions);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      setSelectedTransactions([]);
+      setShowBulkCategorySelector(false);
+      toast({ title: `Categoria atualizada em ${count} transações!` });
+    } catch (error: any) {
+      toast({ title: "Erro ao atualizar categoria", description: error.message, variant: "destructive" });
     }
-    setSelectedTransactions([]);
-    setShowBulkCategorySelector(false);
-    toast({ title: `Categoria atualizada em ${selectedTransactions.length} transações!` });
   };
 
   // Bulk corporate expense toggle handler
   const handleBulkCorporateToggle = async (markAsCorporate: boolean) => {
-    for (const id of selectedTransactions) {
-      await updateTransaction.mutateAsync({ id, is_corporate_expense: markAsCorporate });
+    const count = selectedTransactions.length;
+    try {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ is_corporate_expense: markAsCorporate })
+        .in("id", selectedTransactions);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      setSelectedTransactions([]);
+      toast({ 
+        title: markAsCorporate 
+          ? `${count} transações marcadas como empresarial!` 
+          : `${count} transações desmarcadas como empresarial!`
+      });
+    } catch (error: any) {
+      toast({ title: "Erro ao atualizar transações", description: error.message, variant: "destructive" });
     }
-    setSelectedTransactions([]);
-    toast({ 
-      title: markAsCorporate 
-        ? `${selectedTransactions.length} transações marcadas como empresarial!` 
-        : `${selectedTransactions.length} transações desmarcadas como empresarial!`
-    });
   };
 
   // Export transactions to XLSX
