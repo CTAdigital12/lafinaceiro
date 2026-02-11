@@ -1,54 +1,83 @@
 
+# Mostrar reembolsos corporativos na conciliacao
 
-# Correção de erros e performance em atualizações em massa
+## Problema
 
-## Problema 1: Erro "Cannot coerce the result to a single JSON object"
+A conciliacao mostra o total de despesas corporativas (R$ 56.891) mas nao indica que esses valores ja foram reembolsados pela empresa. O campo `reimbursement_status` existe nas transacoes mas nao e utilizado pelo hook de conciliacao nem pela interface.
 
-A mutation `updateTransaction` no hook `useTransactions.ts` usa `.select().single()` após o update. Quando a query de update não retorna exatamente 1 registro (pode acontecer por timing ou RLS), o Supabase lança esse erro. A correção é trocar `.single()` por `.maybeSingle()`.
+O usuario precisa ver claramente:
+- Quanto das despesas corporativas ja foi reembolsado
+- Quanto ainda esta pendente de reembolso
+- Qual e o valor liquido que ele pessoalmente deve
 
-## Problema 2: Atualizações em massa lentas (uma por uma)
+## Alteracoes
 
-As funções de bulk no `Transactions.tsx` (`handleBulkCorporateToggle`, `handleBulkCategoryUpdate`, `handleBulkDelete`) fazem um loop sequencial com `await` para cada transação. Com 100 lançamentos, são 100 requests HTTP sequenciais.
+### 1. Hook `useCreditCardReconciliation.ts`
 
-A solução é fazer uma única query SQL para atualizar todos os registros de uma vez, usando `.in("id", ids)`.
+- Adicionar `reimbursement_status` na query de transacoes (o campo ja existe na tabela, so precisa ser incluido no select)
+- Calcular novos campos por cartao:
+  - `corporateReimbursed`: soma das despesas corporativas com reimbursement_status = 'reimbursed'
+  - `corporatePending`: soma das despesas corporativas com reimbursement_status != 'reimbursed'
+- Adicionar esses campos na interface `CardReconciliation`
+- Adicionar totais no `ReconciliationSummary`
 
-## Alterações
+### 2. Componente `ReconciliationCard.tsx`
 
-### 1. `src/hooks/useTransactions.ts` - Corrigir `.single()`
+- Na secao de detalhes por cartao, mostrar o valor corporativo reembolsado com um icone de check verde (ex: "Empresa: R$ 56.891 - Reembolsado: R$ 56.891")
+- Mostrar pendente de reembolso quando existir
 
-Na mutation `updateTransaction`, trocar `.select().single()` por `.select().maybeSingle()` para evitar o erro quando o resultado não pode ser convertido em um único objeto JSON.
+### 3. Componente `ReconciliationDetailModal.tsx` e `InvoiceBreakdownCard.tsx`
 
-### 2. `src/pages/Transactions.tsx` - Bulk updates com query única
+- Adicionar `reimbursement_status` na interface de Transaction usada nesses componentes
+- No breakdown, apos mostrar "Empresa: R$ X", detalhar quanto ja foi reembolsado vs pendente
+- Na badge de stats, diferenciar entre corporativo reembolsado e pendente
 
-Substituir os loops sequenciais por operações batch:
+## Detalhes tecnicos
 
-- **`handleBulkCorporateToggle`**: Uma única chamada `supabase.from("transactions").update({ is_corporate_expense }).in("id", selectedTransactions)` em vez de N chamadas individuais.
+No hook, a query ja busca todas as transacoes com credit_card_id. So precisa incluir o campo `reimbursement_status` no select:
 
-- **`handleBulkCategoryUpdate`**: Uma única chamada `supabase.from("transactions").update({ category_id }).in("id", selectedTransactions)` em vez de N chamadas individuais.
-
-- **`handleBulkDelete`**: Uma única chamada `supabase.from("transactions").delete().in("id", selectedTransactions)` em vez de N chamadas individuais.
-
-Após cada operação batch, invalidar as queries de transactions e accounts manualmente (já que não passam pela mutation do hook).
-
-### Detalhes técnicos
-
-**Antes (lento):**
 ```typescript
-for (const id of selectedTransactions) {
-  await updateTransaction.mutateAsync({ id, is_corporate_expense: true });
-}
+// Na query existente, adicionar reimbursement_status
+.select("*, categories(name, icon)")
+// Muda para:
+.select("*, categories(name, icon), reimbursement_status")
+// Na verdade o * ja inclui, entao reimbursement_status ja vem. 
+// O problema e que o calculo nao usa esse campo.
 ```
 
-**Depois (rápido):**
-```typescript
-const { error } = await supabase
-  .from("transactions")
-  .update({ is_corporate_expense: true })
-  .in("id", selectedTransactions);
+No calculo por cartao:
 
-if (error) throw error;
-queryClient.invalidateQueries({ queryKey: ["transactions"] });
+```typescript
+// Separar corporate por status de reembolso
+const corporateReimbursed = normalTransactions
+  .filter(t => t.is_corporate_expense && t.reimbursement_status === 'reimbursed')
+  .reduce((sum, t) => sum + Number(t.amount), 0);
+
+const corporatePending = corporateTotal - corporateReimbursed;
 ```
 
-Isso reduz de N requests para 1 request, independente da quantidade de transações selecionadas.
+Na interface `CardReconciliation`, adicionar:
 
+```typescript
+corporateReimbursed: number;
+corporatePending: number;
+```
+
+No `ReconciliationCard.tsx`, na area que mostra "Empresa: R$ X", trocar para mostrar detalhamento:
+
+```tsx
+{card.corporateReimbursed > 0 && (
+  <div className="flex items-center gap-1">
+    <CheckCircle className="h-3 w-3 text-income" />
+    <span className="text-income">Reembolsado: {formatCurrency(card.corporateReimbursed)}</span>
+  </div>
+)}
+{card.corporatePending > 0 && (
+  <div className="flex items-center gap-1">
+    <Clock className="h-3 w-3" />
+    <span>Pendente: {formatCurrency(card.corporatePending)}</span>
+  </div>
+)}
+```
+
+No summary cards do topo, adicionar um card ou sub-info mostrando "Reembolsado pela empresa" com o total.
