@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Info,
+  Briefcase,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +28,7 @@ interface Transaction {
   credit_card_id: string;
   imported_at?: string | null;
   is_card_payment?: boolean | null;
+  reimbursement_status?: string | null;
 }
 
 interface InvoiceBreakdownCardProps {
@@ -75,6 +78,15 @@ export function InvoiceBreakdownCard({
       .filter((t) => t.status === "pending" && !t.is_refund)
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
+    // Corporate breakdown by reimbursement status
+    const corporateCompleted = cardTransactions
+      .filter((t) => t.status === "completed" && t.is_corporate_expense && !t.is_refund);
+    const corporateTotal = corporateCompleted.reduce((sum, t) => sum + Number(t.amount), 0);
+    const corporateReimbursed = corporateCompleted
+      .filter((t) => t.reimbursement_status === 'reimbursed')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const corporatePendingReimb = corporateTotal - corporateReimbursed;
+
     // Net calculation
     const grossTotal = importedTotal + manualTotal;
     const netTotal = grossTotal - refundTotal;
@@ -95,8 +107,11 @@ export function InvoiceBreakdownCard({
       netTotal,
       difference,
       hasDiscrepancy: Math.abs(difference) > 0.01,
+      corporateTotal,
+      corporateReimbursed,
+      corporatePendingReimb,
     };
-  }, [transactions, cardId]);
+  }, [transactions, cardId, bankInvoice]);
 
   return (
     <Card className="bg-muted/30">
@@ -160,6 +175,44 @@ export function InvoiceBreakdownCard({
                 - {formatCurrency(breakdown.refundTotal)}
               </span>
             </div>
+          )}
+
+          {/* Corporate Reimbursement Breakdown */}
+          {breakdown.corporateTotal > 0 && (
+            <>
+              <Separator className="my-2" />
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-muted-foreground" />
+                  <span>Despesas Corporativas</span>
+                </div>
+                <span className="font-mono font-medium">
+                  {formatCurrency(breakdown.corporateTotal)}
+                </span>
+              </div>
+              {breakdown.corporateReimbursed > 0 && (
+                <div className="flex items-center justify-between text-sm pl-6">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-3 w-3 text-income" />
+                    <span className="text-income">Reembolsado</span>
+                  </div>
+                  <span className="font-mono text-income">
+                    {formatCurrency(breakdown.corporateReimbursed)}
+                  </span>
+                </div>
+              )}
+              {breakdown.corporatePendingReimb > 0 && (
+                <div className="flex items-center justify-between text-sm pl-6">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3 w-3 text-chart-4" />
+                    <span className="text-chart-4">Pendente de Reembolso</span>
+                  </div>
+                  <span className="font-mono text-chart-4">
+                    {formatCurrency(breakdown.corporatePendingReimb)}
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
 

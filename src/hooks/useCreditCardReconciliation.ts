@@ -14,6 +14,8 @@ export interface CardReconciliation {
   difference: number; // bankInvoice - transactionsTotal
   hasDiscrepancy: boolean;
   corporateTotal: number; // Sum of corporate expenses
+  corporateReimbursed: number; // Corporate expenses already reimbursed
+  corporatePending: number; // Corporate expenses pending reimbursement
   personalTotal: number; // transactionsTotal - corporateTotal
   isPaid: boolean; // Whether the invoice has been paid
   paidAmount: number; // Total payments made for this card in the period
@@ -24,6 +26,8 @@ export interface ReconciliationSummary {
   totalTransactions: number;
   totalDifference: number;
   totalCorporate: number;
+  totalCorporateReimbursed: number;
+  totalCorporatePending: number;
   totalPersonal: number;
   totalRefunds: number;
   hasAnyDiscrepancy: boolean;
@@ -43,6 +47,7 @@ export interface ReconciliationTransaction {
   category_id: string | null;
   imported_at: string | null;
   is_card_payment: boolean | null;
+  reimbursement_status: string | null;
 }
 
 interface UseCreditCardReconciliationOptions {
@@ -140,6 +145,12 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       .reduce((sum, t) => sum + Number(t.amount), 0);
     const corporateTotal = corporateNormal - corporateRefunds;
 
+    // Corporate reimbursement breakdown
+    const corporateReimbursed = normalTransactions
+      .filter((t) => t.is_corporate_expense && t.reimbursement_status === 'reimbursed')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const corporatePending = corporateTotal - corporateReimbursed;
+
     // Personal = normal personal transactions - personal refunds
     const personalNormal = normalTransactions
       .filter((t) => !t.is_corporate_expense)
@@ -185,6 +196,8 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       difference,
       hasDiscrepancy,
       corporateTotal,
+      corporateReimbursed,
+      corporatePending,
       personalTotal,
       isPaid,
       paidAmount,
@@ -196,6 +209,8 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
     totalTransactions: cards.reduce((sum, c) => sum + c.transactionsTotal, 0),
     totalDifference: cards.reduce((sum, c) => sum + c.difference, 0),
     totalCorporate: cards.reduce((sum, c) => sum + c.corporateTotal, 0),
+    totalCorporateReimbursed: cards.reduce((sum, c) => sum + c.corporateReimbursed, 0),
+    totalCorporatePending: cards.reduce((sum, c) => sum + c.corporatePending, 0),
     totalPersonal: cards.reduce((sum, c) => sum + c.personalTotal, 0),
     totalRefunds: cards.reduce((sum, c) => sum + c.refundTotal, 0),
     hasAnyDiscrepancy: cards.some((c) => c.hasDiscrepancy),

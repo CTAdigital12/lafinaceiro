@@ -38,6 +38,7 @@ import {
   FileDown,
   PenLine,
   BarChart3,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InvoiceDiscrepancyReport } from "./InvoiceDiscrepancyReport";
@@ -55,6 +56,7 @@ interface Transaction {
   credit_card_id: string;
   imported_at?: string | null;
   is_card_payment?: boolean | null;
+  reimbursement_status?: string | null;
   category?: { name: string; icon: string } | null;
 }
 
@@ -112,6 +114,7 @@ export function ReconciliationDetailModal({
     const pending = allCardTx.filter((t) => t.status === "pending");
     const refunds = allCardTx.filter((t) => t.is_refund);
     const corporate = completed.filter((t) => t.is_corporate_expense);
+    const corporateReimbursed = corporate.filter((t) => t.reimbursement_status === 'reimbursed');
     const imported = completed.filter((t) => t.imported_at);
     const manual = completed.filter((t) => !t.imported_at);
 
@@ -120,6 +123,7 @@ export function ReconciliationDetailModal({
       pendingTotal: pending.reduce((s, t) => s + Number(t.amount), 0),
       refundTotal: refunds.reduce((s, t) => s + Number(t.amount), 0),
       corporateTotal: corporate.reduce((s, t) => s + Number(t.amount), 0),
+      corporateReimbursedTotal: corporateReimbursed.reduce((s, t) => s + Number(t.amount), 0),
       completedCount: completed.length,
       pendingCount: pending.length,
       refundCount: refunds.length,
@@ -219,6 +223,18 @@ export function ReconciliationDetailModal({
             <Badge variant="secondary" className="gap-1">
               <Briefcase className="h-3 w-3" />
               Empresa: {formatCurrency(stats.corporateTotal)}
+            </Badge>
+          )}
+          {stats.corporateReimbursedTotal > 0 && (
+            <Badge variant="secondary" className="gap-1 bg-income/10 text-income">
+              <CheckCircle className="h-3 w-3" />
+              Reembolsado: {formatCurrency(stats.corporateReimbursedTotal)}
+            </Badge>
+          )}
+          {stats.corporateTotal > 0 && stats.corporateTotal - stats.corporateReimbursedTotal > 0 && (
+            <Badge variant="secondary" className="gap-1 bg-chart-4/10 text-chart-4">
+              <Clock className="h-3 w-3" />
+              Pendente: {formatCurrency(stats.corporateTotal - stats.corporateReimbursedTotal)}
             </Badge>
           )}
         </div>

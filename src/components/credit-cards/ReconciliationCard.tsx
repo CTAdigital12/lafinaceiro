@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format, subMonths, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText, Lock, Unlock } from "lucide-react";
+import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText, Lock, Unlock, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -122,6 +122,18 @@ function CardReconciliationItem({
             <div className="flex items-center gap-1">
               <Briefcase className="h-3 w-3" />
               <span>Empresa: {formatCurrency(card.corporateTotal)}</span>
+            </div>
+          )}
+          {card.corporateReimbursed > 0 && (
+            <div className="flex items-center gap-1">
+              <CheckCircle className="h-3 w-3 text-income" />
+              <span className="text-income">Reembolsado: {formatCurrency(card.corporateReimbursed)}</span>
+            </div>
+          )}
+          {card.corporatePending > 0 && (
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3 text-chart-4" />
+              <span className="text-chart-4">Pendente: {formatCurrency(card.corporatePending)}</span>
             </div>
           )}
           {card.pendingTotal > 0 && (
@@ -279,6 +291,18 @@ export function ReconciliationCard({
                   <p className="text-xs text-muted-foreground">Empresa</p>
                 </div>
                 <p className="text-lg font-bold text-muted-foreground">{formatCurrency(reconciliation.totalCorporate)}</p>
+                {reconciliation.totalCorporateReimbursed > 0 && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <CheckCircle className="h-3 w-3 text-income" />
+                    <span className="text-xs text-income">Reembolsado: {formatCurrency(reconciliation.totalCorporateReimbursed)}</span>
+                  </div>
+                )}
+                {reconciliation.totalCorporatePending > 0 && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <Clock className="h-3 w-3 text-chart-4" />
+                    <span className="text-xs text-chart-4">Pendente: {formatCurrency(reconciliation.totalCorporatePending)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
