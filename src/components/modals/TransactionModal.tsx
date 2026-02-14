@@ -733,27 +733,25 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
             />
           </div>
 
-          {/* Corporate Expense - Only show for expenses */}
-          {type === "expense" && (
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
-                  <Briefcase className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div>
-                  <Label htmlFor="corporate-expense" className="text-sm font-medium cursor-pointer">
-                    Despesa da Empresa
-                  </Label>
-                  <p className="text-xs text-muted-foreground">Não contabilizar no orçamento pessoal</p>
-                </div>
+          {/* Corporate Transaction - Show for both expenses and income */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
               </div>
-              <Switch
-                id="corporate-expense"
-                checked={isCorporateExpense}
-                onCheckedChange={setIsCorporateExpense}
-              />
+              <div>
+                <Label htmlFor="corporate-expense" className="text-sm font-medium cursor-pointer">
+                  Transação Corporativa
+                </Label>
+                <p className="text-xs text-muted-foreground">Não contabilizar no orçamento pessoal</p>
+              </div>
             </div>
-          )}
+            <Switch
+              id="corporate-expense"
+              checked={isCorporateExpense}
+              onCheckedChange={setIsCorporateExpense}
+            />
+          </div>
 
           {/* Card Payment - Only show for expenses paid via account */}
           {type === "expense" && paymentMethod === "account" && (
