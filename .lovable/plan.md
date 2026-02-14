@@ -1,52 +1,45 @@
 
 
-# Adicionar seletor de categorias por clique no detalhe de despesas/receitas
+# Corrigir seletor de categorias no mobile
 
 ## Problema
-Atualmente, para navegar entre categorias no mobile, o usuario so pode usar as setas esquerda/direita, o que e pouco pratico quando ha muitas categorias.
+O Popover do Radix usa um Portal que renderiza o conteudo fora do Drawer (vaul). No mobile, o Drawer captura foco e cliques, impedindo que o Popover funcione corretamente. O popover abre mas fecha imediatamente ou nao responde a cliques.
 
 ## Solucao
-Tornar o nome da categoria no cabecalho clicavel, abrindo um Popover com a lista de todas as categorias disponiveis para selecao rapida. As setas continuam funcionando normalmente.
+No mobile, substituir o Popover por uma lista expansivel inline (sem Portal), que funciona perfeitamente dentro do Drawer. No desktop (Sheet), manter o Popover como esta, pois funciona normalmente.
 
-## O que muda visualmente
-- O nome da categoria no cabecalho ganha um icone de ChevronDown indicando que e clicavel
-- Ao clicar no nome, abre uma lista (Popover) com todas as categorias ordenadas por valor, mostrando a bolinha colorida e o nome
-- A categoria atual fica destacada com um check
-- Ao selecionar uma categoria da lista, o detalhe muda para ela
+## O que muda
+- No mobile: ao clicar no nome da categoria, uma lista aparece logo abaixo do cabecalho (inline, sem portal), com animacao suave
+- No desktop: comportamento continua identico (Popover com portal)
+- A experiencia visual e praticamente a mesma nos dois casos
 
 ## Secao tecnica
 
 ### Arquivos a alterar
 
 **1. `src/components/dashboard/ParentCategoryDetailSheet.tsx`**
-- Importar `Popover`, `PopoverContent`, `PopoverTrigger` e `Check` icon
-- Adicionar estado `categoryListOpen` para controlar o popover
-- No `headerContent`, envolver o nome da categoria com um `PopoverTrigger` que abre a lista
-- Dentro do `PopoverContent`, renderizar `allParentCategories` como lista clicavel com bolinha colorida, nome, valor e check na categoria atual
-- Ao clicar em um item, chamar `onParentCategoryChange` e fechar o popover
+- Separar o `headerContent` em duas versoes:
+  - Desktop: manter Popover atual (com Portal)
+  - Mobile: usar um estado `categoryListOpen` com renderizacao condicional de uma `div` inline contendo a lista de categorias (sem Popover/Portal)
+- O trigger no mobile continua sendo o botao com o nome da categoria + ChevronDown
+- A lista inline usa a mesma estrutura visual (ScrollArea com botoes de categoria, check na atual)
 
 **2. `src/components/dashboard/CategoryDetailSheet.tsx`**
-- Mesma abordagem: importar Popover, adicionar estado, envolver nome com trigger
-- Renderizar `allCategories` como lista clicavel dentro do PopoverContent
-- Ao clicar, chamar `onCategoryChange` e fechar o popover
+- Mesma abordagem: no mobile, trocar Popover por lista inline expansivel
 
-### Estrutura do popover (ambos componentes)
+### Estrutura no mobile (ambos componentes)
 ```text
-<Popover>
-  <PopoverTrigger>
-    [bolinha colorida] [nome da categoria] [ChevronDown]
-  </PopoverTrigger>
-  <PopoverContent>
-    <ScrollArea maxHeight=300px>
-      lista de categorias com:
-        - bolinha colorida
-        - nome
-        - valor formatado
-        - check se for a atual
-    </ScrollArea>
-  </PopoverContent>
-</Popover>
+<DrawerHeader>
+  [seta esquerda] [botao com nome da categoria + ChevronDown] [seta direita]
+  {categoryListOpen && (
+    <div className="border rounded-lg mt-2">
+      <ScrollArea className="h-[250px]">
+        lista de categorias (mesma estrutura visual do popover)
+      </ScrollArea>
+    </div>
+  )}
+</DrawerHeader>
 ```
 
-O layout das setas permanece inalterado -- a unica mudanca e que a area central do cabecalho (nome) se torna clicavel.
-
+### Por que funciona
+O Drawer do vaul nao interfere com elementos renderizados dentro dele (inline). O problema era exclusivamente o Portal do Popover, que renderiza fora da arvore do Drawer.
