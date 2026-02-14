@@ -292,7 +292,7 @@ export function CategoryDetailSheet({
             <DrawerDescription className="sr-only">Detalhes das transações</DrawerDescription>
             {headerContent}
           </DrawerHeader>
-          <div className="px-4 pb-6">
+          <div className="px-4 pb-6" data-vaul-no-drag>
             {content}
           </div>
         </DrawerContent>

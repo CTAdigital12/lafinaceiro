@@ -45,7 +45,7 @@ export function ResponsiveDialog({
               <DrawerDescription>{description}</DrawerDescription>
             )}
           </DrawerHeader>
-          <div className={cn("px-4 pb-8 overflow-y-auto", className)}>
+          <div className={cn("px-4 pb-8 overflow-y-auto", className)} data-vaul-no-drag>
             {children}
           </div>
         </DrawerContent>
