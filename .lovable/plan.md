@@ -1,46 +1,60 @@
 
 
-# Corrigir agrupamento de parcelas por mês
+# Corrigir perda de dados de parcelas ao editar transacao
 
 ## Problema
-A "Previsao por Mes" mostra "Nenhuma parcela futura" porque o agrupamento usa o campo `date` da transacao (data da compra, ex: 2025-07-16) em vez do `due_date` (data de vencimento, ex: 2026-03-15). Como todas as datas de compra sao de 2025, o filtro de meses futuros (>= 2026-02) exclui tudo.
+Quando voce edita uma transacao que faz parte de um grupo de parcelas (pelo modal de transacao normal), o sistema **apaga** os campos `installment_group_id`, `installment_number` e `total_installments`, pois o codigo sempre envia esses valores como `null` (linhas 296-298 do TransactionModal.tsx).
+
+Isso faz com que:
+- A parcela editada perca o vinculo com o grupo
+- A categoria e descricao nao sejam propagadas para as outras parcelas do grupo
+- As parcelas de marco (e outros meses) aparecam sem categoria e com descricao desatualizada
 
 ## Causa raiz
-No hook `usePendingInstallments.ts`, o calculo de `byMonth` (linha ~103-110) agrupa por `installment.date`:
-
-```text
-const date = parse(installment.date, "yyyy-MM-dd", new Date());
-const monthKey = format(date, "yyyy-MM");
+No `TransactionModal.tsx`, ao montar o objeto `transactionData` para edicao, o codigo forca:
+```
+installment_group_id: null,
+installment_number: null,
+total_installments: null,
 ```
 
-Deveria agrupar por `installment.due_date` quando disponivel, pois esse campo indica em qual mes a parcela sera cobrada.
+Deveria preservar os valores originais quando a transacao ja pertence a um grupo.
 
 ## Solucao
-Alterar o agrupamento em `usePendingInstallments.ts` para usar `due_date` em vez de `date`.
 
-### Alteracao em `src/hooks/usePendingInstallments.ts`
+### 1. Preservar campos de parcela ao editar (`TransactionModal.tsx`)
+- Quando editando uma transacao existente, manter os valores originais de `installment_group_id`, `installment_number` e `total_installments` em vez de forcar `null`
+- Trocar as 3 linhas para usar os valores do `transaction` original:
 
-Na secao "Group by month" (linhas ~103-114), trocar o campo usado para agrupar:
-
-```text
-Antes:
-  const date = parse(installment.date, "yyyy-MM-dd", new Date());
-
-Depois:
-  const dateStr = installment.due_date || installment.date;
-  const date = parse(dateStr, "yyyy-MM-dd", new Date());
+```
+installment_group_id: isEditing && transaction ? transaction.installment_group_id : null,
+installment_number: isEditing && transaction ? transaction.installment_number : null,
+total_installments: isEditing && transaction ? transaction.total_installments : null,
 ```
 
-O campo `due_date` e preenchido para parcelas (ex: "2026-03-15", "2026-04-15") e indica quando cada parcela vence. Se por algum motivo nao existir, usa o `date` como fallback.
+### 2. Propagar categoria para o grupo ao editar parcela (`TransactionModal.tsx`)
+- Apos o `updateTransaction`, verificar se a transacao pertence a um grupo (`installment_group_id` nao nulo) e se a categoria mudou
+- Se sim, atualizar a categoria de todas as parcelas do grupo (mesma logica do `updateCategoryForAll` no `useInstallmentGroup`)
 
-Nenhuma outra alteracao necessaria -- o campo `due_date` ja existe na interface `PendingInstallment` (vem da query do Supabase) e o componente `MonthlyBreakdown` ja filtra corretamente por meses futuros.
+Trecho a adicionar apos a linha 302 (`await updateTransaction.mutateAsync(...)`) :
+
+```
+// Sync category to all installments in the group
+if (isEditing && transaction?.installment_group_id && categoryId !== transaction.category_id) {
+  await supabase
+    .from("transactions")
+    .update({ category_id: categoryId || null })
+    .eq("installment_group_id", transaction.installment_group_id);
+}
+```
 
 ## Resultado esperado
-- Marco/2026: parcelas com vencimento em marco
-- Abril/2026: parcelas com vencimento em abril
-- E assim por diante ate julho/2026
+- Editar uma parcela preserva o vinculo com o grupo
+- Alterar a categoria de uma parcela propaga para todas as parcelas do grupo
+- As parcelas de marco (e demais meses) manterao categoria e descricao corretas
 
 ## Secao tecnica
-- Arquivo: `src/hooks/usePendingInstallments.ts`
-- A interface `PendingInstallment` nao expoe `due_date` atualmente -- sera necessario adicionar o campo `due_date` a interface e ao mapeamento no `queryFn`
-- Na query, o campo `due_date` ja e retornado pelo `select("*")` da tabela `transactions`
+- Arquivo principal: `src/components/modals/TransactionModal.tsx`
+- Linhas afetadas: 296-298 (preservar campos) e 301-302 (propagar categoria)
+- Nenhuma alteracao em banco de dados necessaria
+
