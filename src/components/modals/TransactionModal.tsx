@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, addMonths } from "date-fns";
 import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -293,13 +294,21 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         is_refund: isRefund,
         is_card_payment: paymentMethod === "account" ? isCardPayment : false,
         refunded_transaction_id: refundedTransactionId,
-        installment_group_id: null,
-        installment_number: null,
-        total_installments: null,
+        installment_group_id: isEditing && transaction ? transaction.installment_group_id : null,
+        installment_number: isEditing && transaction ? transaction.installment_number : null,
+        total_installments: isEditing && transaction ? transaction.total_installments : null,
       };
 
       if (isEditing && transaction) {
         await updateTransaction.mutateAsync({ id: transaction.id, ...transactionData });
+        
+        // Sync category to all installments in the group
+        if (transaction.installment_group_id && categoryId !== transaction.category_id) {
+          await supabase
+            .from("transactions")
+            .update({ category_id: categoryId || null })
+            .eq("installment_group_id", transaction.installment_group_id);
+        }
       } else {
         await createTransaction.mutateAsync(transactionData);
       }
