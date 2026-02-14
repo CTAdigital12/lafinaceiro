@@ -1,48 +1,25 @@
 
-# Permitir que usuários compartilhados atualizem transações
+
+# Corrigir cálculo do total planejado de categorias pai
 
 ## Problema
-Luísa (luisaguarezi@gmail.com) é uma usuária compartilhada que tem acesso de leitura às transações do proprietário (aesdomingues@gmail.com). Porém, a política de segurança (RLS) da tabela `transactions` só permite UPDATE quando `auth.uid() = user_id` -- ou seja, apenas o dono pode editar.
+Quando uma categoria pai (ex: Lazer) tem subcategorias no planejamento e todas estão zeradas, o sistema ignora a soma dos filhos (0) e exibe o valor do próprio pai (R$ 120). Isso acontece porque o codigo verifica `childrenPlanned > 0` antes de decidir qual valor usar.
 
-Isso impede Luísa de:
-- Mudar categorias de transações
-- Editar qualquer campo de transações
-- Categorizar despesas sem categoria na tela de Planejamento
+## Solucao
+Alterar a logica na linha 157 de `src/pages/Planning.tsx`: se a categoria pai tem filhos no planejamento, sempre usar a soma dos filhos, independente de ser zero ou nao.
 
-## Solução
-Atualizar a política RLS de UPDATE da tabela `transactions` para permitir que usuários com acesso compartilhado também possam editar transações do proprietário.
+## Secao tecnica
 
-A mesma lógica já é usada na política de SELECT -- basta replicar para UPDATE.
+Arquivo: `src/pages/Planning.tsx`, linha 157
 
-## Escopo da mudança
-Além de `transactions`, as mesmas restrições existem em outras tabelas que Luísa pode precisar editar:
-- `categories` (UPDATE restrito ao dono)
-- `accounts` (UPDATE restrito ao dono)
-- `credit_cards` (UPDATE restrito ao dono)
-- `budgets` (UPDATE restrito ao dono)
-- `credit_card_invoices` (UPDATE restrito ao dono)
-
-Vou atualizar as políticas de UPDATE de todas essas tabelas para incluir acesso compartilhado, garantindo que Luísa possa operar normalmente.
-
-## Seção técnica
-
-### Migração SQL
-Para cada tabela, substituir a política de UPDATE existente por uma que inclua shared_access:
-
+De:
 ```text
--- transactions
-DROP POLICY "Users can update own transactions" ON transactions;
-CREATE POLICY "Users can update own or shared transactions" ON transactions
-  FOR UPDATE USING (
-    auth.uid() = user_id 
-    OR EXISTS (
-      SELECT 1 FROM shared_access 
-      WHERE shared_access.shared_with_user_id = auth.uid() 
-      AND shared_access.owner_id = transactions.user_id
-    )
-  );
+parent.totalPlanned = childrenPlanned > 0 ? childrenPlanned : Number(parent.planned_amount);
 ```
 
-O mesmo padrão para: `categories`, `accounts`, `credit_cards`, `budgets`, `credit_card_invoices`.
+Para:
+```text
+parent.totalPlanned = parent.children && parent.children.length > 0 ? childrenPlanned : Number(parent.planned_amount);
+```
 
-Nenhuma alteração de código necessária -- o problema é exclusivamente na camada de permissões do banco de dados.
+Isso garante que se existem subcategorias no planejamento, o total do pai sera a soma delas (mesmo que zero). O valor proprio do pai so sera usado quando nao houver nenhuma subcategoria cadastrada no planejamento.
