@@ -86,5 +86,7 @@ export function useMembers() {
     },
   });
 
-  return { members, isLoading, addMember, revokeAccess };
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ["shared_access"] });
+
+  return { members, isLoading, addMember, revokeAccess, refetch };
 }
