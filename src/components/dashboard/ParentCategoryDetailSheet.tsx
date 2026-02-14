@@ -410,7 +410,7 @@ export function ParentCategoryDetailSheet({
             <DrawerDescription className="sr-only">Detalhes das subcategorias e transações</DrawerDescription>
             {headerContent}
           </DrawerHeader>
-          <div className="px-4 pb-6">
+          <div className="px-4 pb-6" data-vaul-no-drag>
             {content}
           </div>
         </DrawerContent>
