@@ -28,7 +28,9 @@ export function MembersSection() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
+  const [memberPassword, setMemberPassword] = useState("");
   const [error, setError] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
   const [revokeAccessId, setRevokeAccessId] = useState<string | null>(null);
 
   // Reset password state
@@ -38,7 +40,7 @@ export function MembersSection() {
   const [passwordError, setPasswordError] = useState("");
   const [isResetting, setIsResetting] = useState(false);
 
-  const { members, isLoading, addMember, revokeAccess } = useMembers();
+  const { members, isLoading, revokeAccess, refetch } = useMembers();
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,9 +58,28 @@ export function MembersSection() {
       return;
     }
 
-    addMember.mutate(email, {
-      onSuccess: () => setEmail(""),
-    });
+    setIsAdding(true);
+    try {
+      const res = await supabase.functions.invoke("add-member", {
+        body: { email, password: memberPassword || undefined },
+      });
+
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+
+      toast({
+        title: res.data?.created
+          ? "Conta criada e membro adicionado!"
+          : "Membro adicionado!",
+      });
+      setEmail("");
+      setMemberPassword("");
+      refetch();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   const handleResetPassword = async () => {
@@ -112,8 +133,8 @@ export function MembersSection() {
       {/* Add Member Form */}
       <div>
         <h4 className="font-medium text-foreground mb-3">Adicionar membro</h4>
-        <form onSubmit={handleAddMember} className="flex gap-3">
-          <div className="flex-1 space-y-1">
+        <form onSubmit={handleAddMember} className="space-y-3">
+          <div className="space-y-1">
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -124,15 +145,28 @@ export function MembersSection() {
                 className="pl-10"
               />
             </div>
-            {error && <p className="text-sm text-expense">{error}</p>}
           </div>
-          <Button type="submit" disabled={addMember.isPending || !email}>
-            {addMember.isPending ? (
+          <div className="space-y-1">
+            <div className="relative">
+              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="password"
+                placeholder="Senha (se for criar conta nova)"
+                value={memberPassword}
+                onChange={(e) => setMemberPassword(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Deixe em branco se o usuário já tem conta</p>
+          </div>
+          {error && <p className="text-sm text-expense">{error}</p>}
+          <Button type="submit" disabled={isAdding || !email} className="w-full">
+            {isAdding ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
                 <UserPlus className="h-4 w-4 mr-2" />
-                Adicionar
+                Adicionar Membro
               </>
             )}
           </Button>
