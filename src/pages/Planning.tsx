@@ -154,7 +154,7 @@ export default function Planning() {
           
           // If parent has children with budgets, use sum of children's planned amounts
           // Otherwise, use the parent's own planned amount
-          parent.totalPlanned = childrenPlanned > 0 ? childrenPlanned : Number(parent.planned_amount);
+          parent.totalPlanned = parent.children && parent.children.length > 0 ? childrenPlanned : Number(parent.planned_amount);
         }
         
         // Spent comes from spentByCategory which already includes subcategories
