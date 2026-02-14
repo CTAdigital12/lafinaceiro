@@ -59,7 +59,7 @@ export function BalanceChart() {
         }) || [];
 
         const receitas = monthTransactions
-          .filter((t) => t.type === "income")
+          .filter((t) => t.type === "income" && !t.is_corporate_expense)
           .reduce((sum, t) => sum + Number(t.amount), 0);
 
         const despesas = monthTransactions

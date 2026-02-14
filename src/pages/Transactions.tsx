@@ -452,8 +452,8 @@ export default function Transactions() {
   // Calculate totals based on filtered transactions (respects all filters and refunds)
   const tabTotalIncome = filteredTransactions
     .filter((t) => 
-      (t.type === "income" && !t.is_refund) || 
-      (t.type === "expense" && t.is_refund)
+      (t.type === "income" && !t.is_refund && !t.is_corporate_expense) || 
+      (t.type === "expense" && t.is_refund && !t.is_corporate_expense)
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
   
