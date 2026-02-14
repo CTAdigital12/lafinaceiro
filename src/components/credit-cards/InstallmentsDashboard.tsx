@@ -9,6 +9,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { usePendingInstallments, PendingInstallment } from "@/hooks/usePendingInstallments";
 import { format, parse, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -66,11 +68,20 @@ function InstallmentAlert({ installment }: { installment: PendingInstallment }) 
 }
 
 function MonthlyBreakdown({ byMonth }: { byMonth: { month: string; amount: number; count: number }[] }) {
-  const maxAmount = Math.max(...byMonth.map((m) => m.amount), 1);
+  const [expanded, setExpanded] = useState(false);
   
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const futureMonths = byMonth.filter(m => m.month >= currentMonth);
+  const visibleMonths = expanded ? futureMonths : futureMonths.slice(0, 6);
+  const maxAmount = Math.max(...futureMonths.map((m) => m.amount), 1);
+  
+  if (futureMonths.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-4">Nenhuma parcela futura</p>;
+  }
+
   return (
     <div className="space-y-3">
-      {byMonth.slice(0, 6).map((monthData) => {
+      {visibleMonths.map((monthData) => {
         const date = parse(monthData.month, "yyyy-MM", new Date());
         const monthLabel = format(date, "MMM/yy", { locale: ptBR });
         const percentage = (monthData.amount / maxAmount) * 100;
@@ -92,6 +103,11 @@ function MonthlyBreakdown({ byMonth }: { byMonth: { month: string; amount: numbe
           </div>
         );
       })}
+      {futureMonths.length > 6 && (
+        <Button variant="ghost" size="sm" className="w-full" onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Ver menos" : `Ver mais ${futureMonths.length - 6} meses`}
+        </Button>
+      )}
     </div>
   );
 }
