@@ -15,16 +15,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Mail, UserPlus, Loader2, Trash2, CheckCircle, Users } from "lucide-react";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
+import { Label } from "@/components/ui/label";
+import { Mail, UserPlus, Loader2, Trash2, CheckCircle, Users, KeyRound } from "lucide-react";
 import { z } from "zod";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const emailSchema = z.string().email("E-mail inválido");
 
 export function MembersSection() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [revokeAccessId, setRevokeAccessId] = useState<string | null>(null);
+
+  // Reset password state
+  const [resetTarget, setResetTarget] = useState<{ email: string; name: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
 
   const { members, isLoading, addMember, revokeAccess } = useMembers();
 
@@ -47,6 +59,52 @@ export function MembersSection() {
     addMember.mutate(email, {
       onSuccess: () => setEmail(""),
     });
+  };
+
+  const handleResetPassword = async () => {
+    setPasswordError("");
+
+    if (newPassword.length < 6) {
+      setPasswordError("Senha deve ter no mínimo 6 caracteres");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("As senhas não coincidem");
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await supabase.functions.invoke("admin-reset-password", {
+        body: { email: resetTarget!.email, newPassword },
+      });
+
+      if (res.error) {
+        throw new Error(res.error.message);
+      }
+      if (res.data?.error) {
+        throw new Error(res.data.error);
+      }
+
+      toast({ title: "Senha redefinida com sucesso!" });
+      closeResetDialog();
+    } catch (err: any) {
+      toast({
+        title: "Erro ao redefinir senha",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const closeResetDialog = () => {
+    setResetTarget(null);
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError("");
   };
 
   return (
@@ -124,6 +182,20 @@ export function MembersSection() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() =>
+                      setResetTarget({
+                        email: member.profiles?.email || "",
+                        name: member.profiles?.full_name || member.profiles?.email || "Usuário",
+                      })
+                    }
+                    title="Redefinir senha"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-expense"
                     onClick={() => setRevokeAccessId(member.id)}
                     disabled={revokeAccess.isPending}
@@ -136,6 +208,50 @@ export function MembersSection() {
           </div>
         )}
       </div>
+
+      {/* Reset Password Dialog */}
+      <ResponsiveDialog
+        open={!!resetTarget}
+        onOpenChange={(open) => !open && closeResetDialog()}
+        title="Redefinir Senha"
+        description={`Definir nova senha para ${resetTarget?.name}`}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="new-password">Nova Senha</Label>
+            <Input
+              id="new-password"
+              type="password"
+              placeholder="Mínimo 6 caracteres"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirmar Senha</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              placeholder="Repita a senha"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          {passwordError && <p className="text-sm text-expense">{passwordError}</p>}
+          <Button
+            onClick={handleResetPassword}
+            disabled={isResetting || !newPassword || !confirmPassword}
+            className="w-full"
+          >
+            {isResetting ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <KeyRound className="h-4 w-4 mr-2" />
+            )}
+            Salvar Senha
+          </Button>
+        </div>
+      </ResponsiveDialog>
 
       {/* Revoke Access Confirmation */}
       <AlertDialog open={!!revokeAccessId} onOpenChange={(open) => !open && setRevokeAccessId(null)}>
