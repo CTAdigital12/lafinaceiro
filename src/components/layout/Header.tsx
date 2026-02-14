@@ -51,7 +51,7 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuário";
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-6">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)', minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))' }}>
       {/* Month/Year Selector */}
       <div className="flex items-center gap-2">
         <Button
