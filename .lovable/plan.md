@@ -1,28 +1,52 @@
 
 
-# Corrigir cabeçalho cortado no iPhone da Luísa
+# Adicionar seletor de categorias por clique no detalhe de despesas/receitas
 
 ## Problema
-No iPhone da Luísa, o cabeçalho com "Fevereiro 2026" fica atrás da barra de status do iOS (horário, wifi, bateria). Isso acontece porque o app não respeita a "safe area" do iPhone -- a área reservada para o notch/Dynamic Island.
+Atualmente, para navegar entre categorias no mobile, o usuario so pode usar as setas esquerda/direita, o que e pouco pratico quando ha muitas categorias.
 
-No seu celular funciona provavelmente porque o modelo é diferente ou o navegador trata a safe area de forma diferente.
+## Solucao
+Tornar o nome da categoria no cabecalho clicavel, abrindo um Popover com a lista de todas as categorias disponiveis para selecao rapida. As setas continuam funcionando normalmente.
 
-## Solução
-Adicionar padding superior usando `env(safe-area-inset-top)` do CSS, que é a forma padrão de lidar com notch/Dynamic Island em iPhones. O valor é automaticamente 0 em celulares sem notch, então não vai afetar outros dispositivos.
+## O que muda visualmente
+- O nome da categoria no cabecalho ganha um icone de ChevronDown indicando que e clicavel
+- Ao clicar no nome, abre uma lista (Popover) com todas as categorias ordenadas por valor, mostrando a bolinha colorida e o nome
+- A categoria atual fica destacada com um check
+- Ao selecionar uma categoria da lista, o detalhe muda para ela
 
-## O que muda
-- O cabeçalho vai ganhar um espaçamento no topo que empurra o conteúdo para baixo do notch
-- Em celulares sem notch (ou desktop), nada muda -- o valor é 0
+## Secao tecnica
 
-## Seção técnica
+### Arquivos a alterar
 
-### 1. `index.html` -- já possui `viewport-fit=cover` (necessário para safe area funcionar) -- OK
+**1. `src/components/dashboard/ParentCategoryDetailSheet.tsx`**
+- Importar `Popover`, `PopoverContent`, `PopoverTrigger` e `Check` icon
+- Adicionar estado `categoryListOpen` para controlar o popover
+- No `headerContent`, envolver o nome da categoria com um `PopoverTrigger` que abre a lista
+- Dentro do `PopoverContent`, renderizar `allParentCategories` como lista clicavel com bolinha colorida, nome, valor e check na categoria atual
+- Ao clicar em um item, chamar `onParentCategoryChange` e fechar o popover
 
-### 2. `src/index.css` -- adicionar regra para safe area no body/html
-Adicionar `padding-top: env(safe-area-inset-top)` no body para que todo o conteúdo respeite a safe area.
+**2. `src/components/dashboard/CategoryDetailSheet.tsx`**
+- Mesma abordagem: importar Popover, adicionar estado, envolver nome com trigger
+- Renderizar `allCategories` como lista clicavel dentro do PopoverContent
+- Ao clicar, chamar `onCategoryChange` e fechar o popover
 
-### 3. `src/components/layout/Header.tsx` -- ajustar posição sticky
-Mudar `top-0` para `top-[env(safe-area-inset-top)]` no header sticky, para que ele grude abaixo da safe area e não atrás dela. Alternativamente, adicionar `pt-[env(safe-area-inset-top)]` direto no header.
+### Estrutura do popover (ambos componentes)
+```text
+<Popover>
+  <PopoverTrigger>
+    [bolinha colorida] [nome da categoria] [ChevronDown]
+  </PopoverTrigger>
+  <PopoverContent>
+    <ScrollArea maxHeight=300px>
+      lista de categorias com:
+        - bolinha colorida
+        - nome
+        - valor formatado
+        - check se for a atual
+    </ScrollArea>
+  </PopoverContent>
+</Popover>
+```
 
-A abordagem mais limpa: adicionar o padding na tag `<header>` usando um estilo inline `paddingTop: env(safe-area-inset-top)` para que o conteúdo do header fique abaixo do notch, mantendo o background estendido até o topo.
+O layout das setas permanece inalterado -- a unica mudanca e que a area central do cabecalho (nome) se torna clicavel.
 
