@@ -13,6 +13,7 @@ export interface PendingInstallment {
   credit_card_name: string;
   credit_card_color: string;
   closing_date: number;
+  due_date?: string;
   days_until_closing: number;
   is_near_closing: boolean;
   is_past_closing: boolean;
@@ -85,6 +86,7 @@ export function usePendingInstallments() {
           date: transaction.date,
           credit_card_id: transaction.credit_card_id!,
           credit_card_name: creditCard?.name || "Cartão",
+          due_date: transaction.due_date,
           credit_card_color: creditCard?.color || "from-gray-500 to-gray-600",
           closing_date: closingDate,
           days_until_closing: daysUntilClosing,
@@ -110,7 +112,8 @@ export function usePendingInstallments() {
   // Group by month
   const monthMap = new Map<string, { amount: number; count: number }>();
   pendingInstallments.forEach((installment) => {
-    const date = parse(installment.date, "yyyy-MM-dd", new Date());
+    const dateStr = installment.due_date || installment.date;
+    const date = parse(dateStr, "yyyy-MM-dd", new Date());
     const monthKey = format(date, "yyyy-MM");
     const existing = monthMap.get(monthKey) || { amount: 0, count: 0 };
     monthMap.set(monthKey, {
