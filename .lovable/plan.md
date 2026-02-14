@@ -1,25 +1,28 @@
 
 
-# Corrigir cálculo do total planejado de categorias pai
+# Corrigir cabeçalho cortado no iPhone da Luísa
 
 ## Problema
-Quando uma categoria pai (ex: Lazer) tem subcategorias no planejamento e todas estão zeradas, o sistema ignora a soma dos filhos (0) e exibe o valor do próprio pai (R$ 120). Isso acontece porque o codigo verifica `childrenPlanned > 0` antes de decidir qual valor usar.
+No iPhone da Luísa, o cabeçalho com "Fevereiro 2026" fica atrás da barra de status do iOS (horário, wifi, bateria). Isso acontece porque o app não respeita a "safe area" do iPhone -- a área reservada para o notch/Dynamic Island.
 
-## Solucao
-Alterar a logica na linha 157 de `src/pages/Planning.tsx`: se a categoria pai tem filhos no planejamento, sempre usar a soma dos filhos, independente de ser zero ou nao.
+No seu celular funciona provavelmente porque o modelo é diferente ou o navegador trata a safe area de forma diferente.
 
-## Secao tecnica
+## Solução
+Adicionar padding superior usando `env(safe-area-inset-top)` do CSS, que é a forma padrão de lidar com notch/Dynamic Island em iPhones. O valor é automaticamente 0 em celulares sem notch, então não vai afetar outros dispositivos.
 
-Arquivo: `src/pages/Planning.tsx`, linha 157
+## O que muda
+- O cabeçalho vai ganhar um espaçamento no topo que empurra o conteúdo para baixo do notch
+- Em celulares sem notch (ou desktop), nada muda -- o valor é 0
 
-De:
-```text
-parent.totalPlanned = childrenPlanned > 0 ? childrenPlanned : Number(parent.planned_amount);
-```
+## Seção técnica
 
-Para:
-```text
-parent.totalPlanned = parent.children && parent.children.length > 0 ? childrenPlanned : Number(parent.planned_amount);
-```
+### 1. `index.html` -- já possui `viewport-fit=cover` (necessário para safe area funcionar) -- OK
 
-Isso garante que se existem subcategorias no planejamento, o total do pai sera a soma delas (mesmo que zero). O valor proprio do pai so sera usado quando nao houver nenhuma subcategoria cadastrada no planejamento.
+### 2. `src/index.css` -- adicionar regra para safe area no body/html
+Adicionar `padding-top: env(safe-area-inset-top)` no body para que todo o conteúdo respeite a safe area.
+
+### 3. `src/components/layout/Header.tsx` -- ajustar posição sticky
+Mudar `top-0` para `top-[env(safe-area-inset-top)]` no header sticky, para que ele grude abaixo da safe area e não atrás dela. Alternativamente, adicionar `pt-[env(safe-area-inset-top)]` direto no header.
+
+A abordagem mais limpa: adicionar o padding na tag `<header>` usando um estilo inline `paddingTop: env(safe-area-inset-top)` para que o conteúdo do header fique abaixo do notch, mantendo o background estendido até o topo.
+
