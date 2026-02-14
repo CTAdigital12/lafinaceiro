@@ -1,83 +1,48 @@
 
-# Mostrar reembolsos corporativos na conciliacao
+# Criar senha para usuario pelo admin
 
 ## Problema
+O e-mail de recuperacao de senha nao chegou para o membro. Voce precisa de uma forma de definir a senha de um usuario diretamente, sem depender do e-mail.
 
-A conciliacao mostra o total de despesas corporativas (R$ 56.891) mas nao indica que esses valores ja foram reembolsados pela empresa. O campo `reimbursement_status` existe nas transacoes mas nao e utilizado pelo hook de conciliacao nem pela interface.
-
-O usuario precisa ver claramente:
-- Quanto das despesas corporativas ja foi reembolsado
-- Quanto ainda esta pendente de reembolso
-- Qual e o valor liquido que ele pessoalmente deve
+## Solucao
+Criar uma edge function que usa a API Admin do Supabase (com service role key) para atualizar a senha de um usuario pelo e-mail. Na interface de Membros, adicionar um botao "Redefinir Senha" ao lado de cada membro ativo, que abre um modal para digitar a nova senha.
 
 ## Alteracoes
 
-### 1. Hook `useCreditCardReconciliation.ts`
+### 1. Edge Function `admin-reset-password`
 
-- Adicionar `reimbursement_status` na query de transacoes (o campo ja existe na tabela, so precisa ser incluido no select)
-- Calcular novos campos por cartao:
-  - `corporateReimbursed`: soma das despesas corporativas com reimbursement_status = 'reimbursed'
-  - `corporatePending`: soma das despesas corporativas com reimbursement_status != 'reimbursed'
-- Adicionar esses campos na interface `CardReconciliation`
-- Adicionar totais no `ReconciliationSummary`
+Criar `supabase/functions/admin-reset-password/index.ts`:
+- Recebe `{ email, newPassword }` via POST
+- Valida que o usuario autenticado e o dono (owner) do shared_access daquele email
+- Busca o user_id pelo email na tabela profiles
+- Usa `supabase.auth.admin.updateUserById()` com o service role key para definir a nova senha
+- Retorna sucesso ou erro
 
-### 2. Componente `ReconciliationCard.tsx`
+### 2. Componente `MembersSection.tsx`
 
-- Na secao de detalhes por cartao, mostrar o valor corporativo reembolsado com um icone de check verde (ex: "Empresa: R$ 56.891 - Reembolsado: R$ 56.891")
-- Mostrar pendente de reembolso quando existir
+- Adicionar um botao de "chave" (KeyRound icon) ao lado de cada membro na lista
+- Ao clicar, abre um dialog simples com:
+  - Campo "Nova Senha" (minimo 6 caracteres)
+  - Campo "Confirmar Senha"
+  - Botao "Salvar"
+- Ao confirmar, chama a edge function `admin-reset-password` com o email do membro e a nova senha
+- Mostra toast de sucesso ou erro
 
-### 3. Componente `ReconciliationDetailModal.tsx` e `InvoiceBreakdownCard.tsx`
+### Detalhes tecnicos
 
-- Adicionar `reimbursement_status` na interface de Transaction usada nesses componentes
-- No breakdown, apos mostrar "Empresa: R$ X", detalhar quanto ja foi reembolsado vs pendente
-- Na badge de stats, diferenciar entre corporativo reembolsado e pendente
-
-## Detalhes tecnicos
-
-No hook, a query ja busca todas as transacoes com credit_card_id. So precisa incluir o campo `reimbursement_status` no select:
-
+**Edge function:**
 ```typescript
-// Na query existente, adicionar reimbursement_status
-.select("*, categories(name, icon)")
-// Muda para:
-.select("*, categories(name, icon), reimbursement_status")
-// Na verdade o * ja inclui, entao reimbursement_status ja vem. 
-// O problema e que o calculo nao usa esse campo.
+// Valida ownership: verifica se o caller tem shared_access com o target user
+// Usa SUPABASE_SERVICE_ROLE_KEY para chamar auth.admin.updateUserById
+// Isso permite redefinir a senha sem enviar e-mail
 ```
 
-No calculo por cartao:
+**Seguranca:**
+- A edge function valida que o usuario autenticado e realmente o owner do membro alvo
+- Usa service role key apenas no servidor (edge function), nunca no cliente
+- Senha minima de 6 caracteres validada no cliente e no servidor
 
-```typescript
-// Separar corporate por status de reembolso
-const corporateReimbursed = normalTransactions
-  .filter(t => t.is_corporate_expense && t.reimbursement_status === 'reimbursed')
-  .reduce((sum, t) => sum + Number(t.amount), 0);
-
-const corporatePending = corporateTotal - corporateReimbursed;
-```
-
-Na interface `CardReconciliation`, adicionar:
-
-```typescript
-corporateReimbursed: number;
-corporatePending: number;
-```
-
-No `ReconciliationCard.tsx`, na area que mostra "Empresa: R$ X", trocar para mostrar detalhamento:
-
-```tsx
-{card.corporateReimbursed > 0 && (
-  <div className="flex items-center gap-1">
-    <CheckCircle className="h-3 w-3 text-income" />
-    <span className="text-income">Reembolsado: {formatCurrency(card.corporateReimbursed)}</span>
-  </div>
-)}
-{card.corporatePending > 0 && (
-  <div className="flex items-center gap-1">
-    <Clock className="h-3 w-3" />
-    <span>Pendente: {formatCurrency(card.corporatePending)}</span>
-  </div>
-)}
-```
-
-No summary cards do topo, adicionar um card ou sub-info mostrando "Reembolsado pela empresa" com o total.
+**UI no MembersSection:**
+- Novo icone KeyRound ao lado do botao de remover membro
+- Dialog com dois campos de senha e validacao de match
+- Loading state durante a chamada
