@@ -325,7 +325,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   // Calculate total income (only actual income, not expense refunds)
   // Expense refunds are now subtracted from expense categories, not added to income
   const totalIncome = transactions
-    .filter((t) => t.type === "income" && !t.is_refund)
+    .filter((t) => t.type === "income" && !t.is_refund && !t.is_corporate_expense)
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   // Calculate total expenses (excluding corporate, reimbursable, card payments, and refunds)
