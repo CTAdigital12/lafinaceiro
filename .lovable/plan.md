@@ -1,35 +1,30 @@
 
-# Excluir receitas corporativas dos totais
+
+# Mostrar opcao "Despesa da Empresa" tambem para receitas
 
 ## Problema
-Despesas marcadas como `is_corporate_expense` ja sao excluidas do total de despesas. Porem, quando o reembolso corporativo chega (ex: PIX de R$ 244,47), ele e registrado como receita e **infla o total de receitas**, o que nao faz sentido -- se a despesa nao conta, a receita correspondente tambem nao deve contar.
+O switch "Despesa da Empresa" no modal de transacao so aparece quando o tipo e `expense`. Para registrar o PIX de reembolso corporativo como receita sem inflar os totais, o usuario precisa marcar `is_corporate_expense` na receita, mas a opcao nao esta visivel.
 
 ## Solucao
-Filtrar receitas com `is_corporate_expense: true` dos totais de receita, em todos os lugares onde o calculo e feito. Nenhuma alteracao de banco de dados e necessaria -- o campo `is_corporate_expense` ja existe na tabela `transactions` e pode ser usado em transacoes do tipo `income`.
+Remover a condicao `type === "expense"` que esconde o switch, permitindo que receitas tambem sejam marcadas como corporativas. Ajustar o label para ficar coerente nos dois contextos.
 
-## Alteracoes
+## Alteracao
 
-### 1. `src/hooks/useTransactions.ts`
-- No calculo de `totalIncome` (linha 327-329), adicionar `&& !t.is_corporate_expense` ao filtro:
+### `src/components/modals/TransactionModal.tsx`
+- Linha ~737: remover a condicao `{type === "expense" && (` que envolve o bloco do switch corporativo
+- Alterar o label de "Despesa da Empresa" para "Transacao Corporativa" (ou manter "Despesa da Empresa" e adicionar um subtitulo contextual)
+- O switch ficara visivel tanto para receitas quanto para despesas
 
+Trecho atual (simplificado):
 ```text
-Antes:  .filter((t) => t.type === "income" && !t.is_refund)
-Depois: .filter((t) => t.type === "income" && !t.is_refund && !t.is_corporate_expense)
+{type === "expense" && (
+  <div> ... Switch "Despesa da Empresa" ... </div>
+)}
 ```
 
-### 2. `src/components/dashboard/BalanceChart.tsx`
-- No calculo de `receitas` (linha 61-63), excluir transacoes corporativas:
-
+Trecho novo:
 ```text
-Antes:  .filter((t) => t.type === "income")
-Depois: .filter((t) => t.type === "income" && !t.is_corporate_expense)
+<div> ... Switch "Transacao Corporativa" ... </div>
 ```
 
-### 3. `src/pages/Transactions.tsx`
-- No calculo de `tabTotalIncome`, adicionar o mesmo filtro `!t.is_corporate_expense`
-
-## Como usar
-Ao registrar o PIX de reembolso corporativo de R$ 244,47:
-1. Crie uma transacao do tipo **Receita**
-2. Marque como **Despesa de empresa** (is_corporate_expense)
-3. O valor nao sera somado nas receitas pessoais, mantendo os totais corretos
+Sem a condicao de tipo, o switch aparece sempre. Nenhuma outra alteracao e necessaria -- os filtros de totais ja foram atualizados para excluir `is_corporate_expense` tanto de receitas quanto de despesas.
