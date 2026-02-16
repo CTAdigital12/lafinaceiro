@@ -29,6 +29,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -923,7 +924,8 @@ export default function Transactions() {
                           className={cn(
                             "group",
                             transaction.installment_group_id && "cursor-pointer hover:bg-muted/50",
-                            transaction.total_installments && transaction.total_installments > 1 && "bg-primary/5 border-l-2 border-l-primary"
+                            transaction.total_installments && transaction.total_installments > 1 && "bg-primary/5 border-l-2 border-l-primary",
+                            transaction.is_provisional && "opacity-60"
                           )}
                           onClick={() => {
                             if (transaction.installment_group_id) {
@@ -987,6 +989,12 @@ export default function Transactions() {
                                 <Badge variant="outline" className="text-xs text-blue-600 border-blue-300 bg-blue-50">
                                   <Receipt className="h-3 w-3 mr-1" />
                                   Reembolsável
+                                </Badge>
+                              )}
+                              {transaction.is_provisional && (
+                                <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Previsto
                                 </Badge>
                               )}
                             </div>
@@ -1100,7 +1108,8 @@ export default function Transactions() {
                         onClick={() => handleTransactionClick(transaction)}
                         className={cn(
                           "flex items-center gap-3 p-3 bg-card rounded-lg border border-border active:bg-muted/50 w-full",
-                          transaction.installment_group_id && "border-l-2 border-l-primary"
+                          transaction.installment_group_id && "border-l-2 border-l-primary",
+                          transaction.is_provisional && "opacity-60"
                         )}
                       >
                         <div
@@ -1122,6 +1131,12 @@ export default function Transactions() {
                           <p className={cn("font-semibold text-sm", isIncome ? "text-income" : "text-expense")}>
                             {isIncome ? "+" : "-"} R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </p>
+                          {transaction.is_provisional && (
+                            <span className="text-[10px] text-amber-600 flex items-center gap-0.5 justify-end">
+                              <Clock className="h-3 w-3" />
+                              Previsto
+                            </span>
+                          )}
                           {transaction.is_corporate_expense && (
                             <span className="text-[10px] text-muted-foreground">Empresa</span>
                           )}
