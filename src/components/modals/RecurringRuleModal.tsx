@@ -5,13 +5,15 @@ import { Label } from "@/components/ui/label";
 
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCreditCards } from "@/hooks/useCreditCards";
+import { useCategories } from "@/hooks/useCategories";
 import { RecurringRule } from "@/hooks/useRecurringRules";
-import { CategorySelector } from "@/components/CategorySelector";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -36,6 +38,7 @@ export function RecurringRuleModal({ open, onOpenChange, editingRule, onSave }: 
   
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
+  const { incomeCategories, expenseCategories } = useCategories();
 
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -146,11 +149,35 @@ export function RecurringRuleModal({ open, onOpenChange, editingRule, onSave }: 
         {/* Category */}
         <div className="space-y-2">
           <Label>Categoria</Label>
-          <CategorySelector
-            value={categoryId}
-            onSelect={(id) => setCategoryId(id)}
-            type={type}
-          />
+          <Select value={categoryId || ""} onValueChange={(v) => setCategoryId(v || null)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione a categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              {(type === "income" ? incomeCategories : expenseCategories)
+                .filter(c => !c.parent_id)
+                .map(parent => {
+                  const children = (type === "income" ? incomeCategories : expenseCategories).filter(c => c.parent_id === parent.id);
+                  if (children.length > 0) {
+                    return (
+                      <SelectGroup key={parent.id}>
+                        <SelectLabel>{parent.icon} {parent.name}</SelectLabel>
+                        {children.map(child => (
+                          <SelectItem key={child.id} value={child.id}>
+                            {child.icon} {child.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    );
+                  }
+                  return (
+                    <SelectItem key={parent.id} value={parent.id}>
+                      {parent.icon} {parent.name}
+                    </SelectItem>
+                  );
+                })}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Payment Method */}
