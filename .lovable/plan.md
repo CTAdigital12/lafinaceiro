@@ -1,153 +1,215 @@
 
-# Consolidar toda documentacao em um unico arquivo
+
+# Modulo de Despesas Recorrentes e Projecao Financeira
 
 ## Resumo
-Unificar AI_CONTEXT.md, DOCUMENTATION.md e GEMINI_EXPORT.md em um unico arquivo `AI_CONTEXT.md` atualizado para Fevereiro 2026, contendo toda informacao do sistema. Os outros dois arquivos serao removidos.
 
-## Estrutura do documento unificado
+Implementar um sistema de regras recorrentes que gera automaticamente transacoes provisorias ("fantasmas") no inicio de cada mes. Essas transacoes aparecem com aparencia distinta na lista e sao substituidas pelo valor real quando o usuario paga manualmente ou importa um extrato/fatura.
 
-O novo `AI_CONTEXT.md` tera a seguinte estrutura, combinando o melhor de cada documento:
+## Etapas de Implementacao
+
+### Fase 1 - Schema do Banco de Dados
+
+Criar tabela `recurring_rules` e adicionar campos na tabela `transactions`:
+
+**Nova tabela: `recurring_rules`**
+- `id` (uuid, PK)
+- `user_id` (uuid, NOT NULL)
+- `description` (text, NOT NULL) - ex: "Conta de Luz"
+- `category_id` (uuid, nullable, FK categories)
+- `account_id` (uuid, nullable) - se debito em conta
+- `credit_card_id` (uuid, nullable) - se no cartao
+- `estimated_amount` (numeric, NOT NULL, default 0)
+- `type` (text, NOT NULL, default 'expense') - income ou expense
+- `day_of_month` (integer, NOT NULL) - dia esperado do vencimento
+- `active` (boolean, NOT NULL, default true)
+- `created_at`, `updated_at` (timestamps)
+
+RLS: mesmas politicas padrao do projeto (owner + shared_access para SELECT/UPDATE, owner-only para INSERT/DELETE).
+
+**Alteracao na tabela `transactions`:**
+- Adicionar `is_provisional` (boolean, NOT NULL, default false)
+- Adicionar `recurring_rule_id` (uuid, nullable)
+
+### Fase 2 - Hook useRecurringRules (CRUD)
+
+Novo hook `src/hooks/useRecurringRules.ts`:
+- Query para listar regras ativas do usuario
+- Mutations para criar, editar, desativar e excluir regras
+- Segue padrao existente dos outros hooks (useAccounts, useBudgets)
+
+### Fase 3 - Hook useRecurringGenerator (Geracao Automatica)
+
+Novo hook `src/hooks/useRecurringGenerator.ts`:
+- Recebe `month` e `year` como parametros
+- Ao ser chamado, consulta `recurring_rules` ativas
+- Para cada regra, verifica se ja existe transacao com `recurring_rule_id` = regra.id no mes/ano
+- Se nao existir, cria transacao com:
+  - `status: 'pending'`
+  - `is_provisional: true`
+  - `recurring_rule_id: regra.id`
+  - `amount: estimated_amount`
+  - `date: year-month-day_of_month`
+  - `due_date`: mesma data (para cartoes, respeita logica existente)
+  - `description`: da regra
+  - `category_id`, `account_id`, `credit_card_id`: da regra
+- Usa `createTransaction` com flag `silent: true` para nao mostrar toast por cada uma
+- Memoizado com useCallback para evitar loops
+
+**Ponto de integracao:** Chamado dentro do `Dashboard.tsx` e `Transactions.tsx` via useEffect quando month/year muda.
+
+### Fase 4 - Ajuste nos Calculos (Seguranca)
+
+**useTransactions.ts:**
+- `totalIncome`: excluir transacoes com `is_provisional: true`
+- `totalExpense`: excluir transacoes com `is_provisional: true`
+- Manter provisorias na lista de transacoes para exibicao
+
+**useCreditCardInvoiceSync.ts:**
+- Adicionar filtro `is_provisional = false` na query de recalculo do `current_invoice`
+- Provisorias NAO afetam o saldo realizado
+
+**useCreditCardReconciliation.ts:**
+- Excluir provisorias do calculo de `transactionsTotal`
+- Provisorias nao devem causar discrepancia na reconciliacao
+
+**Dashboard.tsx:**
+- Adicionar card ou subtexto "Saldo Projetado" nos SummaryCards
+- Formula: Saldo Atual - (Provisorias pendentes de conta) 
+- Fatura Projetada: current_invoice + (Provisorias de cartao)
+
+### Fase 5 - Visualizacao na Lista de Transacoes
+
+**Transactions.tsx - Aparencia "Ghost":**
+- Transacoes com `is_provisional: true` recebem:
+  - `opacity-60` no container
+  - Icone de relogio (Clock) ao lado do valor
+  - Badge "Previsto" com estilo distinto (ex: bg-amber-100 text-amber-700)
+- Filtro adicional no TransactionFiltersModal: "Provisorio" (all / only_provisional / no_provisional)
+
+### Fase 6 - Logica de Substituicao
+
+**Cenario A - Pagamento Manual (TransactionModal):**
+- Quando abrindo uma transacao com `is_provisional: true`, mostrar aviso visual: "Esta e uma previsao. Edite o valor real e salve para confirmar."
+- Ao salvar: `is_provisional = false`, `status = 'completed'`, valor atualizado
+- Botao adicional "Confirmar Pagamento" que faz o mesmo em um clique (mantendo valor estimado)
+
+**Cenario B - Importacao com Match Inteligente:**
+
+No `AccountReviewModal.tsx` e `InvoiceReviewModal.tsx`:
+- Apos carregar itens importados, buscar transacoes provisorias do mesmo mes
+- Algoritmo de matching:
+  1. Mesma `category_id` E valor aproximado (margem 30%) = match forte
+  2. Descricao similar (containsinsensitive parcial) E valor aproximado = match medio
+  3. Apenas valor aproximado = match fraco (sugestao, nao auto-selecao)
+- Se match encontrado, mostrar na linha: "Vincular a previsao: [Descricao] (R$ X)?" com checkbox
+- Se checkbox marcado, ao confirmar importacao: UPDATE na transacao provisoria existente (amount, description, is_provisional=false, status=completed, imported_at) em vez de INSERT novo
+- Reusa logica existente de `detectDuplicates` como referencia de pattern
+
+### Fase 7 - Pagina de Gestao de Recorrencias
+
+Nova pagina `src/pages/RecurringExpenses.tsx`:
+- Lista de regras recorrentes com nome, categoria, valor estimado, dia, status (ativo/inativo)
+- Modal para criar/editar regra (RecurringRuleModal)
+- Toggle para ativar/desativar regra
+- Botao de excluir com confirmacao
+- Link na sidebar (AppSidebar.tsx) e bottom nav (BottomNav.tsx)
+
+### Fase 8 - Atualizacao da Documentacao
+
+Atualizar `AI_CONTEXT.md` com:
+- Nova tabela `recurring_rules` no schema
+- Novos campos `is_provisional` e `recurring_rule_id` na tabela transactions
+- Hooks `useRecurringRules` e `useRecurringGenerator`
+- Regras de negocio de provisorias (nao afetam saldos realizados)
+- Fluxo de matching na importacao
+
+---
+
+## Secao Tecnica
+
+### Migracao SQL
 
 ```text
-1. Visao Geral do Sistema
-   - Stack, arquitetura, design system
+-- Nova tabela
+CREATE TABLE recurring_rules (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  description text NOT NULL,
+  category_id uuid REFERENCES categories(id) ON DELETE SET NULL,
+  account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
+  credit_card_id uuid REFERENCES credit_cards(id) ON DELETE SET NULL,
+  estimated_amount numeric NOT NULL DEFAULT 0,
+  type text NOT NULL DEFAULT 'expense',
+  day_of_month integer NOT NULL DEFAULT 1,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
-2. Schema do Banco de Dados (13 tabelas)
-   - transactions (com explicacao detalhada de campos criticos)
-   - credit_cards (com logica de sync do current_invoice)
-   - accounts
-   - categories (hierarquia)
-   - categorization_rules
-   - budgets
-   - investment_institutions
-   - investment_assets (com pricing_method, current_balance, yield_info, liquidity)
-   - investment_transactions (com notes)
-   - credit_card_invoices (NOVA - ciclos de fatura)
-   - profiles
-   - shared_access
-   - invitations
-   - Diagrama de relacionamentos
+ALTER TABLE recurring_rules ENABLE ROW LEVEL SECURITY;
 
-3. Regras de Negocio Criticas
-   - date vs due_date + inferencia de ano
-   - Pagamento de fatura NAO e despesa
-   - Estornos/reembolsos
-   - Gastos corporativos vs reembolsaveis
-   - Parcelamentos (installment_group_id)
-   - Sincronizacao automatica de current_invoice
-   - Preservacao de due_date em edicoes
-   - Ciclos de fatura (fechar/reabrir/pagar)
+-- RLS policies (padrao owner + shared_access)
+CREATE POLICY "Users can view own or shared recurring_rules" ON recurring_rules
+  FOR SELECT USING (
+    auth.uid() = user_id OR EXISTS (
+      SELECT 1 FROM shared_access 
+      WHERE shared_with_user_id = auth.uid() AND owner_id = recurring_rules.user_id
+    )
+  );
 
-4. Formulas de Calculo
-   - Total de despesas
-   - Total de receitas
-   - Saldo da fatura
-   - Reconciliacao
-   - Filtro hibrido (date para contas, due_date para cartoes)
-   - Preco medio de investimentos
+CREATE POLICY "Users can insert own recurring_rules" ON recurring_rules
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-5. Estrutura de Arquivos
-   - Arvore completa e atualizada (incluindo componentes e hooks faltantes)
+CREATE POLICY "Users can update own or shared recurring_rules" ON recurring_rules
+  FOR UPDATE USING (
+    auth.uid() = user_id OR EXISTS (
+      SELECT 1 FROM shared_access 
+      WHERE shared_with_user_id = auth.uid() AND owner_id = recurring_rules.user_id
+    )
+  );
 
-6. Padroes de Seguranca
-   - RLS (com exemplos de shared_access)
-   - Auth guards em mutations
-   - Tratamento de erros (logError, getSafeErrorMessage)
-   - Edge Functions com service role
+CREATE POLICY "Users can delete own recurring_rules" ON recurring_rules
+  FOR DELETE USING (auth.uid() = user_id);
 
-7. Padroes de Codigo e UI
-   - React Query hooks (padrao de uso)
-   - Queries Supabase
-   - Nomenclatura
-   - Estrutura de componente
-   - ResponsiveDialog (Dialog desktop / Drawer mobile)
-   - Convencoes (datas, moeda, cores, icones)
+-- Trigger updated_at
+CREATE TRIGGER update_recurring_rules_updated_at 
+  BEFORE UPDATE ON recurring_rules 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-8. Padroes Mobile (NOVO)
-   - data-vaul-no-drag para scroll dentro de Drawers
-   - Seletores inline (nao Popover/Portal) dentro de Drawers
-   - Bottom Navigation Bar
-   - Tabelas convertidas em Cards
-   - inputMode="decimal" para valores
-
-9. Hooks e Suas Responsabilidades
-   - useTransactions (com options detalhadas)
-   - useCreditCards
-   - useCreditCardInvoiceSync
-   - useCreditCardReconciliation
-   - useInstallmentGroup
-   - useCategories
-   - useAccounts
-   - useBudgets
-   - useCategorizationRules
-   - useInvestments
-   - useInstitutions
-   - useInvoiceCycles (NOVO)
-   - useActivities (NOVO)
-   - useMembers (NOVO)
-   - useBankPaymentCandidates (NOVO)
-   - useExistingInstallments (NOVO)
-   - useInvoiceTransactions
-   - usePendingInstallments
-   - useCreditCardTransactions
-   - useInvitations
-
-10. Edge Functions
-    - parse-invoice (OCR com Gemini)
-    - migrate-installments
-    - add-member (NOVO - cria usuario + shared_access)
-    - admin-reset-password (NOVO - reset administrativo)
-
-11. Fluxos de Usuario
-    - Importacao de fatura PDF (com staging area)
-    - Importacao de extrato bancario (OFX/CSV)
-    - Pagamento de fatura (split corporativo/reembolsavel/pessoal)
-    - Registro de investimento
-    - Fechar/Reabrir fatura (NOVO)
-    - Adicionar membro (NOVO)
-
-12. Troubleshooting
-    - Problemas comuns e solucoes
-
-13. Memorias Arquiteturais
-    - Todas as memorias atualizadas incluindo mobile-drawer-interaction-standards
-    - invoice-cycle-management
-    - member-management-system
-
-14. Armadilhas a Evitar (Checklist)
-    - Excluir is_card_payment dos relatorios
-    - Nao confundir date com due_date
-    - Hierarquia de categorias
-    - RLS e user_id
-    - Limite de 1000 rows
-    - NAO usar Popover/Portal dentro de Drawer no mobile
-    - Usar data-vaul-no-drag em areas scrollaveis dentro de Drawers
+-- Novos campos em transactions
+ALTER TABLE transactions ADD COLUMN is_provisional boolean NOT NULL DEFAULT false;
+ALTER TABLE transactions ADD COLUMN recurring_rule_id uuid REFERENCES recurring_rules(id) ON DELETE SET NULL;
 ```
 
-## Secao tecnica
+### Arquivos novos
+- `src/hooks/useRecurringRules.ts` - CRUD de regras
+- `src/hooks/useRecurringGenerator.ts` - geracao automatica
+- `src/pages/RecurringExpenses.tsx` - pagina de gestao
+- `src/components/modals/RecurringRuleModal.tsx` - modal de criar/editar regra
 
-### Arquivos a criar/alterar
-1. **`AI_CONTEXT.md`** - Reescrever com todo o conteudo consolidado e atualizado
-2. **`DOCUMENTATION.md`** - Remover (conteudo migrado para AI_CONTEXT.md)
-3. **`GEMINI_EXPORT.md`** - Remover (conteudo migrado para AI_CONTEXT.md)
+### Arquivos a alterar
+- `src/hooks/useTransactions.ts` - excluir provisorias dos totais, adicionar campo na interface Transaction
+- `src/hooks/useCreditCardInvoiceSync.ts` - filtrar provisorias do calculo
+- `src/hooks/useCreditCardReconciliation.ts` - filtrar provisorias
+- `src/pages/Dashboard.tsx` - adicionar saldo projetado
+- `src/pages/Transactions.tsx` - estilo ghost, filtro provisorio
+- `src/components/modals/TransactionModal.tsx` - modo "confirmar pagamento"
+- `src/components/modals/AccountReviewModal.tsx` - matching com provisorias
+- `src/components/modals/InvoiceReviewModal.tsx` - matching com provisorias
+- `src/components/modals/TransactionFiltersModal.tsx` - filtro provisorio
+- `src/components/layout/AppSidebar.tsx` - link para recorrencias
+- `src/components/layout/BottomNav.tsx` - link para recorrencias
+- `src/App.tsx` - rota /recurring
+- `AI_CONTEXT.md` - documentacao
 
-### Conteudo novo que sera adicionado (nao existia em nenhum dos 3 docs)
+### Ordem de implementacao
+1. Migracao SQL (tabela + campos)
+2. Hook useRecurringRules + pagina + modal
+3. Hook useRecurringGenerator + integracao Dashboard/Transactions
+4. Estilo ghost na lista de transacoes
+5. Logica de substituicao manual (TransactionModal)
+6. Logica de matching na importacao (AccountReviewModal + InvoiceReviewModal)
+7. Saldo projetado no Dashboard
+8. Atualizacao da documentacao
 
-- Tabela `credit_card_invoices` no schema
-- Campos adicionais de `investment_assets`: `current_balance`, `pricing_method`, `yield_info`, `liquidity`
-- Campo `notes` de `investment_transactions`
-- Hook `useInvoiceCycles` com interface e funcoes expostas
-- Hook `useActivities` com interface Activity
-- Hook `useMembers` com interface SharedAccess
-- Hook `useBankPaymentCandidates` com interface e logica de janela de busca
-- Hook `useExistingInstallments` com funcao detectDuplicates
-- Edge Function `add-member`: cria usuario se nao existe + adiciona shared_access
-- Edge Function `admin-reset-password`: reset de senha via service role
-- Secao de padroes mobile: `data-vaul-no-drag`, seletores inline, conflito Popover/Portal em Drawers
-- Componentes credit-cards faltantes: CloseInvoiceModal, ReopenInvoiceModal, ClosedInvoiceBanner, InvoiceStatusBadge
-- Componente `ResponsiveDialog` documentado como padrao de modais
-- Pagina Activities.tsx
-- Data atualizada para Fevereiro 2026
-
-### Principio
-O documento unificado sera a unica fonte de verdade para qualquer IA que trabalhe no projeto. Deve ser completo, preciso e atualizado.
