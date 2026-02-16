@@ -1,575 +1,1138 @@
-# AI Context Document - Sistema de Gestão Financeira Pessoal
+# LA Financeiro - Documentação Técnica Completa
 
-> **Propósito**: Este documento fornece contexto completo para IAs assistentes trabalharem neste projeto. Leia ANTES de qualquer modificação.
+> **Última Atualização:** Fevereiro 2026  
+> **Versão:** 3.0  
+> **URL de Produção:** https://lafinaceiro.lovable.app  
+> **Propósito:** Fonte de verdade única para IAs assistentes. Leia ANTES de qualquer modificação.
 
 ---
 
-## 1. VISÃO GERAL DO PROJETO
+## 📋 Índice
 
-| Item | Valor |
-|------|-------|
-| **Nome** | FinançasPro - Gestão Financeira Pessoal |
-| **URL** | https://lafinaceiro.lovable.app |
-| **Tipo** | Web App Mobile-First |
-| **Frontend** | React 18 + Vite + TypeScript + Tailwind CSS |
-| **Backend** | Supabase (Auth, PostgreSQL, Storage, Edge Functions) |
-| **AI Integration** | Google Gemini 2.5 Pro (OCR de faturas) |
-| **State** | TanStack React Query v5 |
-| **UI Library** | Radix UI + shadcn/ui |
+1. [Visão Geral do Sistema](#1-visão-geral-do-sistema)
+2. [Schema do Banco de Dados (13 tabelas)](#2-schema-do-banco-de-dados)
+3. [Regras de Negócio Críticas](#3-regras-de-negócio-críticas)
+4. [Fórmulas de Cálculo](#4-fórmulas-de-cálculo)
+5. [Estrutura de Arquivos](#5-estrutura-de-arquivos)
+6. [Padrões de Segurança](#6-padrões-de-segurança)
+7. [Padrões de Código e UI](#7-padrões-de-código-e-ui)
+8. [Padrões Mobile](#8-padrões-mobile)
+9. [Hooks e Suas Responsabilidades](#9-hooks-e-suas-responsabilidades)
+10. [Edge Functions](#10-edge-functions)
+11. [Fluxos de Usuário](#11-fluxos-de-usuário)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Memórias Arquiteturais](#13-memórias-arquiteturais)
+14. [Armadilhas a Evitar (Checklist)](#14-armadilhas-a-evitar)
+
+---
+
+## 1. Visão Geral do Sistema
+
+### Stack Tecnológico
+
+| Camada | Tecnologia |
+|--------|------------|
+| **Frontend** | React 18 + Vite + TypeScript |
+| **Estilização** | Tailwind CSS + shadcn/ui + Radix UI |
+| **Estado** | TanStack React Query v5 |
+| **Roteamento** | React Router v6 |
+| **Backend** | Lovable Cloud (Supabase) |
+| **Banco de Dados** | PostgreSQL (via Supabase) |
+| **Autenticação** | Supabase Auth (email/password) |
+| **OCR/IA** | Google Gemini 2.5 Pro |
+| **Gráficos** | Recharts |
+| **Tema** | next-themes (dark/light mode) |
 
 ### Arquitetura
+
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  React Frontend │────▶│  Supabase Cloud  │────▶│  Google Gemini  │
-│  (Vite + TS)    │     │  (DB + Auth)     │     │  (OCR Faturas)  │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        FRONTEND                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   Pages     │  │ Components  │  │      Hooks          │  │
+│  │ (17 rotas)  │  │ (50+ comp.) │  │ (20+ React Query)   │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
+│         └────────────────┼─────────────────────┘             │
+│                          ▼                                   │
+│              ┌───────────────────────┐                       │
+│              │   Supabase Client     │                       │
+│              └───────────┬───────────┘                       │
+└──────────────────────────┼───────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     LOVABLE CLOUD                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │  PostgreSQL │  │    Auth     │  │   Edge Functions    │  │
+│  │ (13 tables) │  │             │  │  (4 functions)      │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │               Row Level Security (RLS)                  │ │
+│  │    Todas as tabelas protegidas por user_id + shared     │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Design System
+
+- **Layout:** Cards com bordas suaves e acentos coloridos
+- **Navegação Desktop:** Sidebar colapsável à esquerda
+- **Navegação Mobile:** Bottom Navigation Bar fixa
+- **Componentes:** Radix UI primitives via shadcn/ui
+- **Cores:** Sistema de tokens semânticos HSL em `index.css`
+- **Modais:** `ResponsiveDialog` (Dialog desktop / Drawer mobile)
+
+---
+
+## 2. Schema do Banco de Dados
+
+### 2.1 Tabela: `transactions` (PRINCIPAL)
+
+Tabela central que armazena todas as movimentações financeiras.
+
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `id` | UUID | Não | `gen_random_uuid()` | Identificador único |
+| `user_id` | UUID | Não | - | Proprietário da transação |
+| `account_id` | UUID | Sim | - | Conta bancária (null se cartão) |
+| `credit_card_id` | UUID | Sim | - | Cartão de crédito (null se conta) |
+| `category_id` | UUID | Sim | - | Categoria da transação |
+| `description` | TEXT | Não | - | Descrição do lançamento |
+| `amount` | NUMERIC | Não | - | Valor (positivo sempre) |
+| `type` | TEXT | Não | - | `"income"` ou `"expense"` |
+| `date` | DATE | Não | `CURRENT_DATE` | **Data da compra (imutável)** |
+| `due_date` | DATE | Sim | - | **Data de vencimento/competência** |
+| `status` | TEXT | Não | `'completed'` | `"completed"`, `"pending"` |
+| `is_corporate_expense` | BOOLEAN | Não | `false` | Gasto da empresa no cartão pessoal |
+| `is_reimbursable` | BOOLEAN | Não | `false` | Despesa a ser reembolsada |
+| `is_card_payment` | BOOLEAN | Sim | `false` | **Pagamento de fatura (NÃO É DESPESA!)** |
+| `is_refund` | BOOLEAN | Não | `false` | Estorno/reembolso |
+| `refunded_transaction_id` | UUID | Sim | - | Transação original do estorno |
+| `installment_group_id` | UUID | Sim | - | **Agrupa parcelas da mesma compra** |
+| `installment_number` | INTEGER | Sim | - | Parcela atual (ex: 3) |
+| `total_installments` | INTEGER | Sim | - | Total de parcelas (ex: 10) |
+| `reimbursement_status` | TEXT | Sim | `'pending'` | `"pending"`, `"requested"`, `"reimbursed"` |
+| `imported_at` | TIMESTAMP | Sim | - | Data do upload/importação |
+
+#### Campos Críticos
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ date (Data da Compra)                                           │
+│   → Quando a compra FOI FEITA                                   │
+│   → Imutável após criação                                       │
+│   → Usado para histórico e relatórios                           │
+│                                                                 │
+│ due_date (Competência da Fatura)                                │
+│   → Em qual FATURA a compra aparece                             │
+│   → Calculada com base na closing_date do cartão                │
+│   → Dashboard de cartões filtra por due_date!                   │
+│                                                                 │
+│ is_card_payment                                                 │
+│   → Pagamento de fatura = TRANSFERÊNCIA (conta → cartão)        │
+│   → NÃO é despesa real                                          │
+│   → DEVE SER EXCLUÍDO dos totais de despesas                    │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. SCHEMA DO BANCO DE DADOS
+### 2.2 Tabela: `credit_cards`
 
-### Tabela: `transactions` (PRINCIPAL)
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `id` | UUID | Não | `gen_random_uuid()` | Identificador |
+| `user_id` | UUID | Não | - | Proprietário |
+| `name` | TEXT | Não | - | Nome do cartão |
+| `last_digits` | TEXT | Não | - | Últimos 4 dígitos |
+| `brand` | TEXT | Não | - | Bandeira (Visa, Mastercard) |
+| `credit_limit` | NUMERIC | Não | 0 | Limite de crédito |
+| `current_invoice` | NUMERIC | Não | 0 | **Saldo atual da fatura (sync automático)** |
+| `closing_date` | INTEGER | Não | 3 | Dia do fechamento (1-31) |
+| `due_date` | INTEGER | Não | 10 | Dia do vencimento (1-31) |
+| `color` | TEXT | Sim | gradient | Cor CSS gradient |
+| `status` | TEXT | Não | `'open'` | `"open"`, `"closed"`, `"paid"` |
+
+#### `current_invoice` — Sincronização Automática
+
+O saldo é recalculado via `useCreditCardInvoiceSync`:
+
 ```typescript
-interface Transaction {
-  id: string;                    // UUID
-  user_id: string;               // FK auth.users
-  account_id: string | null;     // FK accounts (null se cartão)
-  credit_card_id: string | null; // FK credit_cards (null se conta)
-  category_id: string | null;    // FK categories
-  
-  // DATAS - CRÍTICO!
-  date: string;                  // Data da COMPRA (imutável)
-  due_date: string | null;       // Data de VENCIMENTO/competência da fatura
-  imported_at: string | null;    // Timestamp do upload
-  
-  // VALORES
-  amount: number;                // Valor em R$ (positivo sempre)
-  type: 'income' | 'expense';    // Tipo da transação
-  description: string;           // Descrição
-  status: 'completed' | 'pending';
-  
-  // FLAGS BOOLEANAS - MUITO IMPORTANTES!
-  is_corporate_expense: boolean; // Gasto da empresa no cartão pessoal
-  is_reimbursable: boolean;      // Despesa a ser reembolsada (diversas)
-  is_card_payment: boolean;      // Pagamento de fatura (NÃO É DESPESA!)
-  is_refund: boolean;            // Estorno/reembolso (despesa negativa)
-  
-  // PARCELAMENTOS
-  installment_group_id: string | null;  // UUID agrupa parcelas
-  installment_number: number | null;    // Parcela atual (ex: 3)
-  total_installments: number | null;    // Total parcelas (ex: 10)
-  
-  // REEMBOLSO
-  reimbursement_status: 'pending' | 'requested' | 'reimbursed' | null;
-  refunded_transaction_id: string | null; // Transação original do estorno
-}
+current_invoice = Σ(completed expenses) - Σ(refunds) - Σ(card payments)
+// Nunca negativo: Math.max(0, invoiceTotal)
 ```
-
-### Tabela: `credit_cards`
-```typescript
-interface CreditCard {
-  id: string;
-  user_id: string;
-  name: string;           // "Nubank", "Itaú"
-  last_digits: string;    // "1234"
-  brand: string;          // "mastercard", "visa"
-  credit_limit: number;
-  current_invoice: number; // Valor da fatura atual
-  closing_date: number;    // Dia do fechamento (1-31)
-  due_date: number;        // Dia do vencimento (1-31)
-  status: 'open' | 'closed' | 'paid';
-  color: string;           // Gradiente CSS
-}
-```
-
-### Tabela: `accounts`
-```typescript
-interface Account {
-  id: string;
-  user_id: string;
-  name: string;
-  type: 'checking' | 'savings' | 'investment' | 'wallet';
-  current_balance: number;
-  icon: string;   // Emoji
-  color: string;  // Gradiente CSS
-}
-```
-
-### Tabela: `categories`
-```typescript
-interface Category {
-  id: string;
-  user_id: string;
-  name: string;
-  type: 'income' | 'expense';
-  icon: string;      // Emoji
-  color: string;     // Hex color
-  parent_id: string | null; // HIERARQUIA! Subcategorias têm parent_id
-}
-```
-
-### Tabela: `categorization_rules`
-```typescript
-interface CategorizationRule {
-  id: string;
-  user_id: string;
-  keyword: string;       // Palavra-chave para matching (case insensitive)
-  category_id: string;   // Categoria a aplicar
-  is_corporate: boolean; // Também marca como corporativo?
-}
-```
-
-### Tabela: `investment_assets`
-```typescript
-interface InvestmentAsset {
-  id: string;
-  user_id: string;
-  institution_id: string | null;
-  name: string;
-  ticker: string;
-  asset_type: 'renda_fixa' | 'renda_variavel' | 'fiis' | 'crypto' | 'saldo_corretora';
-  quantity: number;
-  average_price: number;  // Preço médio ponderado (calculado automaticamente)
-  current_price: number;  // Cotação atual
-  maturity_date: string | null; // Vencimento (renda fixa)
-}
-```
-
-### Tabela: `investment_transactions`
-```typescript
-interface InvestmentTransaction {
-  id: string;
-  user_id: string;
-  asset_id: string;
-  type: 'buy' | 'sell' | 'dividend' | 'yield';
-  quantity: number;
-  unit_price: number;
-  fees: number;
-  total_value: number;
-  date: string;
-  realized_profit: number | null; // Lucro realizado (vendas)
-  linked_transaction_id: string | null; // Transação financeira vinculada
-}
-```
-
-### Tabela: `investment_institutions`
-```typescript
-interface InvestmentInstitution {
-  id: string;
-  user_id: string;
-  name: string;   // "XP", "Rico", "NuInvest"
-  icon: string;   // Emoji
-  color: string;  // Hex
-}
-```
-
-### Outras Tabelas
-- `budgets`: Orçamentos mensais por categoria
-- `profiles`: Dados do usuário (nome, email, avatar)
-- `shared_access`: Compartilhamento de dados entre usuários
-- `invitations`: Convites pendentes
 
 ---
 
-## 3. REGRAS DE NEGÓCIO CRÍTICAS
+### 2.3 Tabela: `credit_card_invoices` (Ciclos de Fatura)
 
-### ⚠️ REGRA 1: Pagamento de Fatura NÃO É Despesa
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `id` | UUID | Não | `gen_random_uuid()` | Identificador |
+| `user_id` | UUID | Não | - | Proprietário |
+| `credit_card_id` | UUID | Não | - | Cartão vinculado |
+| `month` | INTEGER | Não | - | Mês (1-12) |
+| `year` | INTEGER | Não | - | Ano |
+| `status` | TEXT | Não | `'open'` | `"open"`, `"closed"`, `"paid"` |
+| `closed_amount` | NUMERIC | Sim | - | Valor no momento do fechamento |
+| `due_date` | DATE | Sim | - | Data de vencimento |
+| `closing_date` | DATE | Sim | - | Data de fechamento |
+| `closed_at` | TIMESTAMP | Sim | - | Quando foi fechada |
+
+**Regras:** Fatura `"closed"` bloqueia criação, edição e exclusão de transações naquele período.
+
+---
+
+### 2.4 Tabela: `accounts`
+
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `id` | UUID | Não | `gen_random_uuid()` | Identificador |
+| `user_id` | UUID | Não | - | Proprietário |
+| `name` | TEXT | Não | - | Nome da conta |
+| `type` | TEXT | Não | - | `"checking"`, `"savings"`, `"investment"`, `"wallet"` |
+| `current_balance` | NUMERIC | Não | 0 | Saldo atual |
+| `icon` | TEXT | Sim | `'🏦'` | Emoji |
+| `color` | TEXT | Sim | gradient | Cor CSS gradient |
+
+---
+
+### 2.5 Tabela: `categories`
+
+Suporta **hierarquia de dois níveis** (categoria pai → subcategorias).
+
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `id` | UUID | Não | `gen_random_uuid()` | Identificador |
+| `user_id` | UUID | Não | - | Proprietário |
+| `name` | TEXT | Não | - | Nome |
+| `type` | TEXT | Não | - | `"income"` ou `"expense"` |
+| `parent_id` | UUID | Sim | null | Categoria pai (null = raiz) |
+| `icon` | TEXT | Sim | `'📦'` | Emoji |
+| `color` | TEXT | Sim | `'#3B82F6'` | Cor hexadecimal |
+
+---
+
+### 2.6 Tabela: `categorization_rules`
+
+Regras automáticas para categorizar transações importadas.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `keyword` | TEXT | Palavra-chave (case insensitive) |
+| `category_id` | UUID | Categoria a aplicar |
+| `is_corporate` | BOOLEAN | Marca como corporativo automaticamente |
+
+---
+
+### 2.7 Tabela: `budgets`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `category_id` | UUID | Categoria vinculada |
+| `planned_amount` | NUMERIC | Valor planejado |
+| `month` | INTEGER | Mês (1-12) |
+| `year` | INTEGER | Ano |
+
+---
+
+### 2.8 Tabela: `investment_institutions`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `name` | TEXT | Nome (XP, Rico, NuInvest) |
+| `icon` | TEXT | Emoji |
+| `color` | TEXT | Cor hexadecimal |
+
+---
+
+### 2.9 Tabela: `investment_assets`
+
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `institution_id` | UUID | Sim | null | Instituição financeira |
+| `name` | TEXT | Não | - | Nome do ativo |
+| `ticker` | TEXT | Não | - | Código (PETR4, MXRF11) |
+| `asset_type` | TEXT | Não | - | `"renda_fixa"`, `"renda_variavel"`, `"fiis"`, `"crypto"`, `"saldo_corretora"` |
+| `quantity` | NUMERIC | Não | 0 | Quantidade |
+| `average_price` | NUMERIC | Não | 0 | Preço médio ponderado (calculado) |
+| `current_price` | NUMERIC | Não | 0 | Cotação atual |
+| `current_balance` | NUMERIC | Sim | 0 | Saldo atual (para renda fixa) |
+| `pricing_method` | TEXT | Sim | `'unit_price'` | Método de precificação |
+| `maturity_date` | DATE | Sim | null | Vencimento (renda fixa) |
+| `yield_info` | TEXT | Sim | null | Info de rendimento |
+| `liquidity` | TEXT | Sim | null | Liquidez |
+
+---
+
+### 2.10 Tabela: `investment_transactions`
+
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `asset_id` | UUID | Sim | null | Ativo vinculado |
+| `type` | TEXT | Não | - | `"buy"`, `"sell"`, `"dividend"`, `"yield"` |
+| `quantity` | NUMERIC | Não | 0 | Quantidade |
+| `unit_price` | NUMERIC | Não | 0 | Preço unitário |
+| `fees` | NUMERIC | Não | 0 | Taxas |
+| `total_value` | NUMERIC | Não | 0 | Valor total |
+| `date` | DATE | Não | CURRENT_DATE | Data da operação |
+| `realized_profit` | NUMERIC | Sim | null | Lucro realizado (vendas) |
+| `linked_transaction_id` | UUID | Sim | null | Transação financeira vinculada |
+| `notes` | TEXT | Sim | null | Observações |
+
+---
+
+### 2.11 Tabela: `profiles`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | UUID | Mesmo ID do auth.users |
+| `email` | TEXT | Email |
+| `full_name` | TEXT | Nome completo |
+| `avatar_url` | TEXT | URL do avatar |
+
+---
+
+### 2.12 Tabela: `shared_access`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `owner_id` | UUID | Usuário que compartilha |
+| `shared_with_user_id` | UUID | Usuário que recebe acesso |
+
+---
+
+### 2.13 Tabela: `invitations`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `owner_id` | UUID | Quem convida |
+| `invited_email` | TEXT | Email do convidado |
+| `invited_user_id` | UUID | ID após aceite |
+| `status` | TEXT | `"pending"`, `"accepted"`, `"rejected"` |
+
+---
+
+### Diagrama de Relacionamentos
+
+```
+┌─────────────────┐
+│     profiles    │
+│   (id = user)   │
+└────────┬────────┘
+         │ user_id
+         ▼
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│   transactions  │◄────►│   credit_cards  │      │    accounts     │
+│ credit_card_id  │      │                 │      │                 │
+│ account_id      │      │                 │      │                 │
+│ category_id     │      │                 │      │                 │
+└────────┬────────┘      └────────┬────────┘      └─────────────────┘
+         │                        │
+         │ category_id            │ credit_card_id
+         ▼                        ▼
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│   categories    │◄────►│     budgets     │      │credit_card_     │
+│ parent_id (self)│      │ category_id     │      │invoices         │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│ inv_institutions│◄────►│ inv_assets      │◄────►│ inv_transactions│
+│                 │      │ institution_id  │      │ asset_id        │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+```
+
+---
+
+## 3. Regras de Negócio Críticas
+
+### ⚠️ 3.1 Pagamento de Fatura NÃO É Despesa
 
 ```typescript
-// CORRETO: Pagamento de fatura
+// Pagamento de fatura é TRANSFERÊNCIA (conta → cartão)
 {
   type: 'expense',
   is_card_payment: true,  // ← FLAG CRÍTICA
   account_id: 'conta-corrente',
   credit_card_id: 'cartao-id',
-  // ...
 }
 
-// Ao filtrar despesas no Dashboard:
-.filter(t => !t.is_card_payment) // SEMPRE excluir!
+// SEMPRE excluir dos relatórios de despesas:
+.filter(t => !t.is_card_payment)
 ```
-
-**Por quê?** Pagamento de fatura é transferência interna (conta → cartão), não gasto real.
 
 ---
 
-### ⚠️ REGRA 2: date vs due_date
+### ⚠️ 3.2 `date` vs `due_date`
 
+| Campo | Significado | Quando Usar |
+|-------|-------------|-------------|
+| `date` | Data da compra (imutável) | Histórico, relatórios |
+| `due_date` | Competência da fatura | Filtros de fatura, Dashboard de cartões |
+
+**Regra de cálculo do `due_date`:**
 ```typescript
-// date = quando a compra FOI FEITA (imutável, histórico)
-// due_date = em qual FATURA a compra aparece (competência)
-
-// Exemplo: Compra em 28/Dez aparece na fatura de Janeiro
-{
-  date: '2024-12-28',      // Data real da compra
-  due_date: '2025-01-10',  // Vencimento da fatura de Janeiro
+if (purchaseDay <= closingDate) {
+  due_date = mês_atual
+} else {
+  due_date = mês_seguinte
 }
 ```
 
-**IMPORTANTE**: Dashboard de cartões filtra por `due_date`, não por `date`!
-
----
-
-### ⚠️ REGRA 3: Lógica de Ano na Importação
-
-Ao importar fatura de um mês, compras de meses anteriores são do ano passado:
-
+**Inferência de Ano (importação de PDF):**
 ```typescript
-// Importando fatura de JANEIRO/2025
-// Compra com data 28/DEZ → ano = 2024
-
 if (purchaseMonth > invoiceMonth) {
   year = invoiceYear - 1;
 }
+// Ex: Compra DEZ para fatura JAN → ano anterior
 ```
 
 ---
 
-### ⚠️ REGRA 4: Parcelamentos
+### ⚠️ 3.3 Estornos/Reembolsos
 
 ```typescript
-// Compra parcelada em 10x detectada como "3/10"
-// Sistema cria parcelas 4-10 automaticamente
-
-{
-  installment_group_id: 'uuid-unico-da-compra', // MESMO para todas
-  installment_number: 3,   // Esta é a 3ª
-  total_installments: 10,  // De 10 parcelas
-  due_date: '2025-01-10',  // Fatura de Janeiro
-}
-
-// Parcela 4:
-{
-  installment_group_id: 'uuid-unico-da-compra', // MESMO!
-  installment_number: 4,
-  due_date: '2025-02-10',  // +1 mês
-}
+// Estorno = despesa com is_refund: true
+// Subtrai do total de despesas da categoria original
+totalExpense = normalExpenses - expenseRefunds
 ```
 
 ---
 
-### ⚠️ REGRA 5: Gastos Corporativos vs Reembolsáveis
+### ⚠️ 3.4 Gastos Corporativos vs Reembolsáveis
 
 | Flag | Significado | Aparece em relatórios pessoais? |
 |------|-------------|--------------------------------|
 | `is_corporate_expense` | Gasto da EMPRESA no cartão pessoal | ❌ Não |
-| `is_reimbursable` | Gasto PESSOAL que será reembolsado | ❌ Não |
+| `is_reimbursable` | Gasto pessoal que será reembolsado | ❌ Não |
 | Nenhum | Gasto pessoal normal | ✅ Sim |
 
 ---
 
-### ⚠️ REGRA 6: Reembolsos/Estornos
+### ⚠️ 3.5 Parcelamentos
 
 ```typescript
-// Estorno aparece como valor negativo no cálculo
+// Parcelas agrupadas por installment_group_id
 {
-  type: 'expense',
-  is_refund: true,
-  amount: 150,  // Valor positivo no banco
-  refunded_transaction_id: 'transacao-original-id',
+  installment_group_id: 'uuid-unico', // MESMO para todas as parcelas
+  installment_number: 3,              // Parcela atual
+  total_installments: 10,             // Total
+  due_date: '2025-01-10',             // Incrementa +1 mês por parcela
 }
 
-// Cálculo no Dashboard:
-totalExpense = despesasNormais - estornos
+// Regras:
+// - Editar categoria de 1 parcela → atualiza TODAS do grupo
+// - Parcelas pendentes podem ser removidas em lote
 ```
 
 ---
 
-### ⚠️ REGRA 7: Categorias Hierárquicas
+### ⚠️ 3.6 Sincronização de `current_invoice`
 
 ```typescript
-// Categoria pai
-{ id: '1', name: 'Alimentação', parent_id: null }
+// useCreditCardInvoiceSync recalcula após criar/editar/excluir transação
+let invoiceTotal = 0;
 
-// Subcategorias
-{ id: '2', name: 'Restaurantes', parent_id: '1' }
-{ id: '3', name: 'Supermercado', parent_id: '1' }
+for (const tx of transactions) {
+  if (tx.status !== "completed") continue;
+  
+  if (tx.is_card_payment) {
+    invoiceTotal -= tx.amount;     // Pagamentos reduzem
+  } else if (tx.type === "expense") {
+    if (tx.is_refund) {
+      invoiceTotal -= tx.amount;   // Estornos reduzem
+    } else {
+      invoiceTotal += tx.amount;   // Despesas aumentam
+    }
+  }
+}
 
-// Transações podem ter categoria pai OU subcategoria
+invoiceTotal = Math.max(0, invoiceTotal); // Nunca negativo
 ```
 
 ---
 
-## 4. PADRÕES DE CÓDIGO
+### ⚠️ 3.7 Preservação de `due_date`
 
-### React Query Hooks
+Ao editar transação existente:
+- Mudar apenas categoria/descrição → **mantém** `due_date` original
+- Mudar data da compra → **recalcula** `due_date`
+- Mudar cartão → **recalcula** `due_date`
 
-Todos os hooks estão em `src/hooks/`:
+---
+
+### ⚠️ 3.8 Ciclos de Fatura (Fechar/Reabrir)
+
+- Fatura `"closed"` → **bloqueia** criação, edição e exclusão de transações naquele período
+- Fatura `"open"` → operações liberadas
+- Fatura `"paid"` → pagamento registrado
+
+O hook `useInvoiceCycles` gerencia os estados. `useTransactions` verifica o status antes de mutações.
+
+---
+
+## 4. Fórmulas de Cálculo
+
+### 4.1 Total de Despesas
 
 ```typescript
-// Importação
+const normalExpenses = transactions
+  .filter(t => t.type === "expense" && !t.is_refund && !t.is_card_payment 
+    && !t.is_corporate_expense && !t.is_reimbursable)
+  .reduce((sum, t) => sum + Number(t.amount), 0);
+
+const expenseRefunds = transactions
+  .filter(t => t.type === "expense" && t.is_refund 
+    && !t.is_corporate_expense && !t.is_reimbursable)
+  .reduce((sum, t) => sum + Number(t.amount), 0);
+
+const totalExpense = normalExpenses - expenseRefunds;
+```
+
+### 4.2 Total de Receitas
+
+```typescript
+const totalIncome = transactions
+  .filter(t => t.type === "income" && !t.is_refund && !t.is_corporate_expense)
+  .reduce((sum, t) => sum + Number(t.amount), 0);
+```
+
+### 4.3 Reconciliação de Fatura
+
+```typescript
+const transactionsTotal = normalTotal - refundTotal;
+const discrepancy = current_invoice - transactionsTotal;
+// discrepancy > 0: faltam lançamentos
+// discrepancy < 0: sobraram lançamentos
+```
+
+### 4.4 Filtro Híbrido (Dashboard)
+
+```typescript
+// Contas bancárias: filtra por date
+// Cartões de crédito: filtra por due_date
+query = query.or(
+  `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate}),` +
+  `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`
+);
+```
+
+### 4.5 Preço Médio de Investimentos
+
+```typescript
+// Na Compra:
+const newQuantity = asset.quantity + purchaseQuantity;
+const newAveragePrice = (asset.quantity * asset.average_price + purchaseQuantity * purchasePrice) / newQuantity;
+
+// Na Venda: preço médio NÃO muda, só reduz quantity
+// Lucro Realizado = (precoVenda - precoMedio) × quantidade
+```
+
+---
+
+## 5. Estrutura de Arquivos
+
+```
+src/
+├── App.tsx                        # Rotas principais
+├── main.tsx                       # Entry point
+├── index.css                      # Estilos globais + tokens
+│
+├── contexts/
+│   ├── AuthContext.tsx            # Autenticação
+│   └── DateContext.tsx            # Mês/Ano selecionado
+│
+├── hooks/
+│   ├── useTransactions.ts         # CRUD transações (principal)
+│   ├── useCreditCards.ts          # CRUD cartões
+│   ├── useCreditCardInvoiceSync.ts# Sync automático de current_invoice
+│   ├── useCreditCardReconciliation.ts # Lógica de conciliação
+│   ├── useCreditCardTransactions.ts   # Transações de um cartão
+│   ├── useCategories.ts           # CRUD categorias
+│   ├── useAccounts.ts             # CRUD contas
+│   ├── useBudgets.ts              # CRUD orçamentos
+│   ├── useCategorizationRules.ts  # Regras automáticas
+│   ├── useInstallmentGroup.ts     # Gestão de parcelas
+│   ├── usePendingInstallments.ts  # Parcelas pendentes
+│   ├── useExistingInstallments.ts # Deduplicação na importação
+│   ├── useInstitutions.ts         # Instituições de investimento
+│   ├── useInvestments.ts          # Ativos e operações
+│   ├── useInvitations.ts          # Convites de acesso
+│   ├── useInvoiceCycles.ts        # Ciclos de fatura (fechar/reabrir)
+│   ├── useInvoiceTransactions.ts  # Transações da fatura
+│   ├── useActivities.ts           # Log de importações
+│   ├── useMembers.ts              # Gestão de membros
+│   ├── useBankPaymentCandidates.ts# Candidatos para vincular pagamento
+│   └── use-mobile.tsx             # Detecção de mobile
+│
+├── pages/
+│   ├── Dashboard.tsx              # Resumo financeiro
+│   ├── Transactions.tsx           # Lista com 3 abas
+│   ├── CreditCards.tsx            # Gestão de cartões
+│   ├── Accounts.tsx               # Gestão de contas
+│   ├── Categories.tsx             # Gestão de categorias
+│   ├── CategorizationRules.tsx    # Regras automáticas
+│   ├── Planning.tsx               # Orçamentos
+│   ├── Investments.tsx            # Carteira de investimentos
+│   ├── Reports.tsx                # Relatórios
+│   ├── CorporateExpenses.tsx      # Gastos corporativos
+│   ├── Reimbursements.tsx         # Reembolsos
+│   ├── Activities.tsx             # Log de importações
+│   ├── Settings.tsx               # Configurações + Membros
+│   ├── Auth.tsx                   # Login/Signup
+│   ├── ForgotPassword.tsx         # Recuperação de senha
+│   ├── ResetPassword.tsx          # Reset de senha
+│   └── NotFound.tsx               # 404
+│
+├── components/
+│   ├── ui/                        # shadcn/ui (50+ components)
+│   │   └── responsive-dialog.tsx  # Dialog/Drawer responsivo
+│   │
+│   ├── layout/
+│   │   ├── MainLayout.tsx         # Layout principal
+│   │   ├── AppSidebar.tsx         # Menu lateral (desktop)
+│   │   ├── BottomNav.tsx          # Navegação (mobile)
+│   │   └── Header.tsx             # Cabeçalho + seletor de mês
+│   │
+│   ├── dashboard/
+│   │   ├── SummaryCard.tsx        # Cards de resumo
+│   │   ├── BalanceChart.tsx       # Gráfico de saldo
+│   │   ├── CategoryChart.tsx      # Gráfico por categoria
+│   │   ├── BudgetEvolutionChart.tsx
+│   │   ├── AllCategoriesList.tsx  # Lista de categorias
+│   │   ├── CategoryDetailSheet.tsx
+│   │   └── ParentCategoryDetailSheet.tsx
+│   │
+│   ├── credit-cards/
+│   │   ├── InstallmentsDashboard.tsx
+│   │   ├── InvoiceBreakdownCard.tsx
+│   │   ├── ReconciliationCard.tsx
+│   │   ├── ReconciliationDetailModal.tsx
+│   │   ├── InvoiceDiscrepancyReport.tsx
+│   │   ├── CloseInvoiceModal.tsx      # Fechar fatura
+│   │   ├── ReopenInvoiceModal.tsx     # Reabrir fatura
+│   │   ├── ClosedInvoiceBanner.tsx    # Banner de fatura fechada
+│   │   └── InvoiceStatusBadge.tsx     # Badge de status
+│   │
+│   ├── investments/
+│   │   ├── AllocationChart.tsx
+│   │   ├── AssetTable.tsx / AssetModal.tsx
+│   │   ├── InstitutionsList.tsx / InstitutionModal.tsx
+│   │   ├── TransactionHistory.tsx
+│   │   ├── OperationModal.tsx
+│   │   ├── UpdatePricesModal.tsx
+│   │   └── InvestmentSummaryCards.tsx
+│   │
+│   ├── modals/
+│   │   ├── TransactionModal.tsx
+│   │   ├── TransactionFiltersModal.tsx
+│   │   ├── AccountModal.tsx / AccountImportModal.tsx / AccountReviewModal.tsx
+│   │   ├── CreditCardModal.tsx
+│   │   ├── InvoiceImportModal.tsx / InvoiceReviewModal.tsx / InvoiceItemsModal.tsx
+│   │   ├── PayInvoiceModal.tsx
+│   │   ├── AddInstallmentsModal.tsx / EditInstallmentsModal.tsx
+│   │   ├── NewBudgetModal.tsx / EditBudgetModal.tsx
+│   │   ├── AddSubcategoryModal.tsx / DeleteCategoryModal.tsx
+│   │   └── ...
+│   │
+│   ├── reports/
+│   │   └── RefundReport.tsx
+│   │
+│   ├── settings/
+│   │   ├── MembersSection.tsx
+│   │   └── InstallmentMigration.tsx
+│   │
+│   ├── CategorySelector.tsx
+│   └── InstallmentDetailsSheet.tsx
+│
+├── integrations/supabase/
+│   ├── client.ts                  # AUTO-GERADO
+│   └── types.ts                   # AUTO-GERADO
+│
+├── lib/
+│   ├── utils.ts                   # cn, formatCurrency
+│   ├── constants.ts               # Constantes do domínio
+│   ├── errorHandler.ts            # logError, getSafeErrorMessage
+│   ├── csvParser.ts / csvInvoiceParser.ts / ofxParser.ts
+│   └── bankConfig.ts              # Configurações por banco
+│
+├── types/
+│   └── index.ts                   # Tipos centralizados
+│
+└── config/
+    └── version.ts
+
+supabase/
+├── config.toml
+└── functions/
+    ├── parse-invoice/index.ts
+    ├── migrate-installments/index.ts
+    ├── add-member/index.ts
+    └── admin-reset-password/index.ts
+```
+
+---
+
+## 6. Padrões de Segurança
+
+### 6.1 Row Level Security (RLS)
+
+Todas as tabelas têm RLS habilitado:
+
+```sql
+-- Visualizar próprios dados OU dados compartilhados
+CREATE POLICY "Users can view own or shared data" ON table_name
+FOR SELECT USING (
+  auth.uid() = user_id 
+  OR EXISTS (
+    SELECT 1 FROM shared_access 
+    WHERE shared_with_user_id = auth.uid() 
+    AND owner_id = table_name.user_id
+  )
+);
+
+-- INSERT/DELETE: apenas próprios dados (auth.uid() = user_id)
+-- UPDATE: próprios ou compartilhados (mesma lógica de SELECT)
+```
+
+### 6.2 Auth Guards em Mutations
+
+```typescript
+// OBRIGATÓRIO antes de INSERT
+if (!user?.id) {
+  throw new Error("Usuário não autenticado");
+}
+```
+
+### 6.3 Tratamento de Erros
+
+```typescript
+import { logError, getSafeErrorMessage } from "@/lib/errorHandler";
+
+// Nunca expor detalhes internos ao usuário
+catch (error) {
+  logError(error as Error, "NomeDaFuncao");
+  toast({
+    title: "Erro",
+    description: getSafeErrorMessage(error),
+    variant: "destructive",
+  });
+}
+```
+
+### 6.4 Edge Functions
+
+| Aspecto | Implementação |
+|---------|---------------|
+| Autenticação | `verify_jwt = false` (validação manual quando necessário) |
+| CORS | Headers configurados |
+| Secrets | `GOOGLE_AI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+
+---
+
+## 7. Padrões de Código e UI
+
+### 7.1 React Query Hooks
+
+```typescript
 import { useTransactions } from '@/hooks/useTransactions';
-import { useCreditCards } from '@/hooks/useCreditCards';
-import { useCategories } from '@/hooks/useCategories';
-
-// Uso
 const { transactions, isLoading, createTransaction, updateTransaction } = useTransactions();
-const { creditCards, createCreditCard } = useCreditCards();
 ```
 
-### Queries Supabase
+### 7.2 Queries Supabase
 
 ```typescript
 import { supabase } from '@/integrations/supabase/client';
 
-// SELECT
 const { data, error } = await supabase
   .from('transactions')
   .select('*, categories(*), accounts(*)')
   .eq('user_id', userId)
   .order('date', { ascending: false });
-
-// INSERT
-const { error } = await supabase
-  .from('transactions')
-  .insert([{ ...transaction, user_id: userId }]);
-
-// UPDATE
-const { error } = await supabase
-  .from('transactions')
-  .update({ category_id: newCategoryId })
-  .eq('id', transactionId);
 ```
 
-### Estrutura de Componentes
-
-```
-src/components/
-├── layout/          # AppSidebar, Header, MainLayout
-├── modals/          # TransactionModal, InvoiceReviewModal, etc
-├── dashboard/       # SummaryCard, CategoryChart, etc
-├── investments/     # AssetTable, AllocationChart, etc
-├── credit-cards/    # InstallmentsDashboard, ReconciliationCard
-├── ui/              # shadcn/ui (Button, Card, Dialog, etc)
-```
-
-### Modais vs Sheets
+### 7.3 ResponsiveDialog
 
 ```typescript
-// Mobile: usar Sheet (drawer lateral)
-<Sheet>
-  <SheetTrigger asChild>...</SheetTrigger>
-  <SheetContent>...</SheetContent>
-</Sheet>
+// Componente unificado: Dialog no desktop, Drawer no mobile
+// src/components/ui/responsive-dialog.tsx
+<ResponsiveDialog open={open} onOpenChange={setOpen}>
+  <ResponsiveDialogContent>
+    {/* conteúdo */}
+  </ResponsiveDialogContent>
+</ResponsiveDialog>
+```
 
-// Desktop: pode usar Dialog
-<Dialog>
-  <DialogTrigger asChild>...</DialogTrigger>
-  <DialogContent>...</DialogContent>
-</Dialog>
+### 7.4 Nomenclatura
+
+| Tipo | Convenção | Exemplo |
+|------|-----------|---------|
+| Componentes | PascalCase | `TransactionModal.tsx` |
+| Hooks | camelCase + "use" | `useTransactions.ts` |
+| Utilitários | camelCase | `formatCurrency()` |
+| Tipos | PascalCase | `Transaction` |
+| Constantes | UPPER_SNAKE_CASE | `DEFAULT_PAGE_SIZE` |
+
+### 7.5 Convenções
+
+- **Datas:** `date-fns` com locale `ptBR`, formato `dd/MM/yyyy`
+- **Moeda:** `Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })`
+- **Cores de categoria:** Hex (`#3B82F6`)
+- **Cores de cards/contas:** Gradiente Tailwind (`from-purple-500 to-purple-600`)
+- **Ícones de categoria:** Emoji (`🍔`)
+- **Ícones de componente:** Lucide React
+
+---
+
+## 8. Padrões Mobile
+
+### 8.1 `data-vaul-no-drag`
+
+**OBRIGATÓRIO** em áreas roláveis dentro de Drawers para evitar conflito com gestos:
+
+```tsx
+<ScrollArea>
+  <div data-vaul-no-drag>
+    {/* conteúdo rolável */}
+  </div>
+</ScrollArea>
+```
+
+### 8.2 Seletores Inline (NÃO Popover/Portal)
+
+Dentro de Drawers no mobile, **NÃO usar Popover/Portal** para seletores (conflito de foco do Radix). Usar lista inline expansível:
+
+```tsx
+// ❌ ERRADO dentro de Drawer mobile
+<Popover>
+  <PopoverContent>{/* seletor */}</PopoverContent>
+</Popover>
+
+// ✅ CORRETO dentro de Drawer mobile
+{showCategories && (
+  <div className="border rounded-md p-2">
+    {categories.map(cat => <button onClick={() => select(cat)}>{cat.name}</button>)}
+  </div>
+)}
+```
+
+### 8.3 Bottom Navigation Bar
+
+Mobile usa BottomNav fixo com 5 itens: Home, Extrato, FAB (+), Cartões, Mais.
+
+### 8.4 Tabelas → Cards
+
+```typescript
+// Desktop: <Table>
+// Mobile: Cards empilhados
+{isMobile ? (
+  <div className="space-y-3">
+    {items.map(item => <Card>...</Card>)}
+  </div>
+) : (
+  <Table>...</Table>
+)}
+```
+
+### 8.5 Input Monetário
+
+```tsx
+<Input type="number" inputMode="decimal" step="0.01" min="0" placeholder="0,00" />
 ```
 
 ---
 
-## 5. EDGE FUNCTIONS
+## 9. Hooks e Suas Responsabilidades
 
-### `parse-invoice` (OCR de Faturas)
+### 9.1 `useTransactions`
 
-**Localização**: `supabase/functions/parse-invoice/index.ts`
+CRUD principal. Recebe opções de filtragem:
 
-**Fluxo**:
-1. Recebe PDF da fatura (multipart/form-data)
-2. Converte para base64
-3. Envia ao Google Gemini 2.5 Pro com prompt estruturado
-4. Gemini extrai: data, descrição, valor, parcelas
-5. Retorna JSON com items extraídos
+```typescript
+interface UseTransactionsOptions {
+  showAll?: boolean;               // Ignora filtro de período
+  loadedCount?: number;            // Paginação
+  filterByDueDate?: boolean;       // Filtra por due_date
+  creditCardFilter?: "only" | "exclude" | null;
+  searchQuery?: string;
+  useHybridDateFilter?: boolean;   // Dashboard: date para contas, due_date para cartões
+}
+```
 
-**Prompt instrui**:
-- Ignorar tabela "próximas faturas"
-- Detectar parcelamentos (regex: `\d+/\d+`)
-- Extrair total do cabeçalho para validação
+Retorna: `transactions`, `totalIncome`, `totalExpense`, `hasMore`, `createTransaction`, `updateTransaction`, `deleteTransaction`
 
-### `migrate-installments`
-
-**Localização**: `supabase/functions/migrate-installments/index.ts`
-
-**Propósito**: Migrar parcelamentos legados para novo schema com `installment_group_id`
+Verifica `checkInvoiceClosed` antes de mutações em cartão.
 
 ---
 
-## 6. FLUXOS IMPLEMENTADOS
+### 9.2 `useCreditCards`
 
-### Fluxo: Importação de Fatura PDF
+CRUD de cartões de crédito.
+
+### 9.3 `useCreditCardInvoiceSync`
+
+Recalcula `current_invoice` após mudanças. Chamado por `useTransactions` em `onSuccess`.
+
+### 9.4 `useCreditCardReconciliation`
+
+Calcula totais para reconciliação: despesas normais vs estornos vs pagamentos. Compara com `current_invoice`.
+
+### 9.5 `useInstallmentGroup`
+
+Busca parcelas de um grupo, edita individual/lote, exclui pendentes, adiciona novas.
+
+### 9.6 `useCategories`
+
+CRUD de categorias com hierarquia.
+
+### 9.7 `useAccounts`
+
+CRUD de contas bancárias.
+
+### 9.8 `useBudgets`
+
+CRUD de orçamentos mensais.
+
+### 9.9 `useCategorizationRules`
+
+CRUD de regras automáticas de categorização.
+
+### 9.10 `useInvestments`
+
+CRUD de ativos e operações. Calcula preço médio ponderado nas compras.
+
+### 9.11 `useInstitutions`
+
+CRUD de instituições financeiras.
+
+### 9.12 `useInvoiceCycles`
+
+Gerencia ciclos de fatura (`credit_card_invoices`).
+
+```typescript
+interface UseInvoiceCyclesOptions {
+  creditCardId?: string;
+  month?: number;
+  year?: number;
+}
+
+// Retorna:
+{
+  invoiceCycles,              // Lista de ciclos
+  getInvoiceStatus(cardId, month, year),  // "open" | "closed" | "paid"
+  isInvoiceClosed(cardId, month, year),   // boolean
+  getInvoiceCycle(cardId, month, year),   // InvoiceCycle | undefined
+  closeInvoice,               // Mutation
+  reopenInvoice,              // Mutation
+  markInvoicePaid,            // Mutation
+  validateTransactionModification(creditCardId, dueDate),
+  checkInvoiceStatusForImport(cardId, dueDate),
+}
+```
+
+### 9.13 `useActivities`
+
+Log de importações agrupadas por `imported_at`. Permite desfazer importação (deleta todas transações do lote).
+
+```typescript
+interface Activity {
+  imported_at: string;
+  transaction_count: number;
+  total_amount: number;
+  source_type: "credit_card" | "account";
+  source_name: string;
+}
+
+// Retorna: activities, undoActivity, isUndoing
+```
+
+### 9.14 `useMembers`
+
+Gestão de acesso compartilhado via `shared_access`.
+
+```typescript
+interface SharedAccess {
+  id: string;
+  owner_id: string;
+  shared_with_user_id: string;
+  profiles?: { full_name: string | null; email: string | null } | null;
+}
+
+// Retorna: members, addMember (via RPC), revokeAccess
+```
+
+### 9.15 `useBankPaymentCandidates`
+
+Busca transações bancárias candidatas para vincular a pagamento de fatura. Janela de busca: 10 dias antes e 5 dias após vencimento. Tolerância de valor: 20%-200%.
+
+```typescript
+interface UseBankPaymentCandidatesOptions {
+  targetAmount: number;
+  dueDate: Date;
+  enabled?: boolean;
+}
+// Retorna: candidates (BankPaymentCandidate[])
+```
+
+### 9.16 `useExistingInstallments`
+
+Busca parcelas existentes para deduplicação durante importação. Inclui `detectDuplicates()` (tolerância ±R$ 0.05).
+
+### 9.17 Outros Hooks
+
+- `useInvoiceTransactions` — Transações de uma fatura específica
+- `usePendingInstallments` — Parcelas futuras pendentes
+- `useCreditCardTransactions` — Transações filtradas por cartão
+- `useInvitations` — Convites pendentes
+
+---
+
+## 10. Edge Functions
+
+### 10.1 `parse-invoice` (OCR de Faturas)
+
+**Propósito:** Extrair transações de PDF de fatura via Google Gemini 2.5 Pro.
+
+**Input:** `FormData` com `file` (PDF), `creditCardId`  
+**Output:** JSON com transações extraídas (data, descrição, valor, parcelas)
+
+O prompt do Gemini instrui a ignorar seções "próximas faturas" para evitar duplicidade.
+
+### 10.2 `migrate-installments`
+
+Migra parcelamentos legados para formato com `installment_group_id`.
+
+### 10.3 `add-member`
+
+Cria usuário (se não existe) + adiciona `shared_access`. Usa `SUPABASE_SERVICE_ROLE_KEY` para criar conta com senha definida pelo admin.
+
+### 10.4 `admin-reset-password`
+
+Reset de senha administrativo via service role. Contorna dependência de emails de recuperação.
+
+---
+
+## 11. Fluxos de Usuário
+
+### 11.1 Importação de Fatura PDF
 
 ```
-1. Upload do arquivo
-   └─▶ InvoiceImportModal.tsx
-
-2. Envio para Edge Function
-   └─▶ parse-invoice (Gemini OCR)
-
-3. Retorno dos items extraídos
-   └─▶ InvoiceReviewModal.tsx (Staging Area)
-
-4. Usuário revisa cada item:
-   ├─ Edita descrição
-   ├─ Seleciona categoria (pode criar nova)
-   ├─ Marca corporativo/reembolsável
-   ├─ Checkbox "Lembrar Regra"
-   └─ Checkbox "Adicionar Parcelas Futuras"
-
-5. Confirma importação
-   └─▶ Cria transações + regras de categorização
+Upload PDF → Edge Function (Gemini OCR) → Post-Processing (ano, parcelas, due_date)
+  → Staging Area (InvoiceReviewModal) → Usuário revisa/edita/categoriza
+  → Confirma → Cria transações + regras de categorização + parcelas futuras
 ```
 
-### Fluxo: Pagamento de Fatura
+### 11.2 Importação de Extrato Bancário (OFX/CSV)
 
 ```
-1. Usuário abre PayInvoiceModal
-   └─ Seleciona cartão, conta, valor
-
-2. Sistema cria transação:
-   {
-     type: 'expense',
-     is_card_payment: true,
-     account_id: contaSelecionada,
-     credit_card_id: cartaoId,
-   }
-
-3. Atualiza saldos:
-   ├─ account.current_balance -= valor
-   ├─ credit_card.current_invoice -= valor
-   └─ credit_card.status = 'paid' (se zerou)
+Upload OFX/CSV → Parser local → Detecção de duplicatas → Staging Area
+  → Aplicação de regras de categorização → Confirmação → Cria transações
 ```
 
-### Fluxo: Registro de Investimento
+### 11.3 Pagamento de Fatura
 
 ```
-1. Usuário abre OperationModal
-   └─ Seleciona ativo, tipo, quantidade, preço
+PayInvoiceModal → Split por tipo (corporativo/reembolsável/pessoal)
+  → Para cada seção: Cria transação is_card_payment=true
+  → Debita conta, Reduz current_invoice → Se zerou: status='paid'
+```
 
-2. Se COMPRA:
-   ├─ Calcula novo preço médio ponderado
-   ├─ Atualiza quantity do ativo
-   └─ Opcionalmente cria transação de despesa
+### 11.4 Registro de Investimento
 
-3. Se VENDA:
-   ├─ Calcula lucro realizado
-   ├─ Reduz quantity
-   └─ Opcionalmente cria transação de receita
+```
+OperationModal → Se compra: calcula preço médio, atualiza quantity
+  → Se venda: calcula lucro realizado → Cria investment_transaction
+  → Opcionalmente vincula a transação financeira
+```
+
+### 11.5 Fechar/Reabrir Fatura
+
+```
+CloseInvoiceModal → Registra closed_amount + closed_at → status='closed'
+  → Bloqueia edições no período
+ReopenInvoiceModal → Remove closed_at → status='open' → Libera edições
+```
+
+### 11.6 Adicionar Membro
+
+```
+Settings > MembersSection → Insere email → Edge Function add-member
+  → Cria usuário se não existe (com senha definida pelo admin)
+  → Adiciona shared_access → Acesso imediato aos dados
 ```
 
 ---
 
-## 7. ARMADILHAS A EVITAR
+## 12. Troubleshooting
 
-### ❌ Não esquecer de excluir `is_card_payment` dos relatórios
-```typescript
-// ERRADO
-const despesas = transactions.filter(t => t.type === 'expense');
-
-// CORRETO
-const despesas = transactions.filter(t => 
-  t.type === 'expense' && 
-  !t.is_card_payment && 
-  !t.is_refund
-);
-```
-
-### ❌ Não confundir `date` com `due_date`
-```typescript
-// Filtro para Dashboard de cartão de crédito:
-// USAR due_date, não date!
-.gte('due_date', startOfMonth)
-.lte('due_date', endOfMonth)
-```
-
-### ❌ Não ignorar hierarquia de categorias
-```typescript
-// Ao exibir gastos por categoria, agrupar subcategorias:
-const parentCategories = categories.filter(c => !c.parent_id);
-const subcategories = categories.filter(c => c.parent_id === parentId);
-```
-
-### ❌ Não esquecer RLS
-```typescript
-// Todas as queries já filtram por user_id via RLS
-// Mas ao inserir, SEMPRE incluir user_id:
-.insert([{ ...data, user_id: user.id }])
-```
-
-### ❌ Cuidado com o limite de 1000 rows do Supabase
-```typescript
-// Se precisar mais de 1000 registros:
-.range(0, 999)  // Primeira página
-.range(1000, 1999)  // Segunda página
-```
+| Problema | Causa | Solução |
+|----------|-------|---------|
+| Dados não aparecem após importação | Filtro de data errado | Verificar `due_date` vs `date` e mês selecionado |
+| Soma da fatura difere do PDF | Tabela "lançamentos futuros" incluída | Verificar parser ignora seções corretas |
+| Parcelas não agrupadas | `installment_group_id` vazio | Rodar migração `migrate-installments` |
+| Transação em relatório errado | Flags incorretas | Corrigir `is_corporate_expense`, `is_reimbursable`, `is_card_payment` |
+| RLS "new row violates policy" | `user_id` undefined | Verificar `user?.id` antes do INSERT |
+| `current_invoice` não atualiza | Sync não chamado | Verificar `syncInvoiceForCard` em `onSuccess` |
+| Pagamento aparece como despesa | `is_card_payment` não filtrado | Adicionar `!t.is_card_payment` no filtro |
+| Fatura bloqueada | Ciclo fechado | Reabrir via `ReopenInvoiceModal` |
 
 ---
 
-## 8. CONVENÇÕES
+## 13. Memórias Arquiteturais
 
-### Datas
-```typescript
-// Formato no banco: YYYY-MM-DD
-date: '2025-01-15'
+### `architecture/security-safeguards`
+Auth guards em todas as mutations de INSERT. Verificar `user?.id` antes de qualquer escrita.
 
-// Formato para exibição: date-fns
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-format(new Date(date), 'dd/MM/yyyy', { locale: ptBR })
-```
+### `architecture/code-standards`
+Tipos centralizados em `src/types/index.ts`. Constantes de domínio em `src/lib/constants.ts`.
 
-### Valores Monetários
-```typescript
-// Sempre armazenar como número (NUMERIC no Postgres)
-amount: 150.99
+### `architecture/error-handling-standards`
+Usar `logError()` ao invés de `console.log()`. Usar `getSafeErrorMessage()` para toasts.
 
-// Formatar para exibição:
-new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL'
-}).format(amount)
-// → "R$ 150,99"
-```
+### `architecture/mobile-drawer-interaction-standards`
+`data-vaul-no-drag` em áreas roláveis dentro de Drawers. Seletores inline (não Popover/Portal) no mobile para evitar conflitos de foco.
 
-### Cores
-```typescript
-// Categorias: Hex
-color: '#3B82F6'
+### `features/invoice-balance-sync-logic`
+`current_invoice` = Σ(despesas) - Σ(estornos) - Σ(pagamentos). Nunca negativo.
 
-// Cards/Accounts: Gradiente Tailwind
-color: 'from-purple-500 to-purple-600'
-```
+### `features/credit-card-reconciliation-logic`
+Compara saldo do banco vs soma de lançamentos. Inclui seção de saldo residual.
 
-### Ícones
-```typescript
-// Categorias: Emoji
-icon: '🍔'
+### `features/transaction-filtering-rules`
+Dashboard usa `due_date` para cartões, `date` para contas. Filtro híbrido implementado.
 
-// Componentes: Lucide React
-import { CreditCard, Wallet } from 'lucide-react';
-```
+### `features/installment-management-system`
+CRUD completo de parcelas. Sincronização de categoria no grupo.
+
+### `features/due-date-preservation-logic`
+Preservar `due_date` original em edições simples. Recalcular apenas se data ou cartão mudar.
+
+### `features/split-payment-flow`
+Pagamento de fatura suporta split entre corporativo, reembolsável e pessoal.
+
+### `features/invoice-cycle-management`
+Sistema de ciclos com estados open/closed/paid. Fatura fechada bloqueia operações. Modais com persistência de dados (mês/ano capturados no clique).
+
+### `features/member-management-system`
+Acesso imediato ao adicionar membro. Edge Function `add-member` cria usuário se necessário. `admin-reset-password` para reset administrativo.
+
+### `architecture/data-integrity-standards`
+Transações com `is_card_payment: true` devem ter `credit_card_id` válido.
 
 ---
 
-## 9. ARQUIVOS IMPORTANTES
+## 14. Armadilhas a Evitar
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/hooks/useTransactions.ts` | CRUD de transações |
-| `src/hooks/useCreditCards.ts` | CRUD de cartões |
-| `src/hooks/useCategories.ts` | CRUD de categorias |
-| `src/hooks/useInvestments.ts` | CRUD de investimentos |
-| `src/components/modals/InvoiceReviewModal.tsx` | Staging de importação |
-| `src/pages/Dashboard.tsx` | Tela principal |
-| `supabase/functions/parse-invoice/index.ts` | OCR de faturas |
-| `src/integrations/supabase/types.ts` | Types do banco (AUTO-GERADO) |
-
----
-
-## 10. CHECKLIST ANTES DE MODIFICAR
-
-- [ ] Li este documento completamente
-- [ ] Entendi a diferença entre `date` e `due_date`
-- [ ] Entendi as flags booleanas (`is_card_payment`, `is_corporate_expense`, etc)
-- [ ] Sei que pagamento de fatura NÃO é despesa
-- [ ] Sei que categorias têm hierarquia (parent_id)
-- [ ] Vou usar os hooks existentes (`useTransactions`, etc)
-- [ ] Vou manter os filtros de RLS (user_id)
-- [ ] Vou testar em mobile (app é mobile-first)
+- [ ] **Excluir `is_card_payment`** dos relatórios de despesas
+- [ ] **Não confundir `date` com `due_date`** — Dashboard de cartões usa `due_date`
+- [ ] **Hierarquia de categorias** — `parent_id` define subcategorias
+- [ ] **RLS e `user_id`** — Sempre incluir `user_id` em INSERTs
+- [ ] **Limite de 1000 rows** do Supabase — Usar paginação quando necessário
+- [ ] **NÃO usar Popover/Portal dentro de Drawer** no mobile (conflito de foco)
+- [ ] **Usar `data-vaul-no-drag`** em áreas roláveis dentro de Drawers
+- [ ] **Verificar fatura fechada** antes de criar/editar/excluir transações de cartão
+- [ ] **Testar em mobile** — app é mobile-first
 
 ---
 
-**Última atualização**: Janeiro 2025
+> **Versão do Documento:** 3.0  
+> **Data:** Fevereiro 2026
