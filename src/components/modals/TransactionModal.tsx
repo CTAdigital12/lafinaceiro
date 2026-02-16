@@ -300,7 +300,11 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       };
 
       if (isEditing && transaction) {
-        await updateTransaction.mutateAsync({ id: transaction.id, ...transactionData });
+        // If editing a provisional transaction, confirm it as real
+        const provisionalUpdate = transaction.is_provisional 
+          ? { is_provisional: false, status: "completed" as const } 
+          : {};
+        await updateTransaction.mutateAsync({ id: transaction.id, ...transactionData, ...provisionalUpdate });
         
         // Sync category to all installments in the group
         if (transaction.installment_group_id && categoryId !== transaction.category_id) {
@@ -324,6 +328,12 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={modalTitle}>
       <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Provisional Warning */}
+          {isEditing && transaction?.is_provisional && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300">
+              ⏱️ Esta é uma <strong>previsão</strong>. Edite o valor real e salve para confirmar o pagamento.
+            </div>
+          )}
           {/* Type Toggle */}
           <div className="flex rounded-lg bg-muted p-1">
             <button

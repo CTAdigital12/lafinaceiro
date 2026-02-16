@@ -62,6 +62,8 @@ export interface Transaction {
   installment_group_id: string | null;
   installment_number: number | null;
   total_installments: number | null;
+  is_provisional: boolean;
+  recurring_rule_id: string | null;
   created_at: string;
   updated_at: string;
   categories?: { id: string; name: string; icon: string; color: string } | null;
@@ -157,7 +159,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const hasMore = transactions.length < totalCount;
 
   const createTransaction = useMutation({
-    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; silent?: boolean; skipInvoiceCheck?: boolean }) => {
+    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status" | "is_provisional" | "recurring_rule_id"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; is_provisional?: boolean; recurring_rule_id?: string | null; silent?: boolean; skipInvoiceCheck?: boolean }) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
@@ -325,7 +327,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   // Calculate total income (only actual income, not expense refunds)
   // Expense refunds are now subtracted from expense categories, not added to income
   const totalIncome = transactions
-    .filter((t) => t.type === "income" && !t.is_refund && !t.is_corporate_expense)
+    .filter((t) => t.type === "income" && !t.is_refund && !t.is_corporate_expense && !t.is_provisional)
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   // Calculate total expenses (excluding corporate, reimbursable, card payments, and refunds)
@@ -336,7 +338,8 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
       !t.is_corporate_expense && 
       !t.is_refund && 
       !t.is_reimbursable && 
-      !t.is_card_payment
+      !t.is_card_payment &&
+      !t.is_provisional
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
@@ -346,7 +349,8 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
       t.type === "expense" && 
       t.is_refund && 
       !t.is_corporate_expense && 
-      !t.is_reimbursable
+      !t.is_reimbursable &&
+      !t.is_provisional
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
 

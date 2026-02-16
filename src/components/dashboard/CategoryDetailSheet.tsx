@@ -113,6 +113,8 @@ export function CategoryDetailSheet({
       installment_group_id: null,
       refunded_transaction_id: null,
       imported_at: null,
+      is_provisional: false,
+      recurring_rule_id: null,
     });
     setIsModalOpen(true);
   };

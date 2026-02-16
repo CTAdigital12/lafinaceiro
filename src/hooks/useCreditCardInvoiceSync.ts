@@ -21,8 +21,9 @@ export function useCreditCardInvoiceSync() {
       // Fetch all transactions for this credit card (expenses + payments)
       const { data: transactions, error: txError } = await supabase
         .from("transactions")
-        .select("amount, type, status, is_refund, is_card_payment")
-        .eq("credit_card_id", creditCardId);
+        .select("amount, type, status, is_refund, is_card_payment, is_provisional")
+        .eq("credit_card_id", creditCardId)
+        .eq("is_provisional", false);
 
       if (txError) throw txError;
 

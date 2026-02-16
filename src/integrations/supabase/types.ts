@@ -483,6 +483,73 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_rules: {
+        Row: {
+          account_id: string | null
+          active: boolean
+          category_id: string | null
+          created_at: string
+          credit_card_id: string | null
+          day_of_month: number
+          description: string
+          estimated_amount: number
+          id: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          active?: boolean
+          category_id?: string | null
+          created_at?: string
+          credit_card_id?: string | null
+          day_of_month?: number
+          description: string
+          estimated_amount?: number
+          id?: string
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          active?: boolean
+          category_id?: string | null
+          created_at?: string
+          credit_card_id?: string | null
+          day_of_month?: number
+          description?: string
+          estimated_amount?: number
+          id?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_rules_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_rules_credit_card_id_fkey"
+            columns: ["credit_card_id"]
+            isOneToOne: false
+            referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shared_access: {
         Row: {
           created_at: string
@@ -520,8 +587,10 @@ export type Database = {
           installment_number: number | null
           is_card_payment: boolean | null
           is_corporate_expense: boolean
+          is_provisional: boolean
           is_refund: boolean
           is_reimbursable: boolean
+          recurring_rule_id: string | null
           refunded_transaction_id: string | null
           reimbursement_status: string | null
           status: string
@@ -545,8 +614,10 @@ export type Database = {
           installment_number?: number | null
           is_card_payment?: boolean | null
           is_corporate_expense?: boolean
+          is_provisional?: boolean
           is_refund?: boolean
           is_reimbursable?: boolean
+          recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
           status?: string
@@ -570,8 +641,10 @@ export type Database = {
           installment_number?: number | null
           is_card_payment?: boolean | null
           is_corporate_expense?: boolean
+          is_provisional?: boolean
           is_refund?: boolean
           is_reimbursable?: boolean
+          recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
           status?: string
@@ -600,6 +673,13 @@ export type Database = {
             columns: ["credit_card_id"]
             isOneToOne: false
             referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_recurring_rule_id_fkey"
+            columns: ["recurring_rule_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_rules"
             referencedColumns: ["id"]
           },
           {

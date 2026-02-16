@@ -79,6 +79,7 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
         .from("transactions")
         .select("*, categories(name, icon)")
         .not("credit_card_id", "is", null)
+        .eq("is_provisional", false)
         .or(`type.eq.expense,is_card_payment.eq.true`)
         .or(`and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`);
 
