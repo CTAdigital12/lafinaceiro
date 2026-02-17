@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, LineChart, Info, ChevronsUpDown, MoreVertical } from "lucide-react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, LineChart, Info, ChevronsUpDown, MoreVertical, List } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -217,9 +217,44 @@ export default function Planning() {
     });
   };
 
+  const [expandedTransactions, setExpandedTransactions] = useState<Set<string>>(new Set());
+
   const parentCategoriesWithChildren = useMemo(() => {
     return hierarchicalBudgets.filter(b => b.children.length > 0).map(b => b.categories?.id).filter(Boolean) as string[];
   }, [hierarchicalBudgets]);
+
+  // Initialize all parent categories as collapsed on first load
+  const hasInitializedCollapse = useRef(false);
+  useEffect(() => {
+    if (!hasInitializedCollapse.current && parentCategoriesWithChildren.length > 0) {
+      setCollapsedCategories(new Set(parentCategoriesWithChildren));
+      hasInitializedCollapse.current = true;
+    }
+  }, [parentCategoriesWithChildren]);
+
+  const toggleTransactions = (categoryId: string) => {
+    setExpandedTransactions((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  // Get transactions for a specific category (for parent, include subcategories)
+  const getTransactionsForCategory = (categoryId: string, isParent: boolean) => {
+    const childCategoryIds = isParent 
+      ? categories.filter(c => c.parent_id === categoryId).map(c => c.id)
+      : [];
+    
+    return transactions.filter(t => 
+      t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable && !t.is_card_payment &&
+      (t.category_id === categoryId || (isParent && childCategoryIds.includes(t.category_id || "")))
+    ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  };
 
   const allCollapsed = parentCategoriesWithChildren.length > 0 && 
     parentCategoriesWithChildren.every(id => collapsedCategories.has(id));
@@ -352,6 +387,15 @@ export default function Planning() {
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8 text-muted-foreground hover:text-primary", expandedTransactions.has(categoryId) && "text-primary")}
+              onClick={() => toggleTransactions(categoryId)}
+              title="Ver lançamentos"
+            >
+              <List className="h-4 w-4" />
+            </Button>
             {!isChild && (
               <Button 
                 variant="ghost" 
@@ -383,6 +427,36 @@ export default function Planning() {
         </TableCell>
       </TableRow>
     );
+  };
+
+  const renderTransactionRows = (categoryId: string, isParent: boolean) => {
+    if (!expandedTransactions.has(categoryId)) return null;
+    const txns = getTransactionsForCategory(categoryId, isParent);
+    if (txns.length === 0) {
+      return (
+        <TableRow className="bg-muted/20">
+          <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-3">
+            Nenhum lançamento nesta categoria
+          </TableCell>
+        </TableRow>
+      );
+    }
+    return txns.map(t => (
+      <TableRow 
+        key={`txn-${t.id}`} 
+        className="bg-muted/20 cursor-pointer hover:bg-muted/40"
+        onClick={() => { setEditingTransaction(t); setTransactionModalOpen(true); }}
+      >
+        <TableCell className="pl-12 text-sm text-muted-foreground">
+          {new Date(t.date).toLocaleDateString("pt-BR")}
+        </TableCell>
+        <TableCell colSpan={3} className="text-sm">{t.description}</TableCell>
+        <TableCell className="text-right text-sm font-medium text-expense">
+          R$ {Number(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        </TableCell>
+        <TableCell colSpan={2} />
+      </TableRow>
+    ));
   };
 
   return (
@@ -534,9 +608,16 @@ export default function Planning() {
                   return (
                     <React.Fragment key={parentBudget.id}>
                       {renderBudgetRow(parentBudget, false)}
-                      {!isCollapsed && parentBudget.children.map((childBudget) => 
-                        renderBudgetRow(childBudget, true)
-                      )}
+                      {renderTransactionRows(categoryId, parentBudget.children.length > 0)}
+                      {!isCollapsed && parentBudget.children.map((childBudget) => {
+                        const childCatId = childBudget.categories?.id || "";
+                        return (
+                          <React.Fragment key={childBudget.id}>
+                            {renderBudgetRow(childBudget, true)}
+                            {renderTransactionRows(childCatId, false)}
+                          </React.Fragment>
+                        );
+                      })}
                     </React.Fragment>
                   );
                 })}
@@ -607,6 +688,10 @@ export default function Planning() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => toggleTransactions(categoryId)}>
+                            <List className="h-4 w-4 mr-2" />
+                            {expandedTransactions.has(categoryId) ? "Ocultar lançamentos" : "Ver lançamentos"}
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleAddSubcategory(parentBudget)}>
                             <Plus className="h-4 w-4 mr-2" />
                             Adicionar subcategoria
@@ -674,6 +759,32 @@ export default function Planning() {
                     </div>
                   </div>
 
+                  {/* Expanded Transactions for Parent */}
+                  {expandedTransactions.has(categoryId) && (() => {
+                    const txns = getTransactionsForCategory(categoryId, hasChildren);
+                    return (
+                      <div className="border-t border-border bg-muted/20 divide-y divide-border">
+                        {txns.length === 0 ? (
+                          <p className="text-center text-sm text-muted-foreground py-3">Nenhum lançamento nesta categoria</p>
+                        ) : txns.map(t => (
+                          <div 
+                            key={t.id} 
+                            className="px-4 py-2 flex items-center justify-between gap-2 cursor-pointer hover:bg-muted/40"
+                            onClick={() => { setEditingTransaction(t); setTransactionModalOpen(true); }}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm truncate">{t.description}</p>
+                              <p className="text-xs text-muted-foreground">{new Date(t.date).toLocaleDateString("pt-BR")}</p>
+                            </div>
+                            <span className="text-sm font-medium text-expense shrink-0">
+                              R$ {Number(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
                   {/* Children Cards */}
                   {!isCollapsed && parentBudget.children.length > 0 && (
                     <div className="border-t border-border bg-muted/30">
@@ -694,6 +805,14 @@ export default function Planning() {
                                 </span>
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className={cn("h-7 w-7", expandedTransactions.has(childBudget.categories?.id || "") && "text-primary")}
+                                  onClick={() => toggleTransactions(childBudget.categories?.id || "")}
+                                >
+                                  <List className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
@@ -739,6 +858,31 @@ export default function Planning() {
                                 : `Resta R$ ${childRemaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                               }
                             </p>
+                            {/* Child Expanded Transactions */}
+                            {expandedTransactions.has(childBudget.categories?.id || "") && (() => {
+                              const childTxns = getTransactionsForCategory(childBudget.categories?.id || "", false);
+                              return (
+                                <div className="mt-2 divide-y divide-border rounded-md bg-background/50">
+                                  {childTxns.length === 0 ? (
+                                    <p className="text-center text-xs text-muted-foreground py-2">Nenhum lançamento</p>
+                                  ) : childTxns.map(t => (
+                                    <div 
+                                      key={t.id} 
+                                      className="px-2 py-1.5 flex items-center justify-between gap-2 cursor-pointer hover:bg-muted/40"
+                                      onClick={() => { setEditingTransaction(t); setTransactionModalOpen(true); }}
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs truncate">{t.description}</p>
+                                        <p className="text-[10px] text-muted-foreground">{new Date(t.date).toLocaleDateString("pt-BR")}</p>
+                                      </div>
+                                      <span className="text-xs font-medium text-expense shrink-0">
+                                        R$ {Number(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}
