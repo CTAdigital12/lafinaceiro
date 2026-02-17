@@ -68,6 +68,22 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
   const periodStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
   const periodEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
 
+  // Fetch invoice cycles for the period to get closed_amount
+  const { data: invoiceCyclesData = [] } = useQuery({
+    queryKey: ["invoice-cycles-reconciliation", user?.id, month, year],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("credit_card_invoices")
+        .select("*")
+        .eq("month", month)
+        .eq("year", year);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && creditCards.length > 0,
+  });
+
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ["credit-card-transactions-reconciliation", user?.id, month, year],
     queryFn: async () => {
@@ -158,7 +174,15 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       .reduce((sum, t) => sum + Number(t.amount), 0);
     const personalTotal = personalNormal - personalRefunds;
 
-    const bankInvoice = Number(card.current_invoice);
+    // Get invoice cycle for this card/month/year
+    const invoiceCycle = invoiceCyclesData.find(
+      (ic) => ic.credit_card_id === card.id
+    );
+    const closedAmount = invoiceCycle?.closed_amount != null ? Number(invoiceCycle.closed_amount) : null;
+    const invoiceStatus = invoiceCycle?.status || "open";
+    
+    // bankInvoice = closed_amount if invoice is closed, otherwise use transactionsTotal
+    const bankInvoice = closedAmount ?? transactionsTotal;
     
     // Find payment transactions for this card (is_card_payment = true)
     // These are transactions that represent invoice payments
@@ -173,13 +197,13 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
     );
     
     // Detect if invoice is paid:
-    // - status is 'paid' OR
-    // - current_invoice is 0 and there are payments
-    const isPaid = card.status === 'paid' || (bankInvoice === 0 && paidAmount > 0);
+    // - invoice status is 'paid' OR
+    // - payments cover the transactions total
+    const isPaid = invoiceStatus === "paid" || (paidAmount >= transactionsTotal && transactionsTotal > 0 && paidAmount > 0);
     
-    // Calculate difference based on payment status:
-    // - If paid: compare transactions vs payments (should be ~0 if fully paid)
-    // - If not paid: compare bank invoice vs transactions
+    // Calculate difference: bankInvoice vs transactionsTotal
+    // When closed: shows if there are missing/extra transactions vs closed amount
+    // When open: bankInvoice === transactionsTotal, so difference is 0
     const difference = isPaid 
       ? transactionsTotal - paidAmount
       : bankInvoice - transactionsTotal;

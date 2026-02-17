@@ -86,6 +86,8 @@ export function PayInvoiceModal({
     reimbursableTotal,
     personalTotal,
     myTotalToPay,
+    transactionsTotal: invoiceTransactionsTotal,
+    closedAmount,
     isLoading: isLoadingTransactions,
   } = useInvoiceTransactions({
     creditCardId: creditCard?.id || "",
@@ -126,25 +128,21 @@ export function PayInvoiceModal({
   }, [creditCard, invoiceMonth, invoiceYear]);
 
   // Fetch bank payment candidates based on my payment amount
-  const totalInvoice = Number(creditCard?.current_invoice || 0);
+  // Use closed_amount if available, otherwise use sum of transactions for the month
+  const totalInvoice = closedAmount ?? (corporateTotal + myTotalToPay);
   const transactionsTotal = corporateTotal + myTotalToPay;
   
-  // Detectar situação de pagamento parcial anterior:
-  // Se current_invoice < total das transações, significa que já pagou parte
-  // e o que sobra é residual (juros, taxas, ou diferença)
-  const isPartiallyPaid = totalInvoice < transactionsTotal && totalInvoice > 0;
+  // Residual = closed_amount - transactions total (only when invoice is closed and there's a difference)
+  // This catches real differences like fees, interest, etc.
+  const calculatedResidual = closedAmount != null 
+    ? Math.max(0, closedAmount - transactionsTotal) 
+    : 0;
   
-  // Se parcialmente pago, TODO o saldo restante é residual
-  // Caso contrário, calcular diferença entre fatura e transações
-  const calculatedResidual = isPartiallyPaid 
-    ? totalInvoice 
-    : Math.max(0, totalInvoice - transactionsTotal);
-  
-  // Mostrar seção se há residual > 0
+  // Show residual section only if there's a real difference between closed amount and transactions
   const hasResidualBalance = calculatedResidual > 0;
   
-  // Quando é pagamento parcial, ocultar seções de transações (já foram pagas)
-  const shouldHideTransactionSections = isPartiallyPaid;
+  // No more "partially paid" logic based on global current_invoice
+  const shouldHideTransactionSections = false;
   
   const myPaymentAmount = parseFloat(personalAmount) || myTotalToPay;
   const { candidates: bankCandidates, isLoading: isLoadingCandidates } = useBankPaymentCandidates({
@@ -177,28 +175,18 @@ export function PayInvoiceModal({
       setCorporateOpen(corporateTotal > 0);
       setPersonalOpen(true);
       // Reset residual state
-      const transTotal = corporateTotal + myTotalToPay;
-      const isPartiallyPaidInit = Number(creditCard.current_invoice) < transTotal && Number(creditCard.current_invoice) > 0;
-      
-      const residual = isPartiallyPaidInit 
-        ? Number(creditCard.current_invoice) 
-        : Math.max(0, Number(creditCard.current_invoice) - transTotal);
+      const residual = closedAmount != null 
+        ? Math.max(0, closedAmount - (corporateTotal + myTotalToPay))
+        : 0;
       
       setResidualAmount(residual.toFixed(2));
-      // Marcar automaticamente se é pagamento parcial
-      setIncludeResidual(isPartiallyPaidInit && residual > 0);
+      setIncludeResidual(false);
       setResidualPaymentType("bank");
       setResidualAccountId("");
-      setResidualLinkToTransaction(isPartiallyPaidInit); // Pre-select link option
+      setResidualLinkToTransaction(false);
       setResidualLinkedTransactionId("");
-      
-      // Quando parcialmente pago, desmarcar seções de transações
-      if (isPartiallyPaidInit) {
-        setIncludeCorporate(false);
-        setIncludePersonal(false);
-      }
     }
-  }, [open, creditCard, corporateTotal, myTotalToPay]);
+  }, [open, creditCard, corporateTotal, myTotalToPay, closedAmount]);
 
   // Calculate payment summary
   const totalToPay = useMemo(() => {
