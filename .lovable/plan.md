@@ -1,45 +1,56 @@
 
-# Incluir Parcelas Futuras no Calculo do Limite Disponivel
+# Melhorias no Planejamento Mensal
 
-## Problema
+## 1. Categorias comecam fechadas
 
-O limite disponivel atual e calculado como:
+Atualmente o estado `collapsedCategories` inicia como um `Set` vazio (tudo aberto). A mudanca e inicializar com todas as categorias pai que possuem filhos ja colapsadas.
 
-```text
-Disponivel = Limite - Saldo Devedor (current_invoice)
-           = 100.000 - 5.196,39
-           = 94.803,61
-```
+Como `parentCategoriesWithChildren` depende de `hierarchicalBudgets` (que depende de dados async), a inicializacao sera feita via `useEffect` que popula o Set na primeira vez que os dados carregam.
 
-Mas existem R$ 7.742,84 em parcelas pendentes (status "pending") que ainda serao cobradas nos proximos meses. O banco ja reserva esse valor do limite, entao o calculo correto seria:
+## 2. Ver lancamentos por categoria
 
-```text
-Disponivel = Limite - Saldo Devedor - Parcelas Futuras Pendentes
-           = 100.000 - 5.196,39 - 7.742,84
-           = 87.060,77
-```
+Ao clicar numa categoria (pai ou filho), abrir uma lista colapsavel mostrando as transacoes daquela categoria no mes. Sera adicionado um estado `expandedTransactions` que controla qual categoria esta com lancamentos visiveis. As transacoes ja estao carregadas no hook `useTransactions` - basta filtrar por `category_id`.
 
-## Solucao
+A lista mostrara: data, descricao e valor de cada transacao, dentro de uma area colapsavel abaixo da linha da categoria.
 
-Adicionar uma query no hook `useCreditCards` que busca o total de parcelas pendentes por cartao e subtrai do limite disponivel.
+---
 
 ## Secao Tecnica
 
-### Arquivo a alterar: `src/hooks/useCreditCards.ts`
+### Arquivo: `src/pages/Planning.tsx`
 
-- Adicionar uma query separada que busca `SUM(amount)` das transacoes com `status = 'pending'`, `type = 'expense'`, `is_refund = false`, `is_card_payment = false`, `is_provisional = false`, agrupado por `credit_card_id`
-- Expor `pendingByCard` (mapa de credit_card_id para total pendente) e `totalPendingInstallments`
-- Recalcular `totalAvailable = totalLimit - totalInvoice - totalPendingInstallments`
+**Mudanca 1 - Categorias fechadas por padrao:**
+- Adicionar `useEffect` que, ao carregar `parentCategoriesWithChildren` pela primeira vez, seta `collapsedCategories` com todos os IDs
+- Usar um `ref` (`hasInitialized`) para executar apenas uma vez por montagem
 
-### Arquivo a alterar: `src/pages/CreditCards.tsx`
+```typescript
+const hasInitializedCollapse = useRef(false);
 
-- No componente `CreditCardComponent`: receber o valor pendente do cartao como prop e subtrair do `availableLimit`
-- No card de resumo "Limite Disponivel": ja usa `totalAvailable` do hook, entao atualiza automaticamente
-- Adicionar subtexto mostrando quanto e de parcelas futuras (ex: "inclui R$ 7.742,84 em parcelas futuras")
-
-### Calculo por cartao
-
-```text
-availableLimit = credit_limit - current_invoice - pendingFutureAmount
-usagePercent = (current_invoice + pendingFutureAmount) / credit_limit * 100
+useEffect(() => {
+  if (!hasInitializedCollapse.current && parentCategoriesWithChildren.length > 0) {
+    setCollapsedCategories(new Set(parentCategoriesWithChildren));
+    hasInitializedCollapse.current = true;
+  }
+}, [parentCategoriesWithChildren]);
 ```
+
+**Mudanca 2 - Expandir lancamentos por categoria:**
+- Novo estado: `expandedTransactions: Set<string>` (IDs de categorias com lancamentos visiveis)
+- Funcao `toggleTransactions(categoryId)` para abrir/fechar
+- Filtrar `transactions` por `category_id` da categoria clicada (para pai, incluir subcategorias)
+- No desktop (Table): adicionar uma `TableRow` colapsavel abaixo da linha do budget mostrando as transacoes
+- No mobile (Cards): adicionar secao colapsavel dentro do card mostrando as transacoes
+- Botao de "ver lancamentos" sera um icone de lista na coluna de acoes (ou o proprio nome da categoria sera clicavel)
+
+**Layout dos lancamentos expandidos (desktop):**
+```text
+| Data       | Descricao              | Valor       |
+|------------|------------------------|-------------|
+| 01/02/2026 | Supermercado XYZ       | R$ 450,00   |
+| 05/02/2026 | Feira da semana        | R$ 120,50   |
+```
+
+**Layout dos lancamentos expandidos (mobile):**
+Lista simples com data, descricao e valor em cada linha.
+
+Clicar numa transacao abrira o `TransactionModal` para edicao (reutilizando o modal ja existente).
