@@ -421,9 +421,39 @@ export function useCreditCards() {
     },
   });
 
+  // Query pending future installments per card
+  const { data: pendingByCardRaw = [] } = useQuery({
+    queryKey: ["pending_installments_by_card", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("credit_card_id, amount")
+        .eq("status", "pending")
+        .eq("type", "expense")
+        .eq("is_refund", false)
+        .eq("is_card_payment", false)
+        .eq("is_provisional", false)
+        .not("credit_card_id", "is", null);
+
+      if (error) throw error;
+
+      // Group by credit_card_id
+      const map: Record<string, number> = {};
+      (data || []).forEach((t) => {
+        const cardId = t.credit_card_id!;
+        map[cardId] = (map[cardId] || 0) + Number(t.amount);
+      });
+      return map;
+    },
+    enabled: !!user,
+  });
+
+  const pendingByCard = pendingByCardRaw as unknown as Record<string, number>;
+  const totalPendingInstallments = Object.values(pendingByCard).reduce((sum, v) => sum + v, 0);
+
   const totalInvoice = creditCards.reduce((sum, card) => sum + Number(card.current_invoice), 0);
   const totalLimit = creditCards.reduce((sum, card) => sum + Number(card.credit_limit), 0);
-  const totalAvailable = totalLimit - totalInvoice;
+  const totalAvailable = totalLimit - totalInvoice - totalPendingInstallments;
 
   return {
     creditCards,
@@ -431,6 +461,8 @@ export function useCreditCards() {
     totalInvoice,
     totalLimit,
     totalAvailable,
+    totalPendingInstallments,
+    pendingByCard,
     createCreditCard,
     updateCreditCard,
     deleteCreditCard,

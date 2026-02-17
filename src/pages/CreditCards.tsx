@@ -39,15 +39,17 @@ const statusConfig = {
 
 interface CreditCardComponentProps {
   card: CreditCardType;
+  pendingAmount: number;
   onEdit: (card: CreditCardType) => void;
   onDelete: () => void;
   onImportInvoice: (card: CreditCardType) => void;
   onPayInvoice: (card: CreditCardType) => void;
 }
 
-function CreditCardComponent({ card, onEdit, onDelete, onImportInvoice, onPayInvoice }: CreditCardComponentProps) {
-  const availableLimit = Number(card.credit_limit) - Number(card.current_invoice);
-  const usagePercent = (Number(card.current_invoice) / Number(card.credit_limit)) * 100;
+function CreditCardComponent({ card, pendingAmount, onEdit, onDelete, onImportInvoice, onPayInvoice }: CreditCardComponentProps) {
+  const totalUsed = Number(card.current_invoice) + pendingAmount;
+  const availableLimit = Number(card.credit_limit) - totalUsed;
+  const usagePercent = (totalUsed / Number(card.credit_limit)) * 100;
   const status = statusConfig[card.status as keyof typeof statusConfig] || statusConfig.open;
 
   return (
@@ -191,7 +193,7 @@ export default function CreditCards() {
     setReconciliationYear(globalYear);
   }, [globalMonth, globalYear]);
   
-  const { creditCards, isLoading, totalInvoice, totalAvailable, deleteCreditCard } = useCreditCards();
+  const { creditCards, isLoading, totalInvoice, totalAvailable, totalPendingInstallments, pendingByCard, deleteCreditCard } = useCreditCards();
   const { reconciliation, isLoading: isReconciliationLoading, transactions } = useCreditCardReconciliation({
     month: reconciliationMonth,
     year: reconciliationYear,
@@ -325,6 +327,11 @@ export default function CreditCards() {
               <p className="text-lg font-bold text-income">
                 R$ {totalAvailable.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
+              {totalPendingInstallments > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  inclui R$ {totalPendingInstallments.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em parcelas futuras
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -359,6 +366,7 @@ export default function CreditCards() {
             <CreditCardComponent 
               key={card.id} 
               card={card}
+              pendingAmount={pendingByCard[card.id] || 0}
               onEdit={handleEdit}
               onDelete={() => setDeleteCardId(card.id)}
               onImportInvoice={handleImportInvoice}
