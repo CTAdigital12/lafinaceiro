@@ -116,6 +116,27 @@ export function useInvoiceTransactions({
   const myTotalToPay = reimbursableTotal + personalTotal;
   const transactionsTotal = corporateTotal + reimbursableTotal + personalTotal;
 
+  // Fetch invoice cycle for this card/month/year to get closedAmount
+  const { data: invoiceCycleData } = useQuery({
+    queryKey: ["invoice-cycle-for-payment", creditCardId, month, year],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("credit_card_invoices")
+        .select("closed_amount, status")
+        .eq("credit_card_id", creditCardId)
+        .eq("month", month)
+        .eq("year", year)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user && !!creditCardId && enabled,
+  });
+
+  const closedAmount = invoiceCycleData?.closed_amount != null ? Number(invoiceCycleData.closed_amount) : null;
+  const invoiceStatus = (invoiceCycleData?.status as string) || "open";
+
   return {
     transactions,
     isLoading,
@@ -124,5 +145,7 @@ export function useInvoiceTransactions({
     personalTotal,
     myTotalToPay,
     transactionsTotal,
+    closedAmount,
+    invoiceStatus,
   };
 }
