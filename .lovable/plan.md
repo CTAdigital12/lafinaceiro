@@ -1,56 +1,92 @@
 
-# Melhorias no Planejamento Mensal
+# Corrigir Deduplicacao de Transacoes Nao-Parceladas na Importacao de Faturas
 
-## 1. Categorias comecam fechadas
+## Problema
 
-Atualmente o estado `collapsedCategories` inicia como um `Set` vazio (tudo aberto). A mudanca e inicializar com todas as categorias pai que possuem filhos ja colapsadas.
+O sistema de deduplicacao so detecta duplicatas de **parcelas** (transacoes com installment_number). Transacoes avulsas (sem parcela) nunca sao verificadas, resultando em 18 transacoes duplicadas na fatura de marco.
 
-Como `parentCategoriesWithChildren` depende de `hierarchicalBudgets` (que depende de dados async), a inicializacao sera feita via `useEffect` que popula o Set na primeira vez que os dados carregam.
+Duas falhas no codigo atual:
 
-## 2. Ver lancamentos por categoria
+1. **Query** (`useExistingInstallments.ts` linha 44): filtra `.not("installment_number", "is", null)` -- so busca parcelas
+2. **Deteccao** (`detectDuplicates` linha 73): faz `if (!item.installment_current || !item.installment_total) return` -- pula itens sem parcela
 
-Ao clicar numa categoria (pai ou filho), abrir uma lista colapsavel mostrando as transacoes daquela categoria no mes. Sera adicionado um estado `expandedTransactions` que controla qual categoria esta com lancamentos visiveis. As transacoes ja estao carregadas no hook `useTransactions` - basta filtrar por `category_id`.
+## Solucao
 
-A lista mostrara: data, descricao e valor de cada transacao, dentro de uma area colapsavel abaixo da linha da categoria.
-
----
+Expandir a deduplicacao para cobrir TODAS as transacoes do periodo, nao apenas parcelas.
 
 ## Secao Tecnica
 
-### Arquivo: `src/pages/Planning.tsx`
+### Arquivo: `src/hooks/useExistingInstallments.ts`
 
-**Mudanca 1 - Categorias fechadas por padrao:**
-- Adicionar `useEffect` que, ao carregar `parentCategoriesWithChildren` pela primeira vez, seta `collapsedCategories` com todos os IDs
-- Usar um `ref` (`hasInitialized`) para executar apenas uma vez por montagem
+**Mudanca 1 - Query mais abrangente:**
+- Remover o filtro `.not("installment_number", "is", null)` para buscar TODAS as transacoes de despesa do cartao no periodo
+- Renomear a interface/hook para refletir o escopo ampliado (ex: `ExistingTransaction` / `useExistingTransactions`) ou manter o nome atual por compatibilidade -- prefiro manter o nome para minimizar mudancas
+
+**Mudanca 2 - Query adicionar campo `date`:**
+- Incluir `date` no select para usar na comparacao de transacoes nao-parceladas
+
+**Mudanca 3 - Deteccao de duplicatas ampliada:**
+- Remover o `return` precoce para itens sem parcela
+- Para itens COM parcela: manter logica atual (amount + installment_number + total_installments)
+- Para itens SEM parcela: comparar por amount (com tolerancia) + date + descricao normalizada (uppercase, trim)
+- Usar um Set para rastrear quais `existing` ja foram "consumidos" (evitar que duas transacoes importadas de mesmo valor casem com a mesma existente)
 
 ```typescript
-const hasInitializedCollapse = useRef(false);
+export function detectDuplicates(
+  importedItems: Array<{
+    transaction_value: number;
+    installment_current?: number | null;
+    installment_total?: number | null;
+    purchase_date?: string;
+    description?: string;
+  }>,
+  existingTransactions: ExistingInstallment[]
+): Map<number, ExistingInstallment> {
+  const duplicateMap = new Map<number, ExistingInstallment>();
+  const usedExistingIds = new Set<string>();
+  const TOLERANCE = 0.05;
 
-useEffect(() => {
-  if (!hasInitializedCollapse.current && parentCategoriesWithChildren.length > 0) {
-    setCollapsedCategories(new Set(parentCategoriesWithChildren));
-    hasInitializedCollapse.current = true;
-  }
-}, [parentCategoriesWithChildren]);
+  importedItems.forEach((item, index) => {
+    const isInstallment = !!(item.installment_current && item.installment_total);
+
+    const match = existingTransactions.find((existing) => {
+      if (usedExistingIds.has(existing.id)) return false;
+
+      const amountMatch = Math.abs(Number(existing.amount) - item.transaction_value) <= TOLERANCE;
+      if (!amountMatch) return false;
+
+      if (isInstallment) {
+        return (
+          existing.installment_number === item.installment_current &&
+          existing.total_installments === item.installment_total
+        );
+      } else {
+        // Non-installment: match by amount + date + normalized description
+        const dateMatch = existing.date === item.purchase_date;
+        const descMatch = existing.description?.trim().toUpperCase() === 
+                          item.description?.trim().toUpperCase();
+        return dateMatch && descMatch;
+      }
+    });
+
+    if (match) {
+      duplicateMap.set(index, match);
+      usedExistingIds.add(match.id);
+    }
+  });
+
+  return duplicateMap;
+}
 ```
 
-**Mudanca 2 - Expandir lancamentos por categoria:**
-- Novo estado: `expandedTransactions: Set<string>` (IDs de categorias com lancamentos visiveis)
-- Funcao `toggleTransactions(categoryId)` para abrir/fechar
-- Filtrar `transactions` por `category_id` da categoria clicada (para pai, incluir subcategorias)
-- No desktop (Table): adicionar uma `TableRow` colapsavel abaixo da linha do budget mostrando as transacoes
-- No mobile (Cards): adicionar secao colapsavel dentro do card mostrando as transacoes
-- Botao de "ver lancamentos" sera um icone de lista na coluna de acoes (ou o proprio nome da categoria sera clicavel)
+### Interface ExistingInstallment - adicionar campos:
+- `date: string` (para comparacao de transacoes avulsas)
+- `description` ja existe
 
-**Layout dos lancamentos expandidos (desktop):**
-```text
-| Data       | Descricao              | Valor       |
-|------------|------------------------|-------------|
-| 01/02/2026 | Supermercado XYZ       | R$ 450,00   |
-| 05/02/2026 | Feira da semana        | R$ 120,50   |
-```
+### Impacto
+- Transacoes avulsas como "99Food", "CONTA VIVO", "LINKEDIN" serao detectadas como "Ja Lancado" e desmarcadas por padrao
+- Parcelas continuam funcionando como antes
+- Nenhuma migracao necessaria
 
-**Layout dos lancamentos expandidos (mobile):**
-Lista simples com data, descricao e valor em cada linha.
-
-Clicar numa transacao abrira o `TransactionModal` para edicao (reutilizando o modal ja existente).
+### Limpeza dos dados atuais
+- As 18 transacoes duplicadas ja inseridas precisarao ser removidas manualmente ou via a pagina de Atividades (desfazer a importacao de 2026-02-23 22:18:39)
