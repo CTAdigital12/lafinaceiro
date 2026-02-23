@@ -7,6 +7,7 @@ export interface ExistingInstallment {
   id: string;
   description: string;
   amount: number;
+  date: string;
   installment_number: number | null;
   total_installments: number | null;
 }
@@ -19,8 +20,8 @@ interface UseExistingInstallmentsParams {
 }
 
 /**
- * Hook to fetch existing installments for a specific credit card and period.
- * Used for deduplication during invoice import.
+ * Hook to fetch existing transactions for a specific credit card and period.
+ * Used for deduplication during invoice import (both installments and one-off expenses).
  */
 export function useExistingInstallments({
   creditCardId,
@@ -38,10 +39,9 @@ export function useExistingInstallments({
     queryFn: async (): Promise<ExistingInstallment[]> => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("id, description, amount, installment_number, total_installments")
+        .select("id, description, amount, date, installment_number, total_installments")
         .eq("credit_card_id", creditCardId)
         .eq("type", "expense")
-        .not("installment_number", "is", null)
         .or(
           `and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`
         );
@@ -54,33 +54,50 @@ export function useExistingInstallments({
 }
 
 /**
- * Detects duplicate installments by comparing imported items against existing transactions.
- * Uses a tolerance of ±R$ 0.05 for amount comparison.
+ * Detects duplicate transactions by comparing imported items against existing transactions.
+ * Handles both installments (by amount + installment numbers) and one-off expenses
+ * (by amount + date + normalized description). Uses a tolerance of ±R$ 0.05.
  */
 export function detectDuplicates(
   importedItems: Array<{
     transaction_value: number;
     installment_current?: number | null;
     installment_total?: number | null;
+    purchase_date?: string;
+    description?: string;
   }>,
-  existingInstallments: ExistingInstallment[]
+  existingTransactions: ExistingInstallment[]
 ): Map<number, ExistingInstallment> {
   const duplicateMap = new Map<number, ExistingInstallment>();
+  const usedExistingIds = new Set<string>();
   const TOLERANCE = 0.05;
 
   importedItems.forEach((item, index) => {
-    // Only check items that are installments
-    if (!item.installment_current || !item.installment_total) return;
+    const isInstallment = !!(item.installment_current && item.installment_total);
 
-    const match = existingInstallments.find(
-      (existing) =>
-        Math.abs(Number(existing.amount) - item.transaction_value) <= TOLERANCE &&
-        existing.installment_number === item.installment_current &&
-        existing.total_installments === item.installment_total
-    );
+    const match = existingTransactions.find((existing) => {
+      if (usedExistingIds.has(existing.id)) return false;
+
+      const amountMatch = Math.abs(Number(existing.amount) - item.transaction_value) <= TOLERANCE;
+      if (!amountMatch) return false;
+
+      if (isInstallment) {
+        return (
+          existing.installment_number === item.installment_current &&
+          existing.total_installments === item.installment_total
+        );
+      } else {
+        const dateMatch = existing.date === item.purchase_date;
+        const descMatch =
+          existing.description?.trim().toUpperCase() ===
+          item.description?.trim().toUpperCase();
+        return dateMatch && descMatch;
+      }
+    });
 
     if (match) {
       duplicateMap.set(index, match);
+      usedExistingIds.add(match.id);
     }
   });
 
