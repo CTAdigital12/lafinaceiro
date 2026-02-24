@@ -195,6 +195,13 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
     }
   }, [sourceData, open, isDuplicating, refundFrom]);
 
+  // Auto-suggest pending status when due_date is future and payment is via account
+  useEffect(() => {
+    if (paymentMethod === "account" && dueDate && dueDate > new Date()) {
+      setStatus("pending");
+    }
+  }, [dueDate, paymentMethod]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -208,7 +215,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
     }
 
     // Handle installment creation (only for new transactions)
-    if (isInstallment && paymentMethod === "credit_card" && !isEditing) {
+    if (isInstallment && !isEditing) {
       const groupId = crypto.randomUUID();
       const baseDate = date;
       
@@ -221,8 +228,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           amount: parseFloat(amount),
           type,
           category_id: categoryId || null,
-          account_id: null,
-          credit_card_id: creditCardId || null,
+          account_id: paymentMethod === "account" ? (accountId || null) : null,
+          credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
           date: format(installmentDate, "yyyy-MM-dd"),
           due_date: format(installmentDate, "yyyy-MM-dd"),
           status: i === installmentNumber ? status : "pending",
@@ -589,8 +596,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
             </div>
           )}
 
-          {/* Installment Toggle - Only for credit card payments */}
-          {paymentMethod === "credit_card" && !isEditing && (
+          {/* Installment Toggle */}
+          {!isEditing && (
             <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -682,38 +689,38 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           </Popover>
           </div>
 
-          {/* Due Date - Only for credit card payments */}
-          {paymentMethod === "credit_card" && (
-            <div className="space-y-2">
-              <Label>Data de Vencimento</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dueDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "dd/MM/yyyy") : "Calculada automaticamente"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={dueDate ?? undefined}
-                    onSelect={(d) => setDueDate(d ?? null)}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-              <p className="text-xs text-muted-foreground">
-                Deixe em branco para calcular com base no fechamento do cartão
-              </p>
-            </div>
-          )}
+          {/* Due Date */}
+          <div className="space-y-2">
+            <Label>{paymentMethod === "credit_card" ? "Data de Vencimento" : "Data de Vencimento (opcional)"}</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !dueDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dueDate ? format(dueDate, "dd/MM/yyyy") : paymentMethod === "credit_card" ? "Calculada automaticamente" : "Selecione a data de vencimento"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dueDate ?? undefined}
+                  onSelect={(d) => setDueDate(d ?? null)}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            <p className="text-xs text-muted-foreground">
+              {paymentMethod === "credit_card" 
+                ? "Deixe em branco para calcular com base no fechamento do cartão"
+                : "Se a data for futura, a transação será marcada como pendente"}
+            </p>
+          </div>
 
           {/* Status */}
           <div className="space-y-2">
