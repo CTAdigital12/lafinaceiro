@@ -217,7 +217,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
     // Handle installment creation (only for new transactions)
     if (isInstallment && !isEditing) {
       const groupId = crypto.randomUUID();
-      const baseDate = date;
+      const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
       
       // Create all installments from current number to total
       for (let i = installmentNumber; i <= totalInstallments; i++) {
