@@ -1,137 +1,49 @@
 
-# Melhorias no Lancamento Manual de Transacoes
 
-## Problemas Identificados
+# Corrigir Data das Parcelas em Debito em Conta
 
-### 1. Transacao com vencimento futuro conta como saida realizada
-Ao criar "Seguro Apartamento" com vencimento em 02/03/2026 via debito em conta, a transacao entra no calculo de despesas reais mesmo estando com status "pendente". O sistema so exclui `is_provisional` dos totais, mas nao exclui transacoes com `status: "pending"`. Uma transacao pendente com vencimento futuro deveria ser tratada como projecao ate ser efetivada.
+## Problema
 
-### 2. Sem opcao de parcelas para debito em conta
-O toggle de parcelamento ("E compra parcelada?") so aparece quando o metodo de pagamento e "Cartao de Credito". Transacoes em conta (como seguro, financiamento, consorcio) nao permitem criar parcelas.
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
----
+O bug esta na linha 220 do `TransactionModal.tsx`:
+
+```text
+const baseDate = date;  // usa data de compra (24/02)
+```
+
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
 
 ## Solucao
 
-### Mudanca 1: Transacoes pendentes nao contam como saida realizada
-
-**Arquivo: `src/hooks/useTransactions.ts`**
-
-Adicionar filtro `status !== "pending"` nos calculos de `totalIncome`, `expenseTotal` e `expenseRefunds`. Transacoes pendentes serao tratadas como projecoes, assim como as provisorias.
-
-```text
-Antes:  !t.is_provisional
-Depois: !t.is_provisional && t.status !== "pending"
-```
-
-Isso faz com que:
-- Transacoes "completed" = saida realizada (entra nos totais)
-- Transacoes "pending" = projecao (nao entra nos totais, como provisorias)
-
-### Mudanca 2: Habilitar parcelamento para debito em conta
-
-**Arquivo: `src/components/modals/TransactionModal.tsx`**
-
-- Mover o bloco de parcelamento (linhas 593-653) para fora da condicao `paymentMethod === "credit_card"`
-- Exibir para AMBOS os metodos de pagamento (conta e cartao), mantendo `!isEditing`
-- Ajustar a logica de criacao de parcelas no `handleSubmit` (linhas 211-239) para funcionar sem credit_card_id:
-  - Parcelas em conta usam `account_id` em vez de `credit_card_id`
-  - O `due_date` das parcelas em conta sera a propria data da parcela (sem calculo de fechamento)
-  - Status das parcelas futuras sera "pending" (projecao)
-
-### Mudanca 3: Exibir campo de vencimento para debito em conta
-
-**Arquivo: `src/components/modals/TransactionModal.tsx`**
-
-- O campo "Data de Vencimento" (linhas 685-716) atualmente so aparece para cartao de credito
-- Exibir tambem quando o metodo e "conta", permitindo ao usuario definir quando o debito sera efetivado
-- Quando a data de vencimento for futura e metodo for conta, sugerir automaticamente status "pending"
-
----
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
 
 ## Secao Tecnica
 
-### `src/hooks/useTransactions.ts` - Filtro de totais
+### Arquivo: `src/components/modals/TransactionModal.tsx`
 
-Tres blocos a alterar (linhas 330, 336, 348):
+Alterar linha 220:
 
 ```typescript
-// totalIncome - adicionar && t.status !== "pending"
-const totalIncome = transactions
-  .filter((t) => t.type === "income" && !t.is_refund && !t.is_corporate_expense && !t.is_provisional && t.status !== "pending")
-  .reduce((sum, t) => sum + Number(t.amount), 0);
+// Antes:
+const baseDate = date;
 
-// expenseTotal - adicionar && t.status !== "pending"  
-const expenseTotal = transactions
-  .filter((t) => 
-    t.type === "expense" && 
-    !t.is_corporate_expense && 
-    !t.is_refund && 
-    !t.is_reimbursable && 
-    !t.is_card_payment &&
-    !t.is_provisional &&
-    t.status !== "pending"
-  )
-  .reduce((sum, t) => sum + Number(t.amount), 0);
-
-// expenseRefunds - adicionar && t.status !== "pending"
-const expenseRefunds = transactions
-  .filter((t) => 
-    t.type === "expense" && 
-    t.is_refund && 
-    !t.is_corporate_expense && 
-    !t.is_reimbursable &&
-    !t.is_provisional &&
-    t.status !== "pending"
-  )
-  .reduce((sum, t) => sum + Number(t.amount), 0);
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
 ```
 
-### `src/components/modals/TransactionModal.tsx` - Parcelamento universal
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
 
-1. Mover bloco de parcelamento para fora do `if credit_card`:
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
+
 ```typescript
-// De: {paymentMethod === "credit_card" && !isEditing && (
-// Para: {!isEditing && (
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
 ```
 
-2. Ajustar criacao de parcelas no handleSubmit para suportar conta:
-```typescript
-if (isInstallment && !isEditing) {
-  const groupId = crypto.randomUUID();
-  for (let i = installmentNumber; i <= totalInstallments; i++) {
-    const installmentDate = addMonths(date, i - installmentNumber);
-    await createTransaction.mutateAsync({
-      description: `${description} ${i}/${totalInstallments}`,
-      amount: parseFloat(amount),
-      type,
-      category_id: categoryId || null,
-      account_id: paymentMethod === "account" ? (accountId || null) : null,
-      credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
-      date: format(installmentDate, "yyyy-MM-dd"),
-      due_date: format(installmentDate, "yyyy-MM-dd"),
-      status: i === installmentNumber ? status : "pending",
-      // ... demais campos
-      installment_group_id: groupId,
-      installment_number: i,
-      total_installments: totalInstallments,
-    });
-  }
-}
-```
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
 
-3. Exibir campo de vencimento para todos os metodos:
-```typescript
-// De: {paymentMethod === "credit_card" && (
-// Para: sempre exibir, com label contextualizado
-```
+Uma unica linha a alterar.
 
-4. Auto-sugerir status "pending" quando due_date for futura e metodo for conta:
-```typescript
-// Quando usuario seleciona dueDate futura em conta
-useEffect(() => {
-  if (paymentMethod === "account" && dueDate && dueDate > new Date()) {
-    setStatus("pending");
-  }
-}, [dueDate, paymentMethod]);
-```
