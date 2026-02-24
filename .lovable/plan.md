@@ -1,92 +1,137 @@
 
-# Corrigir Deduplicacao de Transacoes Nao-Parceladas na Importacao de Faturas
+# Melhorias no Lancamento Manual de Transacoes
 
-## Problema
+## Problemas Identificados
 
-O sistema de deduplicacao so detecta duplicatas de **parcelas** (transacoes com installment_number). Transacoes avulsas (sem parcela) nunca sao verificadas, resultando em 18 transacoes duplicadas na fatura de marco.
+### 1. Transacao com vencimento futuro conta como saida realizada
+Ao criar "Seguro Apartamento" com vencimento em 02/03/2026 via debito em conta, a transacao entra no calculo de despesas reais mesmo estando com status "pendente". O sistema so exclui `is_provisional` dos totais, mas nao exclui transacoes com `status: "pending"`. Uma transacao pendente com vencimento futuro deveria ser tratada como projecao ate ser efetivada.
 
-Duas falhas no codigo atual:
+### 2. Sem opcao de parcelas para debito em conta
+O toggle de parcelamento ("E compra parcelada?") so aparece quando o metodo de pagamento e "Cartao de Credito". Transacoes em conta (como seguro, financiamento, consorcio) nao permitem criar parcelas.
 
-1. **Query** (`useExistingInstallments.ts` linha 44): filtra `.not("installment_number", "is", null)` -- so busca parcelas
-2. **Deteccao** (`detectDuplicates` linha 73): faz `if (!item.installment_current || !item.installment_total) return` -- pula itens sem parcela
+---
 
 ## Solucao
 
-Expandir a deduplicacao para cobrir TODAS as transacoes do periodo, nao apenas parcelas.
+### Mudanca 1: Transacoes pendentes nao contam como saida realizada
+
+**Arquivo: `src/hooks/useTransactions.ts`**
+
+Adicionar filtro `status !== "pending"` nos calculos de `totalIncome`, `expenseTotal` e `expenseRefunds`. Transacoes pendentes serao tratadas como projecoes, assim como as provisorias.
+
+```text
+Antes:  !t.is_provisional
+Depois: !t.is_provisional && t.status !== "pending"
+```
+
+Isso faz com que:
+- Transacoes "completed" = saida realizada (entra nos totais)
+- Transacoes "pending" = projecao (nao entra nos totais, como provisorias)
+
+### Mudanca 2: Habilitar parcelamento para debito em conta
+
+**Arquivo: `src/components/modals/TransactionModal.tsx`**
+
+- Mover o bloco de parcelamento (linhas 593-653) para fora da condicao `paymentMethod === "credit_card"`
+- Exibir para AMBOS os metodos de pagamento (conta e cartao), mantendo `!isEditing`
+- Ajustar a logica de criacao de parcelas no `handleSubmit` (linhas 211-239) para funcionar sem credit_card_id:
+  - Parcelas em conta usam `account_id` em vez de `credit_card_id`
+  - O `due_date` das parcelas em conta sera a propria data da parcela (sem calculo de fechamento)
+  - Status das parcelas futuras sera "pending" (projecao)
+
+### Mudanca 3: Exibir campo de vencimento para debito em conta
+
+**Arquivo: `src/components/modals/TransactionModal.tsx`**
+
+- O campo "Data de Vencimento" (linhas 685-716) atualmente so aparece para cartao de credito
+- Exibir tambem quando o metodo e "conta", permitindo ao usuario definir quando o debito sera efetivado
+- Quando a data de vencimento for futura e metodo for conta, sugerir automaticamente status "pending"
+
+---
 
 ## Secao Tecnica
 
-### Arquivo: `src/hooks/useExistingInstallments.ts`
+### `src/hooks/useTransactions.ts` - Filtro de totais
 
-**Mudanca 1 - Query mais abrangente:**
-- Remover o filtro `.not("installment_number", "is", null)` para buscar TODAS as transacoes de despesa do cartao no periodo
-- Renomear a interface/hook para refletir o escopo ampliado (ex: `ExistingTransaction` / `useExistingTransactions`) ou manter o nome atual por compatibilidade -- prefiro manter o nome para minimizar mudancas
-
-**Mudanca 2 - Query adicionar campo `date`:**
-- Incluir `date` no select para usar na comparacao de transacoes nao-parceladas
-
-**Mudanca 3 - Deteccao de duplicatas ampliada:**
-- Remover o `return` precoce para itens sem parcela
-- Para itens COM parcela: manter logica atual (amount + installment_number + total_installments)
-- Para itens SEM parcela: comparar por amount (com tolerancia) + date + descricao normalizada (uppercase, trim)
-- Usar um Set para rastrear quais `existing` ja foram "consumidos" (evitar que duas transacoes importadas de mesmo valor casem com a mesma existente)
+Tres blocos a alterar (linhas 330, 336, 348):
 
 ```typescript
-export function detectDuplicates(
-  importedItems: Array<{
-    transaction_value: number;
-    installment_current?: number | null;
-    installment_total?: number | null;
-    purchase_date?: string;
-    description?: string;
-  }>,
-  existingTransactions: ExistingInstallment[]
-): Map<number, ExistingInstallment> {
-  const duplicateMap = new Map<number, ExistingInstallment>();
-  const usedExistingIds = new Set<string>();
-  const TOLERANCE = 0.05;
+// totalIncome - adicionar && t.status !== "pending"
+const totalIncome = transactions
+  .filter((t) => t.type === "income" && !t.is_refund && !t.is_corporate_expense && !t.is_provisional && t.status !== "pending")
+  .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  importedItems.forEach((item, index) => {
-    const isInstallment = !!(item.installment_current && item.installment_total);
+// expenseTotal - adicionar && t.status !== "pending"  
+const expenseTotal = transactions
+  .filter((t) => 
+    t.type === "expense" && 
+    !t.is_corporate_expense && 
+    !t.is_refund && 
+    !t.is_reimbursable && 
+    !t.is_card_payment &&
+    !t.is_provisional &&
+    t.status !== "pending"
+  )
+  .reduce((sum, t) => sum + Number(t.amount), 0);
 
-    const match = existingTransactions.find((existing) => {
-      if (usedExistingIds.has(existing.id)) return false;
+// expenseRefunds - adicionar && t.status !== "pending"
+const expenseRefunds = transactions
+  .filter((t) => 
+    t.type === "expense" && 
+    t.is_refund && 
+    !t.is_corporate_expense && 
+    !t.is_reimbursable &&
+    !t.is_provisional &&
+    t.status !== "pending"
+  )
+  .reduce((sum, t) => sum + Number(t.amount), 0);
+```
 
-      const amountMatch = Math.abs(Number(existing.amount) - item.transaction_value) <= TOLERANCE;
-      if (!amountMatch) return false;
+### `src/components/modals/TransactionModal.tsx` - Parcelamento universal
 
-      if (isInstallment) {
-        return (
-          existing.installment_number === item.installment_current &&
-          existing.total_installments === item.installment_total
-        );
-      } else {
-        // Non-installment: match by amount + date + normalized description
-        const dateMatch = existing.date === item.purchase_date;
-        const descMatch = existing.description?.trim().toUpperCase() === 
-                          item.description?.trim().toUpperCase();
-        return dateMatch && descMatch;
-      }
+1. Mover bloco de parcelamento para fora do `if credit_card`:
+```typescript
+// De: {paymentMethod === "credit_card" && !isEditing && (
+// Para: {!isEditing && (
+```
+
+2. Ajustar criacao de parcelas no handleSubmit para suportar conta:
+```typescript
+if (isInstallment && !isEditing) {
+  const groupId = crypto.randomUUID();
+  for (let i = installmentNumber; i <= totalInstallments; i++) {
+    const installmentDate = addMonths(date, i - installmentNumber);
+    await createTransaction.mutateAsync({
+      description: `${description} ${i}/${totalInstallments}`,
+      amount: parseFloat(amount),
+      type,
+      category_id: categoryId || null,
+      account_id: paymentMethod === "account" ? (accountId || null) : null,
+      credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
+      date: format(installmentDate, "yyyy-MM-dd"),
+      due_date: format(installmentDate, "yyyy-MM-dd"),
+      status: i === installmentNumber ? status : "pending",
+      // ... demais campos
+      installment_group_id: groupId,
+      installment_number: i,
+      total_installments: totalInstallments,
     });
-
-    if (match) {
-      duplicateMap.set(index, match);
-      usedExistingIds.add(match.id);
-    }
-  });
-
-  return duplicateMap;
+  }
 }
 ```
 
-### Interface ExistingInstallment - adicionar campos:
-- `date: string` (para comparacao de transacoes avulsas)
-- `description` ja existe
+3. Exibir campo de vencimento para todos os metodos:
+```typescript
+// De: {paymentMethod === "credit_card" && (
+// Para: sempre exibir, com label contextualizado
+```
 
-### Impacto
-- Transacoes avulsas como "99Food", "CONTA VIVO", "LINKEDIN" serao detectadas como "Ja Lancado" e desmarcadas por padrao
-- Parcelas continuam funcionando como antes
-- Nenhuma migracao necessaria
-
-### Limpeza dos dados atuais
-- As 18 transacoes duplicadas ja inseridas precisarao ser removidas manualmente ou via a pagina de Atividades (desfazer a importacao de 2026-02-23 22:18:39)
+4. Auto-sugerir status "pending" quando due_date for futura e metodo for conta:
+```typescript
+// Quando usuario seleciona dueDate futura em conta
+useEffect(() => {
+  if (paymentMethod === "account" && dueDate && dueDate > new Date()) {
+    setStatus("pending");
+  }
+}, [dueDate, paymentMethod]);
+```
