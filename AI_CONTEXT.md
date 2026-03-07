@@ -1041,6 +1041,8 @@ Busca parcelas existentes para deduplicação durante importação. Inclui `dete
 - `usePendingInstallments` — Parcelas futuras pendentes
 - `useCreditCardTransactions` — Transações filtradas por cartão
 - `useInvitations` — Convites pendentes
+- `useRecurringRules` — CRUD de regras recorrentes (descrição, valor, dia, conta/cartão)
+- `useRecurringGenerator` — Gera transações provisórias (`is_provisional: true`) para o mês com base nas regras ativas
 
 ---
 
