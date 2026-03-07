@@ -10,7 +10,7 @@
 ## 📋 Índice
 
 1. [Visão Geral do Sistema](#1-visão-geral-do-sistema)
-2. [Schema do Banco de Dados (13 tabelas)](#2-schema-do-banco-de-dados)
+2. [Schema do Banco de Dados (14 tabelas)](#2-schema-do-banco-de-dados)
 3. [Regras de Negócio Críticas](#3-regras-de-negócio-críticas)
 4. [Fórmulas de Cálculo](#4-fórmulas-de-cálculo)
 5. [Estrutura de Arquivos](#5-estrutura-de-arquivos)
