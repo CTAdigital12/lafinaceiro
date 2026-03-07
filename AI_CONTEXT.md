@@ -119,20 +119,32 @@ Tabela central que armazena todas as movimentações financeiras.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ date (Data da Compra)                                           │
-│   → Quando a compra FOI FEITA                                   │
-│   → Imutável após criação                                       │
-│   → Usado para histórico e relatórios                           │
+│ date (Data da Compra / Débito)                                  │
+│   → Para cartões: quando a compra FOI FEITA                     │
+│   → Para contas parceladas: data do débito (= due_date)         │
+│   → Usado para filtros mensais e relatórios                     │
 │                                                                 │
-│ due_date (Competência da Fatura)                                │
-│   → Em qual FATURA a compra aparece                             │
-│   → Calculada com base na closing_date do cartão                │
+│ due_date (Competência da Fatura / Vencimento)                   │
+│   → Cartões: em qual FATURA a compra aparece                    │
+│   → Contas: data de vencimento do débito                        │
+│   → Calculada com base na closing_date do cartão (para cartões) │
+│   → Informada pelo usuário (para contas)                        │
 │   → Dashboard de cartões filtra por due_date!                   │
 │                                                                 │
 │ is_card_payment                                                 │
 │   → Pagamento de fatura = TRANSFERÊNCIA (conta → cartão)        │
 │   → NÃO é despesa real                                          │
 │   → DEVE SER EXCLUÍDO dos totais de despesas                    │
+│                                                                 │
+│ is_provisional                                                  │
+│   → Transação gerada automaticamente por regra recorrente       │
+│   → EXCLUÍDA dos totais (receitas e despesas)                   │
+│   → Serve como "projeção" do que está por vir no mês            │
+│                                                                 │
+│ status: "pending"                                               │
+│   → Transação com vencimento futuro (promessa de débito)        │
+│   → EXCLUÍDA dos totais (receitas e despesas)                   │
+│   → Auto-atribuído quando due_date é futuro (para contas)       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
