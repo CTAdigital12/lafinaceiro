@@ -99,9 +99,11 @@ Tabela central que armazena todas as movimentações financeiras.
 | `description` | TEXT | Não | - | Descrição do lançamento |
 | `amount` | NUMERIC | Não | - | Valor (positivo sempre) |
 | `type` | TEXT | Não | - | `"income"` ou `"expense"` |
-| `date` | DATE | Não | `CURRENT_DATE` | **Data da compra (imutável)** |
+| `date` | DATE | Não | `CURRENT_DATE` | **Data da compra** (ou data do débito para parcelas em conta) |
 | `due_date` | DATE | Sim | - | **Data de vencimento/competência** |
 | `status` | TEXT | Não | `'completed'` | `"completed"`, `"pending"` |
+| `is_provisional` | BOOLEAN | Não | `false` | Transação gerada por regra recorrente (provisória) |
+| `recurring_rule_id` | UUID | Sim | - | Regra recorrente que gerou esta transação |
 | `is_corporate_expense` | BOOLEAN | Não | `false` | Gasto da empresa no cartão pessoal |
 | `is_reimbursable` | BOOLEAN | Não | `false` | Despesa a ser reembolsada |
 | `is_card_payment` | BOOLEAN | Sim | `false` | **Pagamento de fatura (NÃO É DESPESA!)** |
