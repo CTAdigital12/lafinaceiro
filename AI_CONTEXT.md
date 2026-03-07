@@ -445,6 +445,8 @@ totalExpense = normalExpenses - expenseRefunds
 
 ### ⚠️ 3.5 Parcelamentos
 
+Parcelas são suportadas tanto em **cartões de crédito** quanto em **débito em conta**.
+
 ```typescript
 // Parcelas agrupadas por installment_group_id
 {
@@ -458,6 +460,22 @@ totalExpense = normalExpenses - expenseRefunds
 // - Editar categoria de 1 parcela → atualiza TODAS do grupo
 // - Parcelas pendentes podem ser removidas em lote
 ```
+
+#### Cálculo de Datas das Parcelas (baseDate)
+
+```typescript
+// Para CARTÃO: baseDate = data da compra (due_date calculado pelo fechamento)
+// Para CONTA:  baseDate = dueDate informado pelo usuário
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+const installmentDate = addMonths(baseDate, i - installmentNumber);
+```
+
+#### Parcelas em Conta (Débito em Conta)
+
+- Usam `account_id` em vez de `credit_card_id`
+- `date` e `due_date` são iguais (= data do débito)
+- Parcelas futuras recebem `status: "pending"` automaticamente
+- Exemplos: financiamentos, consórcios, seguros parcelados
 
 ---
 
