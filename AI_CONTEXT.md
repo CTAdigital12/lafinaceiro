@@ -1203,5 +1203,5 @@ Regras recorrentes geram transações provisórias mensais. CRUD via `useRecurri
 
 ---
 
-> **Versão do Documento:** 3.0  
-> **Data:** Fevereiro 2026
+> **Versão do Documento:** 3.1  
+> **Data:** Março 2026
