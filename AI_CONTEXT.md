@@ -1,7 +1,7 @@
 # LA Financeiro - Documentação Técnica Completa
 
-> **Última Atualização:** Fevereiro 2026  
-> **Versão:** 3.0  
+> **Última Atualização:** Março 2026  
+> **Versão:** 3.1  
 > **URL de Produção:** https://lafinaceiro.lovable.app  
 > **Propósito:** Fonte de verdade única para IAs assistentes. Leia ANTES de qualquer modificação.
 
@@ -10,7 +10,7 @@
 ## 📋 Índice
 
 1. [Visão Geral do Sistema](#1-visão-geral-do-sistema)
-2. [Schema do Banco de Dados (13 tabelas)](#2-schema-do-banco-de-dados)
+2. [Schema do Banco de Dados (14 tabelas)](#2-schema-do-banco-de-dados)
 3. [Regras de Negócio Críticas](#3-regras-de-negócio-críticas)
 4. [Fórmulas de Cálculo](#4-fórmulas-de-cálculo)
 5. [Estrutura de Arquivos](#5-estrutura-de-arquivos)
@@ -63,7 +63,7 @@
 │                     LOVABLE CLOUD                            │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │  PostgreSQL │  │    Auth     │  │   Edge Functions    │  │
-│  │ (13 tables) │  │             │  │  (4 functions)      │  │
+│  │ (14 tables) │  │             │  │  (4 functions)      │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │               Row Level Security (RLS)                  │ │
@@ -99,9 +99,11 @@ Tabela central que armazena todas as movimentações financeiras.
 | `description` | TEXT | Não | - | Descrição do lançamento |
 | `amount` | NUMERIC | Não | - | Valor (positivo sempre) |
 | `type` | TEXT | Não | - | `"income"` ou `"expense"` |
-| `date` | DATE | Não | `CURRENT_DATE` | **Data da compra (imutável)** |
+| `date` | DATE | Não | `CURRENT_DATE` | **Data da compra** (ou data do débito para parcelas em conta) |
 | `due_date` | DATE | Sim | - | **Data de vencimento/competência** |
 | `status` | TEXT | Não | `'completed'` | `"completed"`, `"pending"` |
+| `is_provisional` | BOOLEAN | Não | `false` | Transação gerada por regra recorrente (provisória) |
+| `recurring_rule_id` | UUID | Sim | - | Regra recorrente que gerou esta transação |
 | `is_corporate_expense` | BOOLEAN | Não | `false` | Gasto da empresa no cartão pessoal |
 | `is_reimbursable` | BOOLEAN | Não | `false` | Despesa a ser reembolsada |
 | `is_card_payment` | BOOLEAN | Sim | `false` | **Pagamento de fatura (NÃO É DESPESA!)** |
@@ -117,20 +119,32 @@ Tabela central que armazena todas as movimentações financeiras.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ date (Data da Compra)                                           │
-│   → Quando a compra FOI FEITA                                   │
-│   → Imutável após criação                                       │
-│   → Usado para histórico e relatórios                           │
+│ date (Data da Compra / Débito)                                  │
+│   → Para cartões: quando a compra FOI FEITA                     │
+│   → Para contas parceladas: data do débito (= due_date)         │
+│   → Usado para filtros mensais e relatórios                     │
 │                                                                 │
-│ due_date (Competência da Fatura)                                │
-│   → Em qual FATURA a compra aparece                             │
-│   → Calculada com base na closing_date do cartão                │
+│ due_date (Competência da Fatura / Vencimento)                   │
+│   → Cartões: em qual FATURA a compra aparece                    │
+│   → Contas: data de vencimento do débito                        │
+│   → Calculada com base na closing_date do cartão (para cartões) │
+│   → Informada pelo usuário (para contas)                        │
 │   → Dashboard de cartões filtra por due_date!                   │
 │                                                                 │
 │ is_card_payment                                                 │
 │   → Pagamento de fatura = TRANSFERÊNCIA (conta → cartão)        │
 │   → NÃO é despesa real                                          │
 │   → DEVE SER EXCLUÍDO dos totais de despesas                    │
+│                                                                 │
+│ is_provisional                                                  │
+│   → Transação gerada automaticamente por regra recorrente       │
+│   → EXCLUÍDA dos totais (receitas e despesas)                   │
+│   → Serve como "projeção" do que está por vir no mês            │
+│                                                                 │
+│ status: "pending"                                               │
+│   → Transação com vencimento futuro (promessa de débito)        │
+│   → EXCLUÍDA dos totais (receitas e despesas)                   │
+│   → Auto-atribuído quando due_date é futuro (para contas)       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -312,6 +326,27 @@ Regras automáticas para categorizar transações importadas.
 
 ---
 
+### 2.14 Tabela: `recurring_rules`
+
+Regras para geração automática de transações provisórias mensais.
+
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `id` | UUID | Não | `gen_random_uuid()` | Identificador |
+| `user_id` | UUID | Não | - | Proprietário |
+| `description` | TEXT | Não | - | Descrição do lançamento |
+| `category_id` | UUID | Sim | - | Categoria vinculada |
+| `account_id` | UUID | Sim | - | Conta bancária |
+| `credit_card_id` | UUID | Sim | - | Cartão de crédito |
+| `estimated_amount` | NUMERIC | Não | 0 | Valor estimado |
+| `type` | TEXT | Não | - | `"income"` ou `"expense"` |
+| `day_of_month` | INTEGER | Não | 1 | Dia do mês (1-31) |
+| `active` | BOOLEAN | Não | `true` | Regra ativa |
+
+**Funcionamento:** O hook `useRecurringGenerator` gera transações provisórias (`is_provisional: true`) para o mês corrente com base nas regras ativas. As transações provisórias são excluídas dos totais de receitas e despesas.
+
+---
+
 ### Diagrama de Relacionamentos
 
 ```
@@ -410,6 +445,8 @@ totalExpense = normalExpenses - expenseRefunds
 
 ### ⚠️ 3.5 Parcelamentos
 
+Parcelas são suportadas tanto em **cartões de crédito** quanto em **débito em conta**.
+
 ```typescript
 // Parcelas agrupadas por installment_group_id
 {
@@ -423,6 +460,22 @@ totalExpense = normalExpenses - expenseRefunds
 // - Editar categoria de 1 parcela → atualiza TODAS do grupo
 // - Parcelas pendentes podem ser removidas em lote
 ```
+
+#### Cálculo de Datas das Parcelas (baseDate)
+
+```typescript
+// Para CARTÃO: baseDate = data da compra (due_date calculado pelo fechamento)
+// Para CONTA:  baseDate = dueDate informado pelo usuário
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+const installmentDate = addMonths(baseDate, i - installmentNumber);
+```
+
+#### Parcelas em Conta (Débito em Conta)
+
+- Usam `account_id` em vez de `credit_card_id`
+- `date` e `due_date` são iguais (= data do débito)
+- Parcelas futuras recebem `status: "pending"` automaticamente
+- Exemplos: financiamentos, consórcios, seguros parcelados
 
 ---
 
@@ -477,12 +530,14 @@ O hook `useInvoiceCycles` gerencia os estados. `useTransactions` verifica o stat
 ```typescript
 const normalExpenses = transactions
   .filter(t => t.type === "expense" && !t.is_refund && !t.is_card_payment 
-    && !t.is_corporate_expense && !t.is_reimbursable)
+    && !t.is_corporate_expense && !t.is_reimbursable
+    && !t.is_provisional && t.status !== "pending")  // ← Exclui projeções e pendentes
   .reduce((sum, t) => sum + Number(t.amount), 0);
 
 const expenseRefunds = transactions
   .filter(t => t.type === "expense" && t.is_refund 
-    && !t.is_corporate_expense && !t.is_reimbursable)
+    && !t.is_corporate_expense && !t.is_reimbursable
+    && !t.is_provisional && t.status !== "pending")  // ← Exclui projeções e pendentes
   .reduce((sum, t) => sum + Number(t.amount), 0);
 
 const totalExpense = normalExpenses - expenseRefunds;
@@ -492,7 +547,8 @@ const totalExpense = normalExpenses - expenseRefunds;
 
 ```typescript
 const totalIncome = transactions
-  .filter(t => t.type === "income" && !t.is_refund && !t.is_corporate_expense)
+  .filter(t => t.type === "income" && !t.is_refund && !t.is_corporate_expense
+    && !t.is_provisional && t.status !== "pending")  // ← Exclui projeções e pendentes
   .reduce((sum, t) => sum + Number(t.amount), 0);
 ```
 
@@ -562,6 +618,8 @@ src/
 │   ├── useActivities.ts           # Log de importações
 │   ├── useMembers.ts              # Gestão de membros
 │   ├── useBankPaymentCandidates.ts# Candidatos para vincular pagamento
+│   ├── useRecurringRules.ts       # CRUD regras recorrentes
+│   ├── useRecurringGenerator.ts   # Geração de provisórias
 │   └── use-mobile.tsx             # Detecção de mobile
 │
 ├── pages/
@@ -983,6 +1041,8 @@ Busca parcelas existentes para deduplicação durante importação. Inclui `dete
 - `usePendingInstallments` — Parcelas futuras pendentes
 - `useCreditCardTransactions` — Transações filtradas por cartão
 - `useInvitations` — Convites pendentes
+- `useRecurringRules` — CRUD de regras recorrentes (descrição, valor, dia, conta/cartão)
+- `useRecurringGenerator` — Gera transações provisórias (`is_provisional: true`) para o mês com base nas regras ativas
 
 ---
 
@@ -1118,6 +1178,15 @@ Acesso imediato ao adicionar membro. Edge Function `add-member` cria usuário se
 ### `architecture/data-integrity-standards`
 Transações com `is_card_payment: true` devem ter `credit_card_id` válido.
 
+### `features/account-based-installments`
+Parcelas em conta usam `dueDate` como base para cálculo de datas. `date` e `due_date` são iguais para parcelas em conta. Parcelas futuras recebem `status: "pending"` automaticamente.
+
+### `features/projection-logic`
+Transações provisórias (`is_provisional: true`) e pendentes (`status: "pending"`) são EXCLUÍDAS dos totais de receitas e despesas. Provisórias são geradas pelo `useRecurringGenerator`; pendentes representam débitos futuros em conta.
+
+### `features/recurring-rules`
+Regras recorrentes geram transações provisórias mensais. CRUD via `useRecurringRules`. Geração automática via `useRecurringGenerator`. Página: `/recurring-expenses`.
+
 ---
 
 ## 14. Armadilhas a Evitar
@@ -1134,5 +1203,5 @@ Transações com `is_card_payment: true` devem ter `credit_card_id` válido.
 
 ---
 
-> **Versão do Documento:** 3.0  
-> **Data:** Fevereiro 2026
+> **Versão do Documento:** 3.1  
+> **Data:** Março 2026
