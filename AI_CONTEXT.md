@@ -530,12 +530,14 @@ O hook `useInvoiceCycles` gerencia os estados. `useTransactions` verifica o stat
 ```typescript
 const normalExpenses = transactions
   .filter(t => t.type === "expense" && !t.is_refund && !t.is_card_payment 
-    && !t.is_corporate_expense && !t.is_reimbursable)
+    && !t.is_corporate_expense && !t.is_reimbursable
+    && !t.is_provisional && t.status !== "pending")  // ← Exclui projeções e pendentes
   .reduce((sum, t) => sum + Number(t.amount), 0);
 
 const expenseRefunds = transactions
   .filter(t => t.type === "expense" && t.is_refund 
-    && !t.is_corporate_expense && !t.is_reimbursable)
+    && !t.is_corporate_expense && !t.is_reimbursable
+    && !t.is_provisional && t.status !== "pending")  // ← Exclui projeções e pendentes
   .reduce((sum, t) => sum + Number(t.amount), 0);
 
 const totalExpense = normalExpenses - expenseRefunds;
@@ -545,7 +547,8 @@ const totalExpense = normalExpenses - expenseRefunds;
 
 ```typescript
 const totalIncome = transactions
-  .filter(t => t.type === "income" && !t.is_refund && !t.is_corporate_expense)
+  .filter(t => t.type === "income" && !t.is_refund && !t.is_corporate_expense
+    && !t.is_provisional && t.status !== "pending")  // ← Exclui projeções e pendentes
   .reduce((sum, t) => sum + Number(t.amount), 0);
 ```
 
