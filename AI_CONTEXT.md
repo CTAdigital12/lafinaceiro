@@ -618,6 +618,8 @@ src/
 │   ├── useActivities.ts           # Log de importações
 │   ├── useMembers.ts              # Gestão de membros
 │   ├── useBankPaymentCandidates.ts# Candidatos para vincular pagamento
+│   ├── useRecurringRules.ts       # CRUD regras recorrentes
+│   ├── useRecurringGenerator.ts   # Geração de provisórias
 │   └── use-mobile.tsx             # Detecção de mobile
 │
 ├── pages/
