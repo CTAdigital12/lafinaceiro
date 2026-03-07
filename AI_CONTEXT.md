@@ -1178,6 +1178,15 @@ Acesso imediato ao adicionar membro. Edge Function `add-member` cria usuário se
 ### `architecture/data-integrity-standards`
 Transações com `is_card_payment: true` devem ter `credit_card_id` válido.
 
+### `features/account-based-installments`
+Parcelas em conta usam `dueDate` como base para cálculo de datas. `date` e `due_date` são iguais para parcelas em conta. Parcelas futuras recebem `status: "pending"` automaticamente.
+
+### `features/projection-logic`
+Transações provisórias (`is_provisional: true`) e pendentes (`status: "pending"`) são EXCLUÍDAS dos totais de receitas e despesas. Provisórias são geradas pelo `useRecurringGenerator`; pendentes representam débitos futuros em conta.
+
+### `features/recurring-rules`
+Regras recorrentes geram transações provisórias mensais. CRUD via `useRecurringRules`. Geração automática via `useRecurringGenerator`. Página: `/recurring-expenses`.
+
 ---
 
 ## 14. Armadilhas a Evitar
