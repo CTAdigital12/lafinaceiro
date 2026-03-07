@@ -326,6 +326,27 @@ Regras automáticas para categorizar transações importadas.
 
 ---
 
+### 2.14 Tabela: `recurring_rules`
+
+Regras para geração automática de transações provisórias mensais.
+
+| Campo | Tipo | Nullable | Default | Descrição |
+|-------|------|----------|---------|-----------|
+| `id` | UUID | Não | `gen_random_uuid()` | Identificador |
+| `user_id` | UUID | Não | - | Proprietário |
+| `description` | TEXT | Não | - | Descrição do lançamento |
+| `category_id` | UUID | Sim | - | Categoria vinculada |
+| `account_id` | UUID | Sim | - | Conta bancária |
+| `credit_card_id` | UUID | Sim | - | Cartão de crédito |
+| `estimated_amount` | NUMERIC | Não | 0 | Valor estimado |
+| `type` | TEXT | Não | - | `"income"` ou `"expense"` |
+| `day_of_month` | INTEGER | Não | 1 | Dia do mês (1-31) |
+| `active` | BOOLEAN | Não | `true` | Regra ativa |
+
+**Funcionamento:** O hook `useRecurringGenerator` gera transações provisórias (`is_provisional: true`) para o mês corrente com base nas regras ativas. As transações provisórias são excluídas dos totais de receitas e despesas.
+
+---
+
 ### Diagrama de Relacionamentos
 
 ```
