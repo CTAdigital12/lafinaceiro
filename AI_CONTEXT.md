@@ -1,7 +1,7 @@
 # LA Financeiro - Documentação Técnica Completa
 
-> **Última Atualização:** Fevereiro 2026  
-> **Versão:** 3.0  
+> **Última Atualização:** Março 2026  
+> **Versão:** 3.1  
 > **URL de Produção:** https://lafinaceiro.lovable.app  
 > **Propósito:** Fonte de verdade única para IAs assistentes. Leia ANTES de qualquer modificação.
 
