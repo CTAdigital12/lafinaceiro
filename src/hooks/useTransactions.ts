@@ -165,10 +165,11 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
       }
       
       // Sanitize UUID fields - convert empty strings to null
-      const { silent, skipInvoiceCheck, ...transactionData } = transaction;
+      const { silent, skipInvoiceCheck, original_description, ...transactionData } = transaction;
       const sanitizedTransaction = {
         ...transactionData,
         user_id: user.id,
+        original_description: original_description || null,
         category_id: transactionData.category_id && transactionData.category_id.trim() !== "" ? transactionData.category_id : null,
         account_id: transactionData.account_id && transactionData.account_id.trim() !== "" ? transactionData.account_id : null,
         credit_card_id: transactionData.credit_card_id && transactionData.credit_card_id.trim() !== "" ? transactionData.credit_card_id : null,
