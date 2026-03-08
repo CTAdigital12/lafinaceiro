@@ -503,9 +503,10 @@ export function InvoiceReviewModal({
             
             allTransactions.push({
               description: future.notes ? `${future.description} - ${future.notes}` : future.description,
+              original_description: item.original_description,
               amount: future.amount,
-              date: future.date, // purchase_date (original)
-              due_date: future.due_date, // progressive due_date
+              date: future.date,
+              due_date: future.due_date,
               imported_at: importedAt,
               type: "expense",
               category_id: futureCategoryId,
