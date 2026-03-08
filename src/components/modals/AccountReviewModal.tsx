@@ -353,6 +353,7 @@ export function AccountReviewModal({
         try {
           await createTransaction.mutateAsync({
             description: item.description,
+            original_description: item.original_description,
             amount: item.amount,
             date: item.date,
             type: item.type,
