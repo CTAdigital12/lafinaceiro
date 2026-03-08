@@ -163,6 +163,8 @@ export function InvoiceReviewModal({
           // Deduplication fields
           duplicate_status: isDuplicate ? 'duplicate' as DuplicateStatus : 'new' as DuplicateStatus,
           matched_transaction_id: matchedTransaction?.id || null,
+          // Preserve original description from parser
+          original_description: item.description,
         };
       });
       setReviewItems(itemsWithCategories);
