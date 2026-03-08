@@ -471,6 +471,7 @@ export function InvoiceReviewModal({
         
         allTransactions.push({
           description: item.notes ? `${item.description} - ${item.notes}` : item.description,
+          original_description: item.original_description,
           amount: item.amount,
           date: item.date,
           due_date: item.due_date || null,
