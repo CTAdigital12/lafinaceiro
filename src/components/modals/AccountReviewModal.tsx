@@ -71,6 +71,7 @@ interface ReviewItem extends AccountImportedItem {
   remember_corporate: boolean;
   corporate_keyword: string;
   is_card_payment: boolean;
+  original_description: string;
 }
 
 interface AccountReviewModalProps {
