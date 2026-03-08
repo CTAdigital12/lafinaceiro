@@ -6,6 +6,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 export interface ExistingInstallment {
   id: string;
   description: string;
+  original_description: string | null;
   amount: number;
   date: string;
   installment_number: number | null;
@@ -39,7 +40,7 @@ export function useExistingInstallments({
     queryFn: async (): Promise<ExistingInstallment[]> => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("id, description, amount, date, installment_number, total_installments")
+        .select("id, description, original_description, amount, date, installment_number, total_installments")
         .eq("credit_card_id", creditCardId)
         .eq("type", "expense")
         .or(
@@ -53,53 +54,5 @@ export function useExistingInstallments({
   });
 }
 
-/**
- * Detects duplicate transactions by comparing imported items against existing transactions.
- * Handles both installments (by amount + installment numbers) and one-off expenses
- * (by amount + date + normalized description). Uses a tolerance of ±R$ 0.05.
- */
-export function detectDuplicates(
-  importedItems: Array<{
-    transaction_value: number;
-    installment_current?: number | null;
-    installment_total?: number | null;
-    purchase_date?: string;
-    description?: string;
-  }>,
-  existingTransactions: ExistingInstallment[]
-): Map<number, ExistingInstallment> {
-  const duplicateMap = new Map<number, ExistingInstallment>();
-  const usedExistingIds = new Set<string>();
-  const TOLERANCE = 0.05;
-
-  importedItems.forEach((item, index) => {
-    const isInstallment = !!(item.installment_current && item.installment_total);
-
-    const match = existingTransactions.find((existing) => {
-      if (usedExistingIds.has(existing.id)) return false;
-
-      const amountMatch = Math.abs(Number(existing.amount) - item.transaction_value) <= TOLERANCE;
-      if (!amountMatch) return false;
-
-      if (isInstallment) {
-        return (
-          existing.installment_number === item.installment_current &&
-          existing.total_installments === item.installment_total
-        );
-      } else {
-        const dateMatch = existing.date === item.purchase_date;
-        const descMatch =
-          existing.description?.trim().toUpperCase() ===
-          item.description?.trim().toUpperCase();
-        return dateMatch && descMatch;
-      }
-    });
-
-    if (match) {
-      duplicateMap.set(index, match);
-      usedExistingIds.add(match.id);
-    }
-  });
-
-  return duplicateMap;
-}
+// Re-export detectDuplicates from the centralized deduplication module
+export { detectDuplicates } from "@/lib/deduplication";

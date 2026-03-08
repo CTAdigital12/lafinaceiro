@@ -590,6 +590,7 @@ export type Database = {
           is_provisional: boolean
           is_refund: boolean
           is_reimbursable: boolean
+          original_description: string | null
           recurring_rule_id: string | null
           refunded_transaction_id: string | null
           reimbursement_status: string | null
@@ -617,6 +618,7 @@ export type Database = {
           is_provisional?: boolean
           is_refund?: boolean
           is_reimbursable?: boolean
+          original_description?: string | null
           recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
@@ -644,6 +646,7 @@ export type Database = {
           is_provisional?: boolean
           is_refund?: boolean
           is_reimbursable?: boolean
+          original_description?: string | null
           recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null

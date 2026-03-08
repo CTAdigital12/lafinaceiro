@@ -77,6 +77,8 @@ interface ReviewItem extends ImportedItem {
   // Deduplication fields
   duplicate_status: DuplicateStatus;
   matched_transaction_id: string | null;
+  // Original description from parser (before user edits)
+  original_description: string;
 }
 
 interface InvoiceReviewModalProps {
@@ -161,6 +163,8 @@ export function InvoiceReviewModal({
           // Deduplication fields
           duplicate_status: isDuplicate ? 'duplicate' as DuplicateStatus : 'new' as DuplicateStatus,
           matched_transaction_id: matchedTransaction?.id || null,
+          // Preserve original description from parser
+          original_description: item.description,
         };
       });
       setReviewItems(itemsWithCategories);
@@ -436,6 +440,7 @@ export function InvoiceReviewModal({
       // Collect all transactions to create (including future installments)
       const allTransactions: Array<{
         description: string;
+        original_description: string | null;
         amount: number;
         date: string;
         due_date: string | null;
@@ -466,6 +471,7 @@ export function InvoiceReviewModal({
         
         allTransactions.push({
           description: item.notes ? `${item.description} - ${item.notes}` : item.description,
+          original_description: item.original_description,
           amount: item.amount,
           date: item.date,
           due_date: item.due_date || null,
@@ -497,9 +503,10 @@ export function InvoiceReviewModal({
             
             allTransactions.push({
               description: future.notes ? `${future.description} - ${future.notes}` : future.description,
+              original_description: item.original_description,
               amount: future.amount,
-              date: future.date, // purchase_date (original)
-              due_date: future.due_date, // progressive due_date
+              date: future.date,
+              due_date: future.due_date,
               imported_at: importedAt,
               type: "expense",
               category_id: futureCategoryId,

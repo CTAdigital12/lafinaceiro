@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard } from "lucide-react";
+import { detectAccountDuplicates } from "@/lib/deduplication";
 import {
   Dialog,
   DialogContent,
@@ -70,6 +71,7 @@ interface ReviewItem extends AccountImportedItem {
   remember_corporate: boolean;
   corporate_keyword: string;
   is_card_payment: boolean;
+  original_description: string;
 }
 
 interface AccountReviewModalProps {
@@ -135,23 +137,21 @@ export function AccountReviewModal({
         // Fetch existing transactions for this account
         const { data: existingTransactions } = await supabase
           .from("transactions")
-          .select("date, amount, description")
+          .select("date, amount, description, original_description")
           .eq("account_id", accountId);
 
         const existing = existingTransactions || [];
 
-        const itemsWithCategories = items.map((item) => {
+        // Use robust deduplication
+        const duplicateIndices = detectAccountDuplicates(
+          items.map(i => ({ date: i.date, description: i.description, amount: i.amount })),
+          existing.map(tx => ({ date: tx.date, amount: Number(tx.amount), description: tx.description, original_description: tx.original_description }))
+        );
+
+        const itemsWithCategories = items.map((item, index) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
           const isCorporate = findCorporateForDescription(item.description);
-          
-          // Check for duplicates: same date, amount, and similar description
-          const isDuplicate = existing.some(
-            (tx) =>
-              tx.date === item.date &&
-              Math.abs(Number(tx.amount) - item.amount) < 0.01 &&
-              (tx.description.toUpperCase().includes(item.description.toUpperCase().substring(0, 10)) ||
-               item.description.toUpperCase().includes(tx.description.toUpperCase().substring(0, 10)))
-          );
+          const isDuplicate = duplicateIndices.has(index);
 
           return {
             ...item,
@@ -165,6 +165,7 @@ export function AccountReviewModal({
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
+            original_description: item.description,
           };
         });
         
@@ -187,6 +188,7 @@ export function AccountReviewModal({
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
+            original_description: item.description,
           };
         });
         setReviewItems(itemsWithCategories);
@@ -351,6 +353,7 @@ export function AccountReviewModal({
         try {
           await createTransaction.mutateAsync({
             description: item.description,
+            original_description: item.original_description,
             amount: item.amount,
             date: item.date,
             type: item.type,
