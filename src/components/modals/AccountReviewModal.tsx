@@ -188,6 +188,7 @@ export function AccountReviewModal({
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
+            original_description: item.description,
           };
         });
         setReviewItems(itemsWithCategories);
