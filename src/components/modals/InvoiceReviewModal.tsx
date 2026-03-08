@@ -77,6 +77,8 @@ interface ReviewItem extends ImportedItem {
   // Deduplication fields
   duplicate_status: DuplicateStatus;
   matched_transaction_id: string | null;
+  // Original description from parser (before user edits)
+  original_description: string;
 }
 
 interface InvoiceReviewModalProps {
