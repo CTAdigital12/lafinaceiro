@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard } from "lucide-react";
+import { detectAccountDuplicates } from "@/lib/deduplication";
 import {
   Dialog,
   DialogContent,
