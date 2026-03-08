@@ -440,6 +440,7 @@ export function InvoiceReviewModal({
       // Collect all transactions to create (including future installments)
       const allTransactions: Array<{
         description: string;
+        original_description: string | null;
         amount: number;
         date: string;
         due_date: string | null;
