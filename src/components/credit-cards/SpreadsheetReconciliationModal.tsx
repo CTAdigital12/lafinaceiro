@@ -392,6 +392,10 @@ interface ResultTableProps {
   onAdd: (item: SpreadsheetItem) => void;
   onDelete: (tx: SystemTransaction) => void;
   onCorrect: (item: SpreadsheetItem, tx: SystemTransaction) => void;
+  refundItems: Set<number>;
+  onToggleRefund: (rowIndex: number) => void;
+  ignoredKeys: Set<string>;
+  onIgnore: (key: string) => void;
 }
 
 type RowData = {
