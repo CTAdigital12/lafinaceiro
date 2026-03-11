@@ -458,6 +458,7 @@ export function AccountReconciliationModal({
                         onAdd={handleAddTransaction}
                         onDelete={setDeleteConfirm}
                         onCorrect={handleCorrectValue}
+                        onReconcile={setReconcileTarget}
                         refundItems={refundItems}
                         onToggleRefund={(rowIndex) => setRefundItems((prev) => {
                           const s = new Set(prev);
