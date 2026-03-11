@@ -660,6 +660,15 @@ export function AccountReviewModal({
           </div>
         )}
 
+        {!isCheckingDuplicates && pendingMatchCount > 0 && (
+          <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-accent/50 text-accent-foreground text-sm">
+            <ArrowRightLeft className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>
+              {pendingMatchCount} {pendingMatchCount === 1 ? "lançamento previsto será convertido em realizado" : "lançamentos previstos serão convertidos em realizados"}
+            </span>
+          </div>
+        )}
+
         {uncategorizedCount > 0 && (
           <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-chart-4/10 text-chart-4 text-sm">
             <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
