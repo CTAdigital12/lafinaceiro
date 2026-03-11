@@ -95,7 +95,7 @@ export function AccountReconciliationModal({
   const fetchSystemTransactions = useCallback(async (minDate: string, maxDate: string): Promise<SystemTransaction[]> => {
     const { data, error } = await supabase
       .from("transactions")
-      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status")
+      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status, is_provisional, recurring_rule_id")
       .eq("account_id", accountId)
       .gte("date", minDate)
       .lte("date", maxDate);
