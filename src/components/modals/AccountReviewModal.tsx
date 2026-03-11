@@ -565,6 +565,50 @@ export function AccountReviewModal({
     (item) => item.is_corporate && item.type === "expense" && (!item.isDuplicate || item.forceImport)
   ).length;
 
+  const pendingMatchCount = reviewItems.filter(item => item.matchedPendingId && (!item.isDuplicate || item.forceImport)).length;
+
+  // Balance sync view after import
+  if (showBalanceSync && bankBalance != null) {
+    return (
+      <Dialog open={open} onOpenChange={() => onOpenChange(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-primary" />
+              Sincronizar Saldo
+            </DialogTitle>
+            <DialogDescription>
+              O saldo do banco no extrato é diferente do saldo registrado no sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="border rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Saldo do Banco</p>
+                <p className="text-lg font-bold text-foreground">
+                  R$ {bankBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="border rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Saldo do Sistema</p>
+                <SyncSystemBalance accountId={accountId} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleKeepBalance}>
+                Manter Saldo Atual
+              </Button>
+              <Button className="flex-1" onClick={handleSyncBalance}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sincronizar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={isImporting ? () => {} : onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
