@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Building2, Wallet, PiggyBank, TrendingUp, MoreVertical, Loader2, Upload } from "lucide-react";
+import { Plus, Building2, Wallet, PiggyBank, TrendingUp, MoreVertical, Loader2, Upload, FileDown, ArrowRightLeft } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +22,10 @@ import { useAccounts, Account } from "@/hooks/useAccounts";
 import { AccountModal } from "@/components/modals/AccountModal";
 import { AccountImportModal, AccountImportedItem } from "@/components/modals/AccountImportModal";
 import { AccountReviewModal } from "@/components/modals/AccountReviewModal";
+import { AccountReconciliationModal } from "@/components/accounts/AccountReconciliationModal";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useCategories } from "@/hooks/useCategories";
 
 const iconComponents = {
   bank: Building2,
@@ -42,9 +46,11 @@ interface AccountCardProps {
   onEdit: (account: Account) => void;
   onDelete: (id: string) => void;
   onImport: (account: Account) => void;
+  onExport: (account: Account) => void;
+  onReconcile: (account: Account) => void;
 }
 
-function AccountCard({ account, onEdit, onDelete, onImport }: AccountCardProps) {
+function AccountCard({ account, onEdit, onDelete, onImport, onExport, onReconcile }: AccountCardProps) {
   const Icon = iconComponents[account.type] || Building2;
 
   return (
@@ -71,6 +77,14 @@ function AccountCard({ account, onEdit, onDelete, onImport }: AccountCardProps) 
               <DropdownMenuItem onClick={() => onImport(account)}>
                 <Upload className="h-4 w-4 mr-2" />
                 Importar Extrato
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onExport(account)}>
+                <FileDown className="h-4 w-4 mr-2" />
+                Exportar Extrato
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onReconcile(account)}>
+                <ArrowRightLeft className="h-4 w-4 mr-2" />
+                Conciliar Extrato
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(account)}>Editar</DropdownMenuItem>
               <DropdownMenuItem onClick={() => onDelete(account.id)} className="text-expense">
@@ -112,7 +126,10 @@ export default function Accounts() {
   const [importedItems, setImportedItems] = useState<AccountImportedItem[]>([]);
   const [importBankBalance, setImportBankBalance] = useState<number | null>(null);
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
+  const [reconcilingAccount, setReconcilingAccount] = useState<Account | null>(null);
   const { accounts, isLoading, totalBalance, deleteAccount } = useAccounts();
+  const { categories } = useCategories();
+  const { toast } = useToast();
 
   const handleEdit = (account: Account) => {
     setEditingAccount(account);
@@ -144,6 +161,54 @@ export default function Accounts() {
       setImportedItems([]);
       setImportBankBalance(null);
       setImportingAccount(null);
+    }
+  };
+
+  const handleExport = async (account: Account) => {
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("date, description, amount, type, category_id, status")
+        .eq("account_id", account.id)
+        .order("date", { ascending: true });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        toast({ title: "Nenhuma transação encontrada para esta conta", variant: "destructive" });
+        return;
+      }
+
+      // Build category map
+      const catMap = new Map<string, string>();
+      for (const cat of categories) {
+        catMap.set(cat.id, cat.name);
+      }
+
+      // Build CSV
+      const header = "Data;Descrição;Valor;Tipo;Categoria;Status";
+      const rows = data.map((tx) => {
+        const date = tx.date;
+        const desc = `"${(tx.description || "").replace(/"/g, '""')}"`;
+        const amount = Number(tx.amount).toFixed(2).replace(".", ",");
+        const type = tx.type === "income" ? "Receita" : "Despesa";
+        const category = tx.category_id ? (catMap.get(tx.category_id) || "") : "";
+        const status = tx.status === "completed" ? "Concluída" : "Pendente";
+        return `${date};${desc};${amount};${type};${category};${status}`;
+      });
+
+      const csvContent = [header, ...rows].join("\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `extrato_${account.name.replace(/\s+/g, "_")}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast({ title: "Extrato exportado com sucesso!" });
+    } catch (err: any) {
+      toast({ title: "Erro ao exportar", description: err.message, variant: "destructive" });
     }
   };
 
@@ -204,6 +269,8 @@ export default function Accounts() {
               onEdit={handleEdit}
               onDelete={(id) => setDeleteAccountId(id)}
               onImport={handleImport}
+              onExport={handleExport}
+              onReconcile={(acc) => setReconcilingAccount(acc)}
             />
           ))}
         </div>
@@ -234,6 +301,16 @@ export default function Accounts() {
             bankBalance={importBankBalance}
           />
         </>
+      )}
+
+      {reconcilingAccount && (
+        <AccountReconciliationModal
+          open={!!reconcilingAccount}
+          onOpenChange={(open) => !open && setReconcilingAccount(null)}
+          accountId={reconcilingAccount.id}
+          accountName={reconcilingAccount.name}
+          computedBalance={reconcilingAccount.computed_balance}
+        />
       )}
 
       {/* Delete Confirmation Dialog */}
