@@ -347,10 +347,12 @@ export function AccountReviewModal({
     setIsImporting(true);
 
     try {
-      // Filter out duplicates that user doesn't want to force import
+      // Separate items: new imports vs pending matches
       const itemsToImport = reviewItems.filter(
         (item) => !item.isDuplicate || item.forceImport
       );
+      const newItems = itemsToImport.filter(item => !item.matchedPendingId);
+      const pendingMatches = itemsToImport.filter(item => item.matchedPendingId);
 
       // First, create categorization rules for items marked to remember
       const rulesToCreate = itemsToImport
@@ -361,7 +363,6 @@ export function AccountReviewModal({
           is_corporate: item.is_corporate,
         }));
 
-      // Create corporate rules for items marked to remember as corporate
       const corporateRulesToCreate = itemsToImport
         .filter((item) => item.remember_corporate && item.is_corporate && item.corporate_keyword.trim())
         .map((item) => ({
@@ -370,18 +371,42 @@ export function AccountReviewModal({
           is_corporate: true,
         }));
 
-      // Create all rules
       for (const rule of [...rulesToCreate, ...corporateRulesToCreate]) {
         await createRule.mutateAsync(rule);
       }
 
-      // Calculate balance change
       let balanceChange = 0;
       let successCount = 0;
       let errorCount = 0;
+      let convertedCount = 0;
 
-      // Create transactions
-      for (const item of itemsToImport) {
+      // Convert pending matches to completed
+      for (const item of pendingMatches) {
+        try {
+          const { error } = await supabase
+            .from("transactions")
+            .update({
+              status: "completed",
+              is_provisional: false,
+              description: item.description,
+              original_description: item.original_description,
+              category_id: item.category_id || undefined,
+              is_corporate_expense: item.is_corporate,
+              is_card_payment: item.is_card_payment,
+            })
+            .eq("id", item.matchedPendingId!);
+          
+          if (error) throw error;
+          convertedCount++;
+          successCount++;
+        } catch (error) {
+          console.error("Error converting pending transaction:", error);
+          errorCount++;
+        }
+      }
+
+      // Create new transactions
+      for (const item of newItems) {
         try {
           await createTransaction.mutateAsync({
             description: item.description,
@@ -406,7 +431,6 @@ export function AccountReviewModal({
           });
           successCount++;
 
-          // Update balance calculation
           if (item.type === "income") {
             balanceChange += item.amount;
           } else {
@@ -418,19 +442,40 @@ export function AccountReviewModal({
         }
       }
 
-      // Update account balance
-      const { data: currentAccount } = await supabase
-        .from("accounts")
-        .select("current_balance")
-        .eq("id", accountId)
-        .single();
+      // If bank balance available, show sync dialog instead of incremental update
+      if (bankBalance != null) {
+        // Still apply incremental for now, then show sync option
+        const { data: currentAccount } = await supabase
+          .from("accounts")
+          .select("current_balance")
+          .eq("id", accountId)
+          .single();
 
-      if (currentAccount) {
-        const newBalance = Number(currentAccount.current_balance) + balanceChange;
-        await updateAccount.mutateAsync({
-          id: accountId,
-          current_balance: newBalance,
-        });
+        if (currentAccount) {
+          const newBalance = Number(currentAccount.current_balance) + balanceChange;
+          await updateAccount.mutateAsync({
+            id: accountId,
+            current_balance: newBalance,
+          });
+        }
+
+        // Show balance sync dialog
+        setShowBalanceSync(true);
+      } else {
+        // No bank balance - use incremental as before
+        const { data: currentAccount } = await supabase
+          .from("accounts")
+          .select("current_balance")
+          .eq("id", accountId)
+          .single();
+
+        if (currentAccount) {
+          const newBalance = Number(currentAccount.current_balance) + balanceChange;
+          await updateAccount.mutateAsync({
+            id: accountId,
+            current_balance: newBalance,
+          });
+        }
       }
 
       const skippedCount = reviewItems.length - itemsToImport.length;
@@ -438,6 +483,9 @@ export function AccountReviewModal({
       const totalRules = rulesToCreate.length + corporateRulesToCreate.length;
 
       let description = `${successCount} transações importadas`;
+      if (convertedCount > 0) {
+        description += ` • ${convertedCount} previstos convertidos`;
+      }
       if (errorCount > 0) {
         description += ` • ${errorCount} erros`;
       }
@@ -457,7 +505,9 @@ export function AccountReviewModal({
         variant: errorCount > 0 ? "destructive" : "default",
       });
 
-      onOpenChange(false);
+      if (!showBalanceSync) {
+        onOpenChange(false);
+      }
     } catch (error) {
       console.error("Error importing statement:", error);
       toast({
@@ -468,6 +518,30 @@ export function AccountReviewModal({
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const handleSyncBalance = async () => {
+    if (bankBalance == null) return;
+    try {
+      await updateAccount.mutateAsync({
+        id: accountId,
+        current_balance: bankBalance,
+      });
+      toast({
+        title: "Saldo sincronizado!",
+        description: `Saldo atualizado para R$ ${bankBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao sincronizar saldo",
+        variant: "destructive",
+      });
+    }
+    onOpenChange(false);
+  };
+
+  const handleKeepBalance = () => {
+    onOpenChange(false);
   };
 
   const incomeCategories = categories.filter(c => c.type === "income");
