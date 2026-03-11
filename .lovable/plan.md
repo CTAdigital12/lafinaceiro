@@ -1,50 +1,53 @@
+# Exportar Extrato + Conciliação OFX para Contas
 
+## 1. Exportar Extrato (dropdown do card de conta)
 
-## Diagnóstico
+Adicionar opção "Exportar Extrato" no menu de 3 pontinhos do `AccountCard`. Ao clicar, gera um arquivo CSV com todas as transações da conta (completed, do mês atual ou todas), com colunas: Data, Descrição, Valor, Tipo, Categoria.
 
-A migração anterior usou a fórmula errada. Ela calculou:
+**Arquivo:** `src/pages/Accounts.tsx`
 
-```
-initial_balance = current_balance - realized_net
-              = -442.84 - (-1312.20) = 869.36
-computed       = 869.36 + (-1312.20) = -442.84  ← errado
-```
+- Adicionar item "Exportar Extrato" no `DropdownMenu`
+- Função que busca transações da conta no Supabase, monta CSV ou XLSX e faz download via `Blob`/`URL.createObjectURL`
 
-O problema é que `current_balance` (-442.84) já estava corrompido por atualizações incrementais que incluíam transações pendentes/futuras. Não é possível derivar o saldo real (69.15) apenas a partir dos dados internos — o único valor correto veio do OFX do banco.
+## 2. Conciliação OFX para Contas Bancárias
 
-A fórmula correta para o `initial_balance` seria:
-```
-initial_balance = saldo_real_desejado - realized_net
-                = 69.15 - (-1312.20) = 1381.35
-computed        = 1381.35 + (-1312.20) = 69.15  ✓
-```
+Criar um modal de conciliação baseado no `SpreadsheetReconciliationModal` existente, adaptado para contas bancárias com suporte a OFX.
 
-## Plano
+### Novos arquivos:
 
-1. **Migração SQL corretiva**: Atualizar o `initial_balance` desta conta para `1381.35`. Como `current_balance` já estava errado antes de qualquer mudança nossa, não há como derivar o valor correto automaticamente — precisa ser o valor real do banco.
+`**src/components/accounts/AccountReconciliationModal.tsx**`
 
-   A migração vai usar a mesma lógica genérica: `initial_balance = current_balance - SUM(ALL transactions)` (usando TODAS as transações, não apenas realizadas), pois `current_balance` foi construído a partir de TODAS. Isso dá `1793.44`. Mas isso resulta em 481.24, não 69.15.
+- Modal que aceita upload de OFX (ou CSV/XLSX)
+- Usa `parseOFXWithBalance` para extrair transações do arquivo
+- Busca transações do sistema para a conta (filtrando por período do OFX)
+- Reutiliza `reconcileSpreadsheet` da lib existente para matching (data + valor)
+- Mesma UI de tabs: Conciliados, Divergentes, Apenas Banco, Apenas Sistema
+- Ações: Incluir, Excluir, Corrigir valor (idêntico ao credit card)
+- Se o OFX tiver saldo (`BALAMT`), mostrar comparação com saldo calculado do sistema e opção de sincronizar `initial_balance`
 
-   **Conclusão**: O `current_balance` original já estava errado por ~412 reais (drift acumulado de atualizações incrementais defeituosas anteriores). A única opção é corrigir pontualmente usando o valor do OFX.
+### Alterações:
 
-   Vou setar `initial_balance` = `current_balance - SUM(all_tx)` = `1793.44` **e depois** também atualizar `current_balance` para o valor correto do banco (69.15), recalculando `initial_balance = 69.15 - (-1312.20) = 1381.35`.
+`**src/pages/Accounts.tsx**`
 
-2. **Nenhuma mudança de código** — o hook `useAccounts` já calcula corretamente `computed_balance = initial_balance + realized_net`. O problema é puramente de dados.
+- Adicionar item "Conciliar Extrato" no dropdown do card
+- State para controlar abertura do modal de conciliação
+- Passar account selecionada para o modal
 
-## Seção técnica
+`**src/lib/spreadsheetReconciliation.ts**`
 
-Migração SQL:
-```sql
-UPDATE accounts a
-SET initial_balance = a.current_balance - COALESCE(
-  (SELECT SUM(CASE WHEN t.type='income' THEN t.amount ELSE -t.amount END)
-   FROM transactions t WHERE t.account_id = a.id), 0
-);
-```
+- Sem alterações — a lógica de matching já é genérica (data + valor com tolerância)
 
-Isso restaura `initial_balance` para o valor que existia antes da segunda migração (1793.44), mas o saldo exibido será 481.24 — ainda não 69.15, pois o `current_balance` original já era incorreto.
+### Fluxo do usuário:
 
-Para corrigir de verdade, o usuário precisa usar a funcionalidade de "Sincronizar Saldo" (que já existe) após reimportar o OFX, ou editar manualmente o saldo da conta para 69.15 (a lógica do AccountModal já converte para `initial_balance` correto).
+1. Clica nos 3 pontinhos → "Conciliar Extrato"
+2. Faz upload do OFX (ou CSV/XLSX)
+3. Vê resultado da conciliação em tabs
+4. Pode incluir transações faltantes, excluir extras, corrigir valores
+5. Se o OFX tiver saldo do banco, pode sincronizar o saldo
 
-**Alternativa direta**: Se o usuário confirmar que 69.15 é o saldo correto, posso executar uma migração que seta `initial_balance = 1381.35` diretamente para essa conta específica.
+### Seção técnica
 
+- Para buscar transações do sistema, o modal detecta o range de datas do arquivo OFX (min/max date das transações) e filtra `transactions` por `account_id` + `date` dentro desse range
+- As transações do OFX são convertidas para `SpreadsheetItem[]` para reutilizar `reconcileSpreadsheet`
+- Para incluir novas transações, usa `createTransaction` do `useTransactions` com `account_id` preenchido e `credit_card_id = null`
+- O saldo OFX é comparado com `computed_balance` da conta; sincronização ajusta `initial_balance = bankBalance - realized_net`
