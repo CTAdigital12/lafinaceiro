@@ -1,49 +1,32 @@
 
 
-# Corrigir Data das Parcelas em Debito em Conta
+# Fix: Conciliação com tiebreaker por descrição
 
 ## Problema
 
-Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
+O `reconcileSpreadsheet` faz matching greedy por data+valor. Quando há múltiplas transações na mesma data com o mesmo valor (ex: dois PIX de R$500 em 23/02), ele pode parear o item OFX com a transação errada do sistema, deixando a transação correta como "apenas no sistema".
 
-O bug esta na linha 220 do `TransactionModal.tsx`:
+No screenshot: 100 conciliados, 0 apenas banco, 3 apenas sistema — todos os itens OFX foram consumidos, mas 3 transações do sistema ficaram órfãs porque foram "roubadas" por outros itens OFX de mesma data/valor.
 
-```text
-const baseDate = date;  // usa data de compra (24/02)
-```
+## Solução
 
-As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
+Adicionar **similaridade de descrição como tiebreaker** no Pass 1 do `reconcileSpreadsheet`. Em vez de pegar o primeiro match por data+valor, coletar todos os candidatos e escolher o que tem descrição mais similar.
 
-## Solucao
+### Arquivo: `src/lib/spreadsheetReconciliation.ts`
 
-Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+**Pass 1 modificado:**
+1. Para cada item do spreadsheet, coletar TODOS os candidatos do sistema com mesma data+valor (dentro da tolerância)
+2. Se houver múltiplos candidatos, calcular similaridade de descrição (normalizada) entre o item e cada candidato, usando `original_description` quando disponível
+3. Escolher o candidato com maior similaridade
+4. Se houver apenas 1 candidato, usar diretamente (sem overhead)
 
-## Secao Tecnica
+**Nova função auxiliar:** `descriptionSimilarity(a: string, b: string): number`
+- Normaliza ambas as strings (lowercase, remove acentos, colapsa espaços)
+- Calcula overlap de palavras (Jaccard index simples)
+- Retorna 0-1
 
-### Arquivo: `src/components/modals/TransactionModal.tsx`
-
-Alterar linha 220:
-
-```typescript
-// Antes:
-const baseDate = date;
-
-// Depois:
-const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
-```
-
-Isso garante que:
-- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
-- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
-
-Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
-
-```typescript
-date: format(installmentDate, "yyyy-MM-dd"),
-due_date: format(installmentDate, "yyyy-MM-dd"),
-```
-
-Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
-
-Uma unica linha a alterar.
+### Impacto
+- Sem mudanças na interface ou no modal
+- A lógica é genérica, beneficia também a conciliação de cartões de crédito
+- Sem regressão: quando há apenas 1 candidato, o comportamento é idêntico ao atual
 
