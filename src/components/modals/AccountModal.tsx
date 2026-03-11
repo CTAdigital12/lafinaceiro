@@ -97,9 +97,26 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
     };
 
     if (isEditing && account) {
-      // When editing, update initial_balance to reflect new desired balance
-      await updateAccount.mutateAsync({ id: account.id, ...accountData, initial_balance: balanceValue });
+      // Compute initial_balance = desired_balance - sum(realized transactions)
+      // so that computed_balance = initial_balance + sum(realized) = desired_balance
+      const today = new Date().toISOString().split("T")[0];
+      const { data: txData } = await supabase
+        .from("transactions")
+        .select("type, amount, status, is_provisional, date")
+        .eq("account_id", account.id)
+        .eq("status", "completed")
+        .eq("is_provisional", false)
+        .lte("date", today);
+
+      const txNet = (txData || []).reduce((sum, tx) => {
+        const sign = tx.type === "income" ? 1 : -1;
+        return sum + sign * Number(tx.amount);
+      }, 0);
+
+      const newInitialBalance = balanceValue - txNet;
+      await updateAccount.mutateAsync({ id: account.id, ...accountData, initial_balance: newInitialBalance });
     } else {
+      // New account: no transactions yet, so initial_balance = entered balance
       await createAccount.mutateAsync(accountData);
     }
 
