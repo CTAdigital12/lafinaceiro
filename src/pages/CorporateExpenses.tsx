@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -213,22 +214,31 @@ export default function CorporateExpenses() {
     setSelectedIds(new Set());
   };
 
-  const exportToCSV = () => {
+  const getExportData = () => {
     const itemsToExport = selectedIds.size > 0 
       ? filteredTransactions.filter((t) => selectedIds.has(t.id))
       : filteredTransactions;
 
     if (itemsToExport.length === 0) {
       toast({ title: "Nenhum item para exportar", variant: "destructive" });
-      return;
+      return null;
     }
 
-    const headers = ["Data", "Descrição", "Categoria", "Cartão", "Status Reembolso", "Valor"];
     const statusLabels: Record<ReimbursementStatus, string> = {
       pending: "Pendente",
       requested: "Solicitado",
       reimbursed: "Reembolsado",
     };
+
+    return { itemsToExport, statusLabels };
+  };
+
+  const exportToCSV = () => {
+    const exportData = getExportData();
+    if (!exportData) return;
+    const { itemsToExport, statusLabels } = exportData;
+
+    const headers = ["Data", "Descrição", "Categoria", "Cartão", "Status Reembolso", "Valor"];
     const rows = itemsToExport.map((t) => [
       format(parseISO(t.date), "dd/MM/yyyy"),
       t.description,
@@ -238,7 +248,6 @@ export default function CorporateExpenses() {
       t.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
     ]);
 
-    // Add total row
     const total = itemsToExport.reduce((sum, t) => sum + Number(t.amount), 0);
     rows.push(["", "", "", "", "TOTAL", total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })]);
 
@@ -254,6 +263,49 @@ export default function CorporateExpenses() {
     link.download = `despesas-empresa-${format(new Date(selectedYear, selectedMonth - 1), "yyyy-MM")}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+
+    toast({ title: `${itemsToExport.length} itens exportados!` });
+  };
+
+  const exportToXLSX = () => {
+    const exportData = getExportData();
+    if (!exportData) return;
+    const { itemsToExport, statusLabels } = exportData;
+
+    const rows = itemsToExport.map((t) => ({
+      "Data": format(parseISO(t.date), "dd/MM/yyyy"),
+      "Descrição": t.description,
+      "Categoria": t.categories?.name || "Sem categoria",
+      "Cartão": t.credit_cards ? `${t.credit_cards.name} (*${t.credit_cards.last_digits})` : "N/A",
+      "Status Reembolso": statusLabels[t.reimbursement_status] || "Pendente",
+      "Valor": Number(t.amount),
+    }));
+
+    const total = itemsToExport.reduce((sum, t) => sum + Number(t.amount), 0);
+    rows.push({
+      "Data": "",
+      "Descrição": "",
+      "Categoria": "",
+      "Cartão": "",
+      "Status Reembolso": "TOTAL",
+      "Valor": total,
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    
+    // Set column widths
+    ws["!cols"] = [
+      { wch: 12 }, // Data
+      { wch: 40 }, // Descrição
+      { wch: 20 }, // Categoria
+      { wch: 25 }, // Cartão
+      { wch: 18 }, // Status
+      { wch: 15 }, // Valor
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Despesas Corporativas");
+    XLSX.writeFile(wb, `despesas-empresa-${format(new Date(selectedYear, selectedMonth - 1), "yyyy-MM")}.xlsx`);
 
     toast({ title: `${itemsToExport.length} itens exportados!` });
   };
@@ -275,10 +327,24 @@ export default function CorporateExpenses() {
             </div>
           </div>
         </div>
-        <Button className="gap-2" onClick={exportToCSV}>
-          <Download className="h-4 w-4" />
-          Exportar {selectedIds.size > 0 ? `(${selectedIds.size})` : "Tudo"}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="gap-2">
+              <Download className="h-4 w-4" />
+              Exportar {selectedIds.size > 0 ? `(${selectedIds.size})` : "Tudo"}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={exportToXLSX}>
+              <FileText className="h-4 w-4 mr-2" />
+              Exportar XLSX
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToCSV}>
+              <FileText className="h-4 w-4 mr-2" />
+              Exportar CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Month Navigation & Filters */}
