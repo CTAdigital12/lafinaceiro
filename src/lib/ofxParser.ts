@@ -7,6 +7,34 @@ export interface OFXTransaction {
   type: "income" | "expense";
 }
 
+export interface OFXParseResult {
+  transactions: OFXTransaction[];
+  balance: number | null;
+}
+
+export function parseOFXWithBalance(content: string): OFXParseResult {
+  const transactions = parseOFX(content);
+  const balance = extractBalance(content);
+  return { transactions, balance };
+}
+
+function extractBalance(content: string): number | null {
+  // Try <LEDGERBAL><BALAMT>value
+  const ledgerBalRegex = /<LEDGERBAL>[\s\S]*?<BALAMT>\s*([^\s<\r\n]+)/i;
+  const match = content.match(ledgerBalRegex);
+  if (match) {
+    const val = parseFloat(match[1].replace(",", "."));
+    if (!isNaN(val)) return val;
+  }
+  // Fallback: any <BALAMT> tag
+  const fallback = content.match(/<BALAMT>\s*([^\s<\r\n]+)/i);
+  if (fallback) {
+    const val = parseFloat(fallback[1].replace(",", "."));
+    if (!isNaN(val)) return val;
+  }
+  return null;
+}
+
 export function parseOFX(content: string): OFXTransaction[] {
   const transactions: OFXTransaction[] = [];
   

@@ -159,7 +159,7 @@ export function AccountImportModal({
       }
 
       if (items.length > 0) {
-        onImportComplete(items);
+        onImportComplete(items, bankBalance);
         onOpenChange(false);
         resetState();
       } else {

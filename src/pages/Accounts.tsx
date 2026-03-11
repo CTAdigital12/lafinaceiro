@@ -231,6 +231,7 @@ export default function Accounts() {
             items={importedItems}
             accountId={importingAccount.id}
             accountName={importingAccount.name}
+            bankBalance={importBankBalance}
           />
         </>
       )}
