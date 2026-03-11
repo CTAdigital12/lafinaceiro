@@ -1,0 +1,1 @@
+UPDATE accounts SET initial_balance = 869.35 WHERE id = '7bc9037a-696e-466f-a184-ffdc3a795ff1';
