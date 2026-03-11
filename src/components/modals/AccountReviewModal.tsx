@@ -60,6 +60,28 @@ const isCardPaymentDescription = (description: string): boolean => {
   return CARD_PAYMENT_PATTERNS.some(pattern => upperDesc.includes(pattern));
 };
 
+// Helper component to show current system balance in sync dialog
+function SyncSystemBalance({ accountId }: { accountId: string }) {
+  const [balance, setBalance] = useState<number | null>(null);
+  useEffect(() => {
+    supabase
+      .from("accounts")
+      .select("current_balance")
+      .eq("id", accountId)
+      .single()
+      .then(({ data }) => {
+        if (data) setBalance(Number(data.current_balance));
+      });
+  }, [accountId]);
+  
+  if (balance === null) return <Loader2 className="h-4 w-4 animate-spin mx-auto" />;
+  return (
+    <p className={cn("text-lg font-bold", balance >= 0 ? "text-foreground" : "text-expense")}>
+      R$ {balance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+    </p>
+  );
+}
+
 interface ReviewItem extends AccountImportedItem {
   category_id: string | null;
   original_category_id: string | null;
