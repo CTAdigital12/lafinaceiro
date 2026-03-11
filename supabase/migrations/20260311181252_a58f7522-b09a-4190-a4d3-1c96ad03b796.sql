@@ -1,0 +1,1 @@
+DELETE FROM transactions WHERE id = '51003e0d-c826-4949-bc75-2154a41b0f1f';
