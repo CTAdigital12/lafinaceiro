@@ -91,6 +91,7 @@ export function AccountReconciliationModal({
   const [refundItems, setRefundItems] = useState<Set<number>>(new Set());
   const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
   const [syncingBalance, setSyncingBalance] = useState(false);
+  const [reconcileTarget, setReconcileTarget] = useState<SystemTransaction | null>(null);
 
   const fetchSystemTransactions = useCallback(async (minDate: string, maxDate: string): Promise<SystemTransaction[]> => {
     const { data, error } = await supabase
