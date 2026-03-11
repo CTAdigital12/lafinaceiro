@@ -91,6 +91,7 @@ export function AccountReviewModal({
   items,
   accountId,
   accountName,
+  bankBalance,
 }: AccountReviewModalProps) {
   const { user } = useAuth();
   const { categories, createCategory } = useCategories();
