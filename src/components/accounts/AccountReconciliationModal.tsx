@@ -670,7 +670,16 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
             <TableCell className="whitespace-nowrap text-sm">
               {format(new Date(row.date + "T12:00:00"), "dd/MM/yyyy")}
             </TableCell>
-            <TableCell className="text-sm max-w-[250px] truncate">{row.description}</TableCell>
+            <TableCell className="text-sm max-w-[250px] truncate">
+              <span className="flex items-center gap-1.5">
+                {row.description}
+                {row.systemTx?.is_provisional && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-chart-4/10 text-chart-4 border-chart-4/20">
+                    Provisória
+                  </Badge>
+                )}
+              </span>
+            </TableCell>
             <TableCell className="text-right font-mono text-sm">
               {row.spreadsheetAmount !== undefined ? formatCurrency(row.spreadsheetAmount) : "—"}
             </TableCell>
