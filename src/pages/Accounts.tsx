@@ -131,8 +131,9 @@ export default function Accounts() {
     setIsImportModalOpen(true);
   };
 
-  const handleImportComplete = (items: AccountImportedItem[]) => {
+  const handleImportComplete = (items: AccountImportedItem[], bankBalance?: number | null) => {
     setImportedItems(items);
+    setImportBankBalance(bankBalance ?? null);
     setIsImportModalOpen(false);
     setIsReviewModalOpen(true);
   };
