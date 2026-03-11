@@ -512,7 +512,7 @@ export function AccountReconciliationModal({
 
       {/* Reconcile provisional with bank item */}
       <Dialog open={!!reconcileTarget} onOpenChange={(o) => !o && setReconcileTarget(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Link className="h-4 w-4" />
@@ -527,7 +527,7 @@ export function AccountReconciliationModal({
                 <p className="font-mono">{formatCurrency(Number(reconcileTarget.amount))} — {format(new Date(reconcileTarget.date + "T12:00:00"), "dd/MM/yyyy")}</p>
               </div>
               <p className="text-sm text-muted-foreground">Selecione o item do extrato bancário correspondente:</p>
-              <ScrollArea className="max-h-[300px]">
+              <ScrollArea className="h-[40vh] border rounded-lg">
                 <div className="space-y-1">
                   {(() => {
                     // Build list of ALL bank items (matched + discrepancies + unmatched)
