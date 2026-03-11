@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format, subMonths, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText, Lock, Unlock, Clock } from "lucide-react";
+import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText, Lock, Unlock, Clock, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -12,6 +12,7 @@ import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import { CloseInvoiceModal } from "./CloseInvoiceModal";
 import { ReopenInvoiceModal } from "./ReopenInvoiceModal";
 import { ClosedInvoiceBanner } from "./ClosedInvoiceBanner";
+import { SpreadsheetReconciliationModal } from "./SpreadsheetReconciliationModal";
 import { useInvoiceCycles, type InvoiceStatus } from "@/hooks/useInvoiceCycles";
 
 interface ReconciliationCardProps {
