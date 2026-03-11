@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { detectAccountDuplicates } from "@/lib/deduplication";
 import {
   Dialog,
@@ -60,6 +60,28 @@ const isCardPaymentDescription = (description: string): boolean => {
   return CARD_PAYMENT_PATTERNS.some(pattern => upperDesc.includes(pattern));
 };
 
+// Helper component to show current system balance in sync dialog
+function SyncSystemBalance({ accountId }: { accountId: string }) {
+  const [balance, setBalance] = useState<number | null>(null);
+  useEffect(() => {
+    supabase
+      .from("accounts")
+      .select("current_balance")
+      .eq("id", accountId)
+      .single()
+      .then(({ data }) => {
+        if (data) setBalance(Number(data.current_balance));
+      });
+  }, [accountId]);
+  
+  if (balance === null) return <Loader2 className="h-4 w-4 animate-spin mx-auto" />;
+  return (
+    <p className={cn("text-lg font-bold", balance >= 0 ? "text-foreground" : "text-expense")}>
+      R$ {balance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+    </p>
+  );
+}
+
 interface ReviewItem extends AccountImportedItem {
   category_id: string | null;
   original_category_id: string | null;
@@ -72,6 +94,8 @@ interface ReviewItem extends AccountImportedItem {
   corporate_keyword: string;
   is_card_payment: boolean;
   original_description: string;
+  matchedPendingId: string | null;
+  matchedPendingDescription: string | null;
 }
 
 interface AccountReviewModalProps {
@@ -80,6 +104,7 @@ interface AccountReviewModalProps {
   items: AccountImportedItem[];
   accountId: string;
   accountName: string;
+  bankBalance?: number | null;
 }
 
 export function AccountReviewModal({
@@ -88,6 +113,7 @@ export function AccountReviewModal({
   items,
   accountId,
   accountName,
+  bankBalance,
 }: AccountReviewModalProps) {
   const { user } = useAuth();
   const { categories, createCategory } = useCategories();
@@ -98,6 +124,7 @@ export function AccountReviewModal({
 
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [showBalanceSync, setShowBalanceSync] = useState(false);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [openCategoryIndex, setOpenCategoryIndex] = useState<number | null>(null);
   const [categorySearch, setCategorySearch] = useState("");
@@ -137,21 +164,45 @@ export function AccountReviewModal({
         // Fetch existing transactions for this account
         const { data: existingTransactions } = await supabase
           .from("transactions")
-          .select("date, amount, description, original_description")
+          .select("id, date, amount, description, original_description, status, is_provisional")
           .eq("account_id", accountId);
 
         const existing = existingTransactions || [];
 
-        // Use robust deduplication
+        // Separate pending/provisional transactions for matching
+        const pendingTransactions = existing.filter(tx => tx.status === 'pending' || tx.is_provisional);
+        const completedTransactions = existing.filter(tx => tx.status === 'completed' && !tx.is_provisional);
+
+        // Use robust deduplication against completed transactions only
         const duplicateIndices = detectAccountDuplicates(
           items.map(i => ({ date: i.date, description: i.description, amount: i.amount })),
-          existing.map(tx => ({ date: tx.date, amount: Number(tx.amount), description: tx.description, original_description: tx.original_description }))
+          completedTransactions.map(tx => ({ date: tx.date, amount: Number(tx.amount), description: tx.description, original_description: tx.original_description }))
         );
+
+        // Track which pending transactions have already been matched
+        const usedPendingIds = new Set<string>();
 
         const itemsWithCategories = items.map((item, index) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
           const isCorporate = findCorporateForDescription(item.description);
           const isDuplicate = duplicateIndices.has(index);
+
+          // Try to match against pending/provisional transactions
+          let matchedPendingId: string | null = null;
+          let matchedPendingDescription: string | null = null;
+          if (!isDuplicate) {
+            const pendingMatch = pendingTransactions.find(tx => {
+              if (usedPendingIds.has(tx.id)) return false;
+              const sameDate = tx.date === item.date;
+              const sameAmount = Math.abs(Number(tx.amount) - item.amount) < 0.05;
+              return sameDate && sameAmount;
+            });
+            if (pendingMatch) {
+              matchedPendingId = pendingMatch.id;
+              matchedPendingDescription = pendingMatch.description;
+              usedPendingIds.add(pendingMatch.id);
+            }
+          }
 
           return {
             ...item,
@@ -166,13 +217,14 @@ export function AccountReviewModal({
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
             original_description: item.description,
+            matchedPendingId,
+            matchedPendingDescription,
           };
         });
         
         setReviewItems(itemsWithCategories);
       } catch (error) {
         console.error("Error checking duplicates:", error);
-        // Initialize without duplicate checking if it fails
         const itemsWithCategories = items.map((item) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
           const isCorporate = findCorporateForDescription(item.description);
@@ -189,6 +241,8 @@ export function AccountReviewModal({
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
             original_description: item.description,
+            matchedPendingId: null,
+            matchedPendingDescription: null,
           };
         });
         setReviewItems(itemsWithCategories);
@@ -315,10 +369,12 @@ export function AccountReviewModal({
     setIsImporting(true);
 
     try {
-      // Filter out duplicates that user doesn't want to force import
+      // Separate items: new imports vs pending matches
       const itemsToImport = reviewItems.filter(
         (item) => !item.isDuplicate || item.forceImport
       );
+      const newItems = itemsToImport.filter(item => !item.matchedPendingId);
+      const pendingMatches = itemsToImport.filter(item => item.matchedPendingId);
 
       // First, create categorization rules for items marked to remember
       const rulesToCreate = itemsToImport
@@ -329,7 +385,6 @@ export function AccountReviewModal({
           is_corporate: item.is_corporate,
         }));
 
-      // Create corporate rules for items marked to remember as corporate
       const corporateRulesToCreate = itemsToImport
         .filter((item) => item.remember_corporate && item.is_corporate && item.corporate_keyword.trim())
         .map((item) => ({
@@ -338,18 +393,42 @@ export function AccountReviewModal({
           is_corporate: true,
         }));
 
-      // Create all rules
       for (const rule of [...rulesToCreate, ...corporateRulesToCreate]) {
         await createRule.mutateAsync(rule);
       }
 
-      // Calculate balance change
       let balanceChange = 0;
       let successCount = 0;
       let errorCount = 0;
+      let convertedCount = 0;
 
-      // Create transactions
-      for (const item of itemsToImport) {
+      // Convert pending matches to completed
+      for (const item of pendingMatches) {
+        try {
+          const { error } = await supabase
+            .from("transactions")
+            .update({
+              status: "completed",
+              is_provisional: false,
+              description: item.description,
+              original_description: item.original_description,
+              category_id: item.category_id || undefined,
+              is_corporate_expense: item.is_corporate,
+              is_card_payment: item.is_card_payment,
+            })
+            .eq("id", item.matchedPendingId!);
+          
+          if (error) throw error;
+          convertedCount++;
+          successCount++;
+        } catch (error) {
+          console.error("Error converting pending transaction:", error);
+          errorCount++;
+        }
+      }
+
+      // Create new transactions
+      for (const item of newItems) {
         try {
           await createTransaction.mutateAsync({
             description: item.description,
@@ -374,7 +453,6 @@ export function AccountReviewModal({
           });
           successCount++;
 
-          // Update balance calculation
           if (item.type === "income") {
             balanceChange += item.amount;
           } else {
@@ -386,19 +464,40 @@ export function AccountReviewModal({
         }
       }
 
-      // Update account balance
-      const { data: currentAccount } = await supabase
-        .from("accounts")
-        .select("current_balance")
-        .eq("id", accountId)
-        .single();
+      // If bank balance available, show sync dialog instead of incremental update
+      if (bankBalance != null) {
+        // Still apply incremental for now, then show sync option
+        const { data: currentAccount } = await supabase
+          .from("accounts")
+          .select("current_balance")
+          .eq("id", accountId)
+          .single();
 
-      if (currentAccount) {
-        const newBalance = Number(currentAccount.current_balance) + balanceChange;
-        await updateAccount.mutateAsync({
-          id: accountId,
-          current_balance: newBalance,
-        });
+        if (currentAccount) {
+          const newBalance = Number(currentAccount.current_balance) + balanceChange;
+          await updateAccount.mutateAsync({
+            id: accountId,
+            current_balance: newBalance,
+          });
+        }
+
+        // Show balance sync dialog
+        setShowBalanceSync(true);
+      } else {
+        // No bank balance - use incremental as before
+        const { data: currentAccount } = await supabase
+          .from("accounts")
+          .select("current_balance")
+          .eq("id", accountId)
+          .single();
+
+        if (currentAccount) {
+          const newBalance = Number(currentAccount.current_balance) + balanceChange;
+          await updateAccount.mutateAsync({
+            id: accountId,
+            current_balance: newBalance,
+          });
+        }
       }
 
       const skippedCount = reviewItems.length - itemsToImport.length;
@@ -406,6 +505,9 @@ export function AccountReviewModal({
       const totalRules = rulesToCreate.length + corporateRulesToCreate.length;
 
       let description = `${successCount} transações importadas`;
+      if (convertedCount > 0) {
+        description += ` • ${convertedCount} previstos convertidos`;
+      }
       if (errorCount > 0) {
         description += ` • ${errorCount} erros`;
       }
@@ -425,7 +527,9 @@ export function AccountReviewModal({
         variant: errorCount > 0 ? "destructive" : "default",
       });
 
-      onOpenChange(false);
+      if (!showBalanceSync) {
+        onOpenChange(false);
+      }
     } catch (error) {
       console.error("Error importing statement:", error);
       toast({
@@ -436,6 +540,30 @@ export function AccountReviewModal({
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const handleSyncBalance = async () => {
+    if (bankBalance == null) return;
+    try {
+      await updateAccount.mutateAsync({
+        id: accountId,
+        current_balance: bankBalance,
+      });
+      toast({
+        title: "Saldo sincronizado!",
+        description: `Saldo atualizado para R$ ${bankBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao sincronizar saldo",
+        variant: "destructive",
+      });
+    }
+    onOpenChange(false);
+  };
+
+  const handleKeepBalance = () => {
+    onOpenChange(false);
   };
 
   const incomeCategories = categories.filter(c => c.type === "income");
@@ -458,6 +586,50 @@ export function AccountReviewModal({
   const corporateCount = reviewItems.filter(
     (item) => item.is_corporate && item.type === "expense" && (!item.isDuplicate || item.forceImport)
   ).length;
+
+  const pendingMatchCount = reviewItems.filter(item => item.matchedPendingId && (!item.isDuplicate || item.forceImport)).length;
+
+  // Balance sync view after import
+  if (showBalanceSync && bankBalance != null) {
+    return (
+      <Dialog open={open} onOpenChange={() => onOpenChange(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-primary" />
+              Sincronizar Saldo
+            </DialogTitle>
+            <DialogDescription>
+              O saldo do banco no extrato é diferente do saldo registrado no sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="border rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Saldo do Banco</p>
+                <p className="text-lg font-bold text-foreground">
+                  R$ {bankBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="border rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Saldo do Sistema</p>
+                <SyncSystemBalance accountId={accountId} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleKeepBalance}>
+                Manter Saldo Atual
+              </Button>
+              <Button className="flex-1" onClick={handleSyncBalance}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sincronizar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={isImporting ? () => {} : onOpenChange}>
@@ -484,6 +656,15 @@ export function AccountReviewModal({
             <Ban className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>
               {duplicateCount} {duplicateCount === 1 ? "transação já importada será ignorada" : "transações já importadas serão ignoradas"}
+            </span>
+          </div>
+        )}
+
+        {!isCheckingDuplicates && pendingMatchCount > 0 && (
+          <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-accent/50 text-accent-foreground text-sm">
+            <ArrowRightLeft className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>
+              {pendingMatchCount} {pendingMatchCount === 1 ? "lançamento previsto será convertido em realizado" : "lançamentos previstos serão convertidos em realizados"}
             </span>
           </div>
         )}
@@ -549,6 +730,12 @@ export function AccountReviewModal({
                           <Badge variant="outline" className="text-xs flex-shrink-0 bg-purple-500/10 text-purple-600 border-purple-500/30">
                             <CreditCard className="h-3 w-3 mr-1" />
                             Pag. Fatura
+                          </Badge>
+                        )}
+                        {item.matchedPendingId && !item.isDuplicate && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0 bg-accent text-accent-foreground border-accent">
+                            <ArrowRightLeft className="h-3 w-3 mr-1" />
+                            Previsto: {item.matchedPendingDescription}
                           </Badge>
                         )}
                       </div>

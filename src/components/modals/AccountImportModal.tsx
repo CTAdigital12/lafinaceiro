@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { parseOFX, OFXTransaction } from "@/lib/ofxParser";
+import { parseOFXWithBalance, OFXTransaction } from "@/lib/ofxParser";
 import { parseCSV, CSVTransaction } from "@/lib/csvParser";
 
 interface AccountImportModalProps {
@@ -17,7 +17,7 @@ interface AccountImportModalProps {
   onOpenChange: (open: boolean) => void;
   accountId: string;
   accountName: string;
-  onImportComplete: (items: AccountImportedItem[]) => void;
+  onImportComplete: (items: AccountImportedItem[], bankBalance?: number | null) => void;
 }
 
 export interface AccountImportedItem {
@@ -104,10 +104,13 @@ export function AccountImportModal({
       const fileType = getFileType(file);
       let items: AccountImportedItem[] = [];
 
+      let bankBalance: number | null = null;
+
       if (fileType === "ofx") {
         const content = await file.text();
-        const ofxItems = parseOFX(content);
-        items = ofxItems.map((item: OFXTransaction) => ({
+        const result = parseOFXWithBalance(content);
+        bankBalance = result.balance;
+        items = result.transactions.map((item: OFXTransaction) => ({
           id: item.id,
           date: item.date,
           description: item.description,
@@ -156,7 +159,7 @@ export function AccountImportModal({
       }
 
       if (items.length > 0) {
-        onImportComplete(items);
+        onImportComplete(items, bankBalance);
         onOpenChange(false);
         resetState();
       } else {

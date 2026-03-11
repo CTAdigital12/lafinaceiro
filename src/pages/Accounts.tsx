@@ -110,6 +110,7 @@ export default function Accounts() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [importedItems, setImportedItems] = useState<AccountImportedItem[]>([]);
+  const [importBankBalance, setImportBankBalance] = useState<number | null>(null);
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
   const { accounts, isLoading, totalBalance, deleteAccount } = useAccounts();
 
@@ -130,8 +131,9 @@ export default function Accounts() {
     setIsImportModalOpen(true);
   };
 
-  const handleImportComplete = (items: AccountImportedItem[]) => {
+  const handleImportComplete = (items: AccountImportedItem[], bankBalance?: number | null) => {
     setImportedItems(items);
+    setImportBankBalance(bankBalance ?? null);
     setIsImportModalOpen(false);
     setIsReviewModalOpen(true);
   };
@@ -140,6 +142,7 @@ export default function Accounts() {
     setIsReviewModalOpen(open);
     if (!open) {
       setImportedItems([]);
+      setImportBankBalance(null);
       setImportingAccount(null);
     }
   };
@@ -228,6 +231,7 @@ export default function Accounts() {
             items={importedItems}
             accountId={importingAccount.id}
             accountName={importingAccount.name}
+            bankBalance={importBankBalance}
           />
         </>
       )}
