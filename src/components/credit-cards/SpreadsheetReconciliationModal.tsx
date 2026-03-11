@@ -319,7 +319,7 @@ export function SpreadsheetReconciliationModal({
                   <TabsTrigger value="extra">Apenas Sistema ({tabCounts.extra})</TabsTrigger>
                 </TabsList>
 
-                <ScrollArea className="flex-1 min-h-0 mt-3" style={{ maxHeight: "calc(90vh - 280px)" }}>
+                <ScrollArea className="mt-3 h-[calc(90vh-280px)] min-h-[280px]">
                   {["all", "matched", "discrepancies", "missing", "extra"].map((tab) => (
                     <TabsContent key={tab} value={tab} className="mt-0">
                       <ResultTable
