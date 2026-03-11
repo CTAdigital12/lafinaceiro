@@ -509,6 +509,51 @@ export function AccountReconciliationModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reconcile provisional with bank item */}
+      <Dialog open={!!reconcileTarget} onOpenChange={(o) => !o && setReconcileTarget(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link className="h-4 w-4" />
+              Conciliar Transação Provisória
+            </DialogTitle>
+          </DialogHeader>
+          {reconcileTarget && (
+            <div className="space-y-3">
+              <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
+                <p className="text-muted-foreground">Transação provisória:</p>
+                <p className="font-medium">{reconcileTarget.description}</p>
+                <p className="font-mono">{formatCurrency(Number(reconcileTarget.amount))} — {format(new Date(reconcileTarget.date + "T12:00:00"), "dd/MM/yyyy")}</p>
+              </div>
+              <p className="text-sm text-muted-foreground">Selecione o item do extrato bancário correspondente:</p>
+              <ScrollArea className="max-h-[300px]">
+                <div className="space-y-1">
+                  {result?.onlyInSpreadsheet.map((item, i) => (
+                    <button
+                      key={i}
+                      className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors text-sm"
+                      disabled={processingIds.has(`reconcile-${reconcileTarget.id}`)}
+                      onClick={() => handleReconcileProvisional(reconcileTarget, item)}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium truncate">{item.description}</p>
+                          <p className="text-muted-foreground">{format(new Date(item.date + "T12:00:00"), "dd/MM/yyyy")}</p>
+                        </div>
+                        <span className="font-mono font-semibold">{formatCurrency(item.amount)}</span>
+                      </div>
+                    </button>
+                  ))}
+                  {(!result?.onlyInSpreadsheet.length) && (
+                    <p className="text-center text-muted-foreground py-4">Nenhum item disponível no extrato.</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
