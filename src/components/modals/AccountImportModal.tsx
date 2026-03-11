@@ -104,10 +104,13 @@ export function AccountImportModal({
       const fileType = getFileType(file);
       let items: AccountImportedItem[] = [];
 
+      let bankBalance: number | null = null;
+
       if (fileType === "ofx") {
         const content = await file.text();
-        const ofxItems = parseOFX(content);
-        items = ofxItems.map((item: OFXTransaction) => ({
+        const result = parseOFXWithBalance(content);
+        bankBalance = result.balance;
+        items = result.transactions.map((item: OFXTransaction) => ({
           id: item.id,
           date: item.date,
           description: item.description,
