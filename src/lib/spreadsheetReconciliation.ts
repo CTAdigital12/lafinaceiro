@@ -38,6 +38,29 @@ export interface ReconciliationResult {
 const TOLERANCE = 0.05;
 
 /**
+ * Normalise and compute Jaccard similarity between two description strings.
+ */
+function descriptionSimilarity(a: string, b: string): number {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const wordsA = new Set(norm(a).split(" ").filter(Boolean));
+  const wordsB = new Set(norm(b).split(" ").filter(Boolean));
+  if (wordsA.size === 0 && wordsB.size === 0) return 1;
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
+  let intersection = 0;
+  for (const w of wordsA) if (wordsB.has(w)) intersection++;
+  return intersection / (wordsA.size + wordsB.size - intersection);
+}
+
+/**
  * Compare spreadsheet items against system transactions using 2-pass matching.
  */
 export function reconcileSpreadsheet(
@@ -50,22 +73,40 @@ export function reconcileSpreadsheet(
   const matched: ReconciliationResult["matched"] = [];
   const valueDiscrepancies: ReconciliationResult["valueDiscrepancies"] = [];
 
-  // Pass 1: Exact match (date + amount)
+  // Pass 1: Exact match (date + amount) with description similarity tiebreaker
   for (let si = 0; si < spreadsheetItems.length; si++) {
     const item = spreadsheetItems[si];
     const normalizedItemDate = normalizeDate(item.date);
 
+    // Collect all candidates with matching date + amount
+    const candidates: SystemTransaction[] = [];
     for (const tx of systemTransactions) {
       if (usedSystemIds.has(tx.id)) continue;
-
       const normalizedTxDate = normalizeDate(tx.date);
-
       if (normalizedItemDate === normalizedTxDate && Math.abs(item.amount - Number(tx.amount)) <= TOLERANCE) {
-        matched.push({ spreadsheet: item, transaction: tx });
-        usedSpreadsheetIndices.add(si);
-        usedSystemIds.add(tx.id);
-        break;
+        candidates.push(tx);
       }
+    }
+
+    if (candidates.length === 1) {
+      matched.push({ spreadsheet: item, transaction: candidates[0] });
+      usedSpreadsheetIndices.add(si);
+      usedSystemIds.add(candidates[0].id);
+    } else if (candidates.length > 1) {
+      // Pick the candidate with the highest description similarity
+      let best = candidates[0];
+      let bestScore = -1;
+      for (const tx of candidates) {
+        const txDesc = tx.original_description || tx.description;
+        const score = descriptionSimilarity(item.description, txDesc);
+        if (score > bestScore) {
+          bestScore = score;
+          best = tx;
+        }
+      }
+      matched.push({ spreadsheet: item, transaction: best });
+      usedSpreadsheetIndices.add(si);
+      usedSystemIds.add(best.id);
     }
   }
 
