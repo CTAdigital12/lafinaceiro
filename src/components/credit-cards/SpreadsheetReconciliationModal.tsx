@@ -502,42 +502,75 @@ function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect
               {row.systemAmount !== undefined ? formatCurrency(row.systemAmount) : "—"}
             </TableCell>
             <TableCell className="text-right">
-              {row.type === "missing" && row.spreadsheetItem && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-primary"
-                  disabled={processingIds.has(`add-${row.spreadsheetItem.rowIndex}`)}
-                  onClick={() => onAdd(row.spreadsheetItem!)}
-                >
-                  <Plus className="h-3 w-3 mr-1" /> Incluir
-                </Button>
-              )}
-              {row.type === "extra" && row.systemTx && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-destructive"
-                  disabled={processingIds.has(`del-${row.systemTx.id}`)}
-                  onClick={() => onDelete(row.systemTx!)}
-                >
-                  <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                </Button>
-              )}
-              {row.type === "discrepancy" && row.spreadsheetItem && row.systemTx && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-chart-4"
-                  disabled={processingIds.has(`fix-${row.systemTx.id}`)}
-                  onClick={() => onCorrect(row.spreadsheetItem!, row.systemTx!)}
-                >
-                  <PenLine className="h-3 w-3 mr-1" /> Corrigir
-                </Button>
-              )}
-              {row.type === "matched" && (
-                <span className="text-xs text-muted-foreground">—</span>
-              )}
+              <div className="flex items-center justify-end gap-1">
+                {/* Refund toggle for missing and discrepancy items with spreadsheetItem */}
+                {(row.type === "missing" || row.type === "discrepancy") && row.spreadsheetItem && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("h-7 w-7 p-0", refundItems.has(row.spreadsheetItem.rowIndex) && "text-income bg-income/10")}
+                    title={refundItems.has(row.spreadsheetItem.rowIndex) ? "Desmarcar extorno" : "Marcar como extorno"}
+                    onClick={() => onToggleRefund(row.spreadsheetItem!.rowIndex)}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                  </Button>
+                )}
+                {row.type === "missing" && row.spreadsheetItem && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-primary"
+                    disabled={processingIds.has(`add-${row.spreadsheetItem.rowIndex}`)}
+                    onClick={() => onAdd(row.spreadsheetItem!)}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Incluir
+                  </Button>
+                )}
+                {row.type === "extra" && row.systemTx && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-destructive"
+                    disabled={processingIds.has(`del-${row.systemTx.id}`)}
+                    onClick={() => onDelete(row.systemTx!)}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                  </Button>
+                )}
+                {row.type === "discrepancy" && row.spreadsheetItem && row.systemTx && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-chart-4"
+                      disabled={processingIds.has(`fix-${row.systemTx.id}`)}
+                      onClick={() => onCorrect(row.spreadsheetItem!, row.systemTx!)}
+                    >
+                      <PenLine className="h-3 w-3 mr-1" /> Corrigir
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-primary"
+                      disabled={processingIds.has(`add-${row.spreadsheetItem.rowIndex}`)}
+                      onClick={() => onAdd(row.spreadsheetItem!)}
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Incluir
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={() => onIgnore(row.key)}
+                    >
+                      <EyeOff className="h-3 w-3 mr-1" /> Ignorar
+                    </Button>
+                  </>
+                )}
+                {row.type === "matched" && (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
             </TableCell>
           </TableRow>
         ))}
