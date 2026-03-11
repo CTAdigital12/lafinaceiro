@@ -712,7 +712,7 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
                 )}
                 {row.type === "extra" && row.systemTx && (
                   <>
-                    {row.systemTx.is_provisional && (
+                    {(row.systemTx.is_provisional || row.systemTx.status === "pending") && (
                       <Button
                         variant="ghost"
                         size="sm"
