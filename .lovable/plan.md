@@ -1,49 +1,40 @@
 
+Objetivo: corrigir o saldo exibido para R$ 69,15 agora e evitar nova divergência no cálculo global de saldo.
 
-# Corrigir Data das Parcelas em Debito em Conta
+Diagnóstico confirmado
+- Hoje o app calcula: `saldo_exibido = initial_balance + soma(realizados)`.
+- Na sua conta:
+  - `initial_balance = 1793,44`
+  - `soma(realizados) = -1312,20`
+  - saldo exibido = `481,24`
+- Para exibir R$ 69,15 com a regra atual (excluir pendentes/provisórios/futuros), o `initial_balance` correto desta conta precisa ser **1381,35**.
 
-## Problema
+Plano de implementação
+1) Correção imediata de dados (1 conta)
+- Executar ajuste pontual no banco para recalcular `initial_balance` da conta corrente com base no saldo real informado (69,15):
+  - `initial_balance = saldo_real_desejado - soma(realizados)`.
+- Isso corrige imediatamente o saldo em Contas e Dashboard sem mexer nas transações.
 
-Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
+2) Corrigir UX de edição de conta (evitar erro futuro)
+- Em `AccountModal`, quando o usuário editar “Saldo Atual”, interpretar esse valor como saldo final desejado e **converter internamente** para `initial_balance`:
+  - `new_initial_balance = saldo_digitado - soma(realizados_da_conta)`.
+- Hoje o modal grava o valor digitado direto em `initial_balance`, o que gera saldo incorreto.
 
-O bug esta na linha 220 do `TransactionModal.tsx`:
+3) Ajustar exibição do “Saldo do Sistema” na sincronização
+- Em `AccountReviewModal`, o bloco de sincronização hoje mostra `current_balance` (campo legado), que pode divergir.
+- Trocar para mostrar o saldo calculado real (mesma regra do app), para evitar inconsistência visual durante a decisão “Sincronizar”.
 
-```text
-const baseDate = date;  // usa data de compra (24/02)
-```
+4) Validação end-to-end
+- Confirmar em `/accounts` e Dashboard: saldo da conta e saldo total = **R$ 69,15**.
+- Confirmar que os 4 lançamentos futuros/pending continuam fora do saldo.
+- Reimportar OFX e validar:
+  - tela de sincronização abre;
+  - “Sincronizar” mantém o saldo correto.
 
-As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
-
-## Solucao
-
-Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
-
-## Secao Tecnica
-
-### Arquivo: `src/components/modals/TransactionModal.tsx`
-
-Alterar linha 220:
-
-```typescript
-// Antes:
-const baseDate = date;
-
-// Depois:
-const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
-```
-
-Isso garante que:
-- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
-- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
-
-Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
-
-```typescript
-date: format(installmentDate, "yyyy-MM-dd"),
-due_date: format(installmentDate, "yyyy-MM-dd"),
-```
-
-Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
-
-Uma unica linha a alterar.
-
+Seção técnica
+- Fórmula única do saldo real:
+  - `saldo_real = initial_balance + SUM(CASE WHEN type='income' THEN amount ELSE -amount END)`
+  - filtros: `status='completed'`, `is_provisional=false`, `date <= CURRENT_DATE`.
+- Ajuste pontual para sua conta:
+  - `required_initial_balance = 69.15 - (-1312.20) = 1381.35`.
+- Sem mudanças de RLS; apenas atualização de dados + ajuste de lógica no frontend.
