@@ -157,6 +157,7 @@ export function ReconciliationCard({
   onPeriodChange,
 }: ReconciliationCardProps) {
   const [selectedCard, setSelectedCard] = useState<CardReconciliation | null>(null);
+  const [spreadsheetCard, setSpreadsheetCard] = useState<CardReconciliation | null>(null);
   const [closeModalData, setCloseModalData] = useState<{
     creditCardId: string;
     creditCardName: string;
