@@ -586,7 +586,7 @@ type RowData = {
   systemTx?: SystemTransaction;
 };
 
-function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, refundItems, onToggleRefund, ignoredKeys, onIgnore }: AccountResultTableProps) {
+function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, onReconcile, refundItems, onToggleRefund, ignoredKeys, onIgnore }: AccountResultTableProps) {
   const rows = useMemo(() => {
     const all: RowData[] = [];
 
