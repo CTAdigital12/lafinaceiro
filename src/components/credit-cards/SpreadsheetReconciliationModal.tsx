@@ -138,10 +138,11 @@ export function SpreadsheetReconciliationModal({
       // Calculate due_date based on month/year (same as invoice import)
       const dueDate = `${year}-${String(month).padStart(2, "0")}-15`;
 
+      const isRefund = refundItems.has(item.rowIndex);
       await createTransaction.mutateAsync({
         description: item.description,
         amount: item.amount,
-        type: "expense",
+        type: isRefund ? "income" : "expense",
         date: item.date,
         due_date: dueDate,
         credit_card_id: creditCardId,
@@ -149,7 +150,7 @@ export function SpreadsheetReconciliationModal({
         category_id: null,
         status: "completed",
         is_corporate_expense: false,
-        is_refund: false,
+        is_refund: isRefund,
         is_reimbursable: false,
         is_card_payment: false,
         refunded_transaction_id: null,
