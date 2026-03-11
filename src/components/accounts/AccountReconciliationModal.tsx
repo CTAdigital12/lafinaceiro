@@ -673,9 +673,9 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
             <TableCell className="text-sm max-w-[250px] truncate">
               <span className="flex items-center gap-1.5">
                 {row.description}
-                {row.systemTx?.is_provisional && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-chart-4/10 text-chart-4 border-chart-4/20">
-                    Provisória
+                {(row.systemTx?.is_provisional || row.systemTx?.status === "pending") && (
+                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-chart-4/10 text-chart-4 border-chart-4/20">
+                     {row.systemTx?.is_provisional ? "Provisória" : "Pendente"}
                   </Badge>
                 )}
               </span>
@@ -712,7 +712,7 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
                 )}
                 {row.type === "extra" && row.systemTx && (
                   <>
-                    {row.systemTx.is_provisional && (
+                    {(row.systemTx.is_provisional || row.systemTx.status === "pending") && (
                       <Button
                         variant="ghost"
                         size="sm"
