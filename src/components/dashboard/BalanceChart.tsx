@@ -80,6 +80,9 @@ export function BalanceChart() {
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const receitas = payload.find((p: any) => p.dataKey === "receitas")?.value || 0;
+      const despesas = payload.find((p: any) => p.dataKey === "despesas")?.value || 0;
+      const resultado = receitas - despesas;
       return (
         <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
           <p className="font-medium text-foreground mb-2">{label}</p>
@@ -88,6 +91,11 @@ export function BalanceChart() {
               {item.name}: R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
           ))}
+          <div className="border-t border-border mt-2 pt-2">
+            <p className={`text-sm font-medium ${resultado >= 0 ? "text-[hsl(var(--income))]" : "text-[hsl(var(--expense))]"}`}>
+              Resultado: R$ {resultado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
         </div>
       );
     }
