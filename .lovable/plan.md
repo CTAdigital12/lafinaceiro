@@ -1,49 +1,34 @@
 
 
-# Corrigir Data das Parcelas em Debito em Conta
+# Correção: Botão "Conciliar" e saldo divergente
 
-## Problema
+## Diagnóstico
 
-Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
+### 1. Botão "Conciliar" não aparece
+A transação "Seguro Apartamento 1/4" tem `is_provisional: false` e `status: "pending"` no banco de dados. O botão "Conciliar" só aparece quando `is_provisional === true` (linha 715 do modal). Como essa transação é uma **parcela** (installment), não uma recorrência, ela nunca foi marcada como provisional — mas é igualmente uma previsão que deveria ser conciliável.
 
-O bug esta na linha 220 do `TransactionModal.tsx`:
+### 2. Saldo divergente
+O `computed_balance` em `useAccounts.ts` só soma transações `completed` e `!is_provisional`. A transação "Seguro Apartamento 1/4" com `status: "pending"` não entra no saldo computado, o que está correto. A divergência de R$ 512 provavelmente já existia antes — preciso verificar se algo foi alterado na lógica de saldo, mas pelo código atual o cálculo parece inalterado.
 
-```text
-const baseDate = date;  // usa data de compra (24/02)
-```
+## Solução
 
-As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
+### Arquivo: `src/components/accounts/AccountReconciliationModal.tsx`
 
-## Solucao
-
-Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
-
-## Secao Tecnica
-
-### Arquivo: `src/components/modals/TransactionModal.tsx`
-
-Alterar linha 220:
+**Expandir a condição do botão "Conciliar"** (linha 715):
 
 ```typescript
 // Antes:
-const baseDate = date;
+{row.systemTx.is_provisional && (
 
 // Depois:
-const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+{(row.systemTx.is_provisional || row.systemTx.status === "pending") && (
 ```
 
-Isso garante que:
-- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
-- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
+Isso permite conciliar tanto transações provisórias (recorrências) quanto pendentes (parcelas futuras) com itens do extrato bancário.
 
-Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
+**Na ação de conciliação** (`handleReconcileProvisional`), já atualiza `status: "completed"` e `is_provisional: false`, o que é correto para ambos os casos.
 
-```typescript
-date: format(installmentDate, "yyyy-MM-dd"),
-due_date: format(installmentDate, "yyyy-MM-dd"),
-```
+### Verificação do saldo
 
-Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
-
-Uma unica linha a alterar.
+Vou confirmar que nenhuma alteração foi feita na lógica de `useAccounts.ts` que pudesse ter mudado o cálculo do saldo. Se o saldo já estava correto antes e agora diverge, pode ser efeito da exclusão das 2 transações duplicadas feita anteriormente (que reduziu o saldo do sistema).
 
