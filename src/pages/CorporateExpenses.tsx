@@ -327,10 +327,24 @@ export default function CorporateExpenses() {
             </div>
           </div>
         </div>
-        <Button className="gap-2" onClick={exportToCSV}>
-          <Download className="h-4 w-4" />
-          Exportar {selectedIds.size > 0 ? `(${selectedIds.size})` : "Tudo"}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="gap-2">
+              <Download className="h-4 w-4" />
+              Exportar {selectedIds.size > 0 ? `(${selectedIds.size})` : "Tudo"}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={exportToXLSX}>
+              <FileText className="h-4 w-4 mr-2" />
+              Exportar XLSX
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToCSV}>
+              <FileText className="h-4 w-4 mr-2" />
+              Exportar CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Month Navigation & Filters */}
