@@ -110,6 +110,7 @@ export default function Accounts() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [importedItems, setImportedItems] = useState<AccountImportedItem[]>([]);
+  const [importBankBalance, setImportBankBalance] = useState<number | null>(null);
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
   const { accounts, isLoading, totalBalance, deleteAccount } = useAccounts();
 
