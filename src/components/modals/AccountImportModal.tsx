@@ -17,7 +17,7 @@ interface AccountImportModalProps {
   onOpenChange: (open: boolean) => void;
   accountId: string;
   accountName: string;
-  onImportComplete: (items: AccountImportedItem[]) => void;
+  onImportComplete: (items: AccountImportedItem[], bankBalance?: number | null) => void;
 }
 
 export interface AccountImportedItem {
