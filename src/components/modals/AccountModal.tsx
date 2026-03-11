@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { useAccounts, Account } from "@/hooks/useAccounts";
 import { detectBankFromName } from "@/lib/bankConfig";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AccountModalProps {
   open: boolean;
