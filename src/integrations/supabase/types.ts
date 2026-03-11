@@ -21,6 +21,7 @@ export type Database = {
           current_balance: number
           icon: string | null
           id: string
+          initial_balance: number
           name: string
           type: string
           updated_at: string
@@ -32,6 +33,7 @@ export type Database = {
           current_balance?: number
           icon?: string | null
           id?: string
+          initial_balance?: number
           name: string
           type: string
           updated_at?: string
@@ -43,6 +45,7 @@ export type Database = {
           current_balance?: number
           icon?: string | null
           id?: string
+          initial_balance?: number
           name?: string
           type?: string
           updated_at?: string

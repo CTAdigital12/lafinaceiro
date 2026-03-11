@@ -1,95 +1,49 @@
 
 
-# Excluir Lançamentos Futuros/Pendentes do Saldo
+# Corrigir Data das Parcelas em Debito em Conta
 
 ## Problema
 
-O saldo exibido (-442,84) inclui parcelas pendentes e futuras (como as 4 parcelas do Seguro Apartamento). O campo `current_balance` na tabela `accounts` é atualizado incrementalmente durante importações e pagamentos, mas o valor armazenado já acumulou transações que não deveriam contar.
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-**Dados atuais da conta:**
-- `current_balance` armazenado: -442,84
-- Soma de todas as transações: -2.236,28
-- Soma apenas completed + passado: -1.312,20
-- Soma pending/futuras: -924,08
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-## Solução
-
-Ao invés de confiar no campo `current_balance` armazenado (que acumula drift), calcular o saldo dinamicamente a partir das transações, excluindo:
-- Transações com `status = 'pending'`
-- Transações com `is_provisional = true`
-- Transações com `date > hoje`
-
-### Arquivos alterados
-
-**1. `src/hooks/useAccounts.ts`**
-- Adicionar uma query separada que calcula o saldo real de cada conta somando transações completed, não-provisórias, com data <= hoje
-- Substituir `account.current_balance` pelo saldo calculado no retorno
-- `totalBalance` será a soma dos saldos calculados
-- Manter o campo `current_balance` do banco como fallback (contas sem transações usam o valor armazenado)
-
-**2. `src/pages/Dashboard.tsx`**
-- Remover a lógica de `projectedBalance` / `provisionalAccountExpenses` que já não será necessária, pois o saldo já exclui pendentes
-- Simplificar o subtitle do card de Saldo
-
-**3. `src/pages/Accounts.tsx`**
-- Usar o saldo calculado (já virá do hook atualizado)
-
-### Seção Técnica
-
-A query para calcular o saldo real por conta:
-
-```sql
-SELECT account_id,
-  SUM(CASE WHEN type='income' THEN amount ELSE -amount END) as net
-FROM transactions
-WHERE account_id IS NOT NULL
-  AND status = 'completed'
-  AND COALESCE(is_provisional, false) = false
-  AND date <= CURRENT_DATE
-GROUP BY account_id
+```text
+const baseDate = date;  // usa data de compra (24/02)
 ```
 
-No hook `useAccounts`, cada conta terá seu saldo substituído pelo valor calculado. Contas que possuem saldo inicial (definido manualmente na criação) precisam de um ajuste: o saldo inicial armazenado em `current_balance` serve como base, mas como ele já inclui transações importadas, a abordagem mais limpa é somar diretamente as transações.
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
 
-**Porém**, como as transações não incluem o saldo inicial da conta (que foi definido na criação), precisamos de uma coluna `initial_balance` OU usar o `current_balance` como "saldo base + delta de transações". 
+## Solucao
 
-A abordagem mais simples sem migração: continuar usando `current_balance` como saldo exibido, mas na hora de atualizar durante importações, calcular corretamente excluindo pendentes. E para corrigir o valor AGORA, usar a sincronização do OFX (que já está implementada).
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
 
-**Abordagem final escolhida:** Adicionar coluna `initial_balance` à tabela `accounts` para guardar o saldo inicial. Depois calcular o saldo exibido = `initial_balance` + soma(transações completed, não-provisórias, data <= hoje). Migração: `initial_balance = current_balance - soma_todas_transações`.
+## Secao Tecnica
 
-**Alternativa mais simples (sem migração):** Mudar `useAccounts` para fazer uma segunda query e ajustar o saldo subtraindo transações pendentes/futuras do `current_balance` armazenado. Ou seja: `saldo_real = current_balance - net_pending_future`.
+### Arquivo: `src/components/modals/TransactionModal.tsx`
 
-Vou usar a alternativa simples:
+Alterar linha 220:
 
-**`src/hooks/useAccounts.ts`:**
-- Query adicional: buscar soma de transações pendentes/provisórias/futuras por conta
-- `adjusted_balance = current_balance + net_pending_future` (pendentes são negativas, então somar as remove)
-- Espera... o `current_balance` atual é -442.84 e não sabemos como chegou ali. O `current_balance` deveria ser o saldo real mas tem drift.
+```typescript
+// Antes:
+const baseDate = date;
 
-**Conclusão:** A forma mais robusta é usar a sincronização OFX que já existe para corrigir o saldo para 69.15, e TAMBÉM parar de incluir transações pending no cálculo incremental durante importações futuras. Mas o usuário quer que funcione AGORA sem reimportar.
-
-**Abordagem definitiva:** Computar o saldo 100% a partir das transações, usando o `current_balance` como `initial_balance` implícito:
-
-```
-saldo_exibido = current_balance 
-  - soma(pending/provisional/futuras que já foram contabilizadas no current_balance)
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
 ```
 
-Mas não sabemos quais transações foram contabilizadas no `current_balance`.
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
 
-**A abordagem mais pragmática:** Adicionar `initial_balance` via migração, setar `initial_balance = current_balance - soma_todas_transações`, e depois calcular `saldo = initial_balance + soma(completed, !provisional, date<=today)`.
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
 
-### Plano final
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
+```
 
-1. **Migração SQL:** Adicionar coluna `initial_balance` em `accounts`. Calcular `initial_balance = current_balance - sum(transações)` para cada conta existente.
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
 
-2. **`src/hooks/useAccounts.ts`:** Query que calcula saldo = `initial_balance` + soma(transações completed, não-provisórias, date <= hoje). Exibir esse valor em vez de `current_balance`.
-
-3. **`src/components/modals/AccountReviewModal.tsx`:** Ao importar, NÃO mais atualizar `current_balance` incrementalmente — o saldo será sempre calculado dinamicamente.
-
-4. **`src/hooks/useCreditCards.ts`:** Ao pagar fatura (debita da conta), NÃO mais atualizar `current_balance` — o saldo será recalculado automaticamente pois a transação de pagamento já é criada.
-
-5. **`src/pages/Dashboard.tsx`:** Remover lógica de `projectedBalance` (já desnecessária).
-
-6. **`src/components/modals/AccountModal.tsx`:** Ao criar/editar conta, salvar o saldo informado em `initial_balance` (e `current_balance` para compatibilidade).
+Uma unica linha a alterar.
 

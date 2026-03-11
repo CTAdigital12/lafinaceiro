@@ -85,8 +85,8 @@ function AccountCard({ account, onEdit, onDelete, onImport }: AccountCardProps) 
       <div className="p-4 space-y-3">
         <div>
           <p className="text-xs text-muted-foreground mb-1">Saldo Atual</p>
-          <p className={cn("text-xl font-bold", Number(account.current_balance) >= 0 ? "text-foreground" : "text-expense")}>
-            R$ {Number(account.current_balance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          <p className={cn("text-xl font-bold", account.computed_balance >= 0 ? "text-foreground" : "text-expense")}>
+            R$ {account.computed_balance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
         </div>
         <Button
