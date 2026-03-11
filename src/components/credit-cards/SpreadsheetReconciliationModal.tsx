@@ -180,7 +180,7 @@ export function SpreadsheetReconciliationModal({
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
-  }, [user, createTransaction, creditCardId, month, year, fetchSystemTransactions, result, toast]);
+  }, [user, createTransaction, creditCardId, month, year, fetchSystemTransactions, result, toast, refundItems]);
 
   const handleDeleteTransaction = useCallback(async (tx: SystemTransaction) => {
     const key = `del-${tx.id}`;
