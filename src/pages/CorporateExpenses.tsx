@@ -291,7 +291,6 @@ export default function CorporateExpenses() {
       "Valor": total,
     });
 
-    const XLSX = require("xlsx");
     const ws = XLSX.utils.json_to_sheet(rows);
     
     // Set column widths
