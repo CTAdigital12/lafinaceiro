@@ -142,21 +142,45 @@ export function AccountReviewModal({
         // Fetch existing transactions for this account
         const { data: existingTransactions } = await supabase
           .from("transactions")
-          .select("date, amount, description, original_description")
+          .select("id, date, amount, description, original_description, status, is_provisional")
           .eq("account_id", accountId);
 
         const existing = existingTransactions || [];
 
-        // Use robust deduplication
+        // Separate pending/provisional transactions for matching
+        const pendingTransactions = existing.filter(tx => tx.status === 'pending' || tx.is_provisional);
+        const completedTransactions = existing.filter(tx => tx.status === 'completed' && !tx.is_provisional);
+
+        // Use robust deduplication against completed transactions only
         const duplicateIndices = detectAccountDuplicates(
           items.map(i => ({ date: i.date, description: i.description, amount: i.amount })),
-          existing.map(tx => ({ date: tx.date, amount: Number(tx.amount), description: tx.description, original_description: tx.original_description }))
+          completedTransactions.map(tx => ({ date: tx.date, amount: Number(tx.amount), description: tx.description, original_description: tx.original_description }))
         );
+
+        // Track which pending transactions have already been matched
+        const usedPendingIds = new Set<string>();
 
         const itemsWithCategories = items.map((item, index) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
           const isCorporate = findCorporateForDescription(item.description);
           const isDuplicate = duplicateIndices.has(index);
+
+          // Try to match against pending/provisional transactions
+          let matchedPendingId: string | null = null;
+          let matchedPendingDescription: string | null = null;
+          if (!isDuplicate) {
+            const pendingMatch = pendingTransactions.find(tx => {
+              if (usedPendingIds.has(tx.id)) return false;
+              const sameDate = tx.date === item.date;
+              const sameAmount = Math.abs(Number(tx.amount) - item.amount) < 0.05;
+              return sameDate && sameAmount;
+            });
+            if (pendingMatch) {
+              matchedPendingId = pendingMatch.id;
+              matchedPendingDescription = pendingMatch.description;
+              usedPendingIds.add(pendingMatch.id);
+            }
+          }
 
           return {
             ...item,
@@ -171,13 +195,14 @@ export function AccountReviewModal({
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
             original_description: item.description,
+            matchedPendingId,
+            matchedPendingDescription,
           };
         });
         
         setReviewItems(itemsWithCategories);
       } catch (error) {
         console.error("Error checking duplicates:", error);
-        // Initialize without duplicate checking if it fails
         const itemsWithCategories = items.map((item) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
           const isCorporate = findCorporateForDescription(item.description);
@@ -194,6 +219,8 @@ export function AccountReviewModal({
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
             original_description: item.description,
+            matchedPendingId: null,
+            matchedPendingDescription: null,
           };
         });
         setReviewItems(itemsWithCategories);
