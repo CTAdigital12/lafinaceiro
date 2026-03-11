@@ -351,6 +351,15 @@ export function ReconciliationCard({
                               variant="ghost"
                               size="sm"
                               className="h-7 text-xs"
+                              onClick={() => setSpreadsheetCard(card)}
+                            >
+                              <Upload className="h-3 w-3 mr-1" />
+                              Planilha
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
                               onClick={() => setSelectedCard(card)}
                             >
                               <FileText className="h-3 w-3 mr-1" />
