@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { parseOFX, OFXTransaction } from "@/lib/ofxParser";
+import { parseOFXWithBalance, OFXTransaction } from "@/lib/ofxParser";
 import { parseCSV, CSVTransaction } from "@/lib/csvParser";
 
 interface AccountImportModalProps {
