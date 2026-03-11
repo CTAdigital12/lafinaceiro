@@ -39,6 +39,8 @@ import {
   FileSpreadsheet,
   ArrowRightLeft,
   Loader2,
+  RotateCcw,
+  EyeOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,6 +86,8 @@ export function SpreadsheetReconciliationModal({
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<SystemTransaction | null>(null);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [refundItems, setRefundItems] = useState<Set<number>>(new Set());
+  const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
 
   // Fetch system transactions for this card/month
   const fetchSystemTransactions = useCallback(async (): Promise<SystemTransaction[]> => {
@@ -136,10 +140,11 @@ export function SpreadsheetReconciliationModal({
       // Calculate due_date based on month/year (same as invoice import)
       const dueDate = `${year}-${String(month).padStart(2, "0")}-15`;
 
+      const isRefund = refundItems.has(item.rowIndex);
       await createTransaction.mutateAsync({
         description: item.description,
         amount: item.amount,
-        type: "expense",
+        type: isRefund ? "income" : "expense",
         date: item.date,
         due_date: dueDate,
         credit_card_id: creditCardId,
@@ -147,7 +152,7 @@ export function SpreadsheetReconciliationModal({
         category_id: null,
         status: "completed",
         is_corporate_expense: false,
-        is_refund: false,
+        is_refund: isRefund,
         is_reimbursable: false,
         is_card_payment: false,
         refunded_transaction_id: null,
@@ -177,7 +182,7 @@ export function SpreadsheetReconciliationModal({
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
-  }, [user, createTransaction, creditCardId, month, year, fetchSystemTransactions, result, toast]);
+  }, [user, createTransaction, creditCardId, month, year, fetchSystemTransactions, result, toast, refundItems]);
 
   const handleDeleteTransaction = useCallback(async (tx: SystemTransaction) => {
     const key = `del-${tx.id}`;
@@ -314,29 +319,27 @@ export function SpreadsheetReconciliationModal({
                   <TabsTrigger value="extra">Apenas Sistema ({tabCounts.extra})</TabsTrigger>
                 </TabsList>
 
-                <ScrollArea className="flex-1 min-h-0 mt-3">
-                  <TabsContent value="all" className="mt-0">
-                    <ResultTable
-                      result={result}
-                      filter="all"
-                      processingIds={processingIds}
-                      onAdd={handleAddTransaction}
-                      onDelete={setDeleteConfirm}
-                      onCorrect={handleCorrectValue}
-                    />
-                  </TabsContent>
-                  <TabsContent value="matched" className="mt-0">
-                    <ResultTable result={result} filter="matched" processingIds={processingIds} onAdd={handleAddTransaction} onDelete={setDeleteConfirm} onCorrect={handleCorrectValue} />
-                  </TabsContent>
-                  <TabsContent value="discrepancies" className="mt-0">
-                    <ResultTable result={result} filter="discrepancies" processingIds={processingIds} onAdd={handleAddTransaction} onDelete={setDeleteConfirm} onCorrect={handleCorrectValue} />
-                  </TabsContent>
-                  <TabsContent value="missing" className="mt-0">
-                    <ResultTable result={result} filter="missing" processingIds={processingIds} onAdd={handleAddTransaction} onDelete={setDeleteConfirm} onCorrect={handleCorrectValue} />
-                  </TabsContent>
-                  <TabsContent value="extra" className="mt-0">
-                    <ResultTable result={result} filter="extra" processingIds={processingIds} onAdd={handleAddTransaction} onDelete={setDeleteConfirm} onCorrect={handleCorrectValue} />
-                  </TabsContent>
+                <ScrollArea className="flex-1 min-h-0 mt-3" style={{ maxHeight: "calc(90vh - 280px)" }}>
+                  {["all", "matched", "discrepancies", "missing", "extra"].map((tab) => (
+                    <TabsContent key={tab} value={tab} className="mt-0">
+                      <ResultTable
+                        result={result}
+                        filter={tab as any}
+                        processingIds={processingIds}
+                        onAdd={handleAddTransaction}
+                        onDelete={setDeleteConfirm}
+                        onCorrect={handleCorrectValue}
+                        refundItems={refundItems}
+                        onToggleRefund={(rowIndex) => setRefundItems((prev) => {
+                          const s = new Set(prev);
+                          s.has(rowIndex) ? s.delete(rowIndex) : s.add(rowIndex);
+                          return s;
+                        })}
+                        ignoredKeys={ignoredKeys}
+                        onIgnore={(key) => setIgnoredKeys((prev) => new Set(prev).add(key))}
+                      />
+                    </TabsContent>
+                  ))}
                 </ScrollArea>
               </Tabs>
 
@@ -389,6 +392,10 @@ interface ResultTableProps {
   onAdd: (item: SpreadsheetItem) => void;
   onDelete: (tx: SystemTransaction) => void;
   onCorrect: (item: SpreadsheetItem, tx: SystemTransaction) => void;
+  refundItems: Set<number>;
+  onToggleRefund: (rowIndex: number) => void;
+  ignoredKeys: Set<string>;
+  onIgnore: (key: string) => void;
 }
 
 type RowData = {
@@ -403,7 +410,7 @@ type RowData = {
   systemTx?: SystemTransaction;
 };
 
-function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect }: ResultTableProps) {
+function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, refundItems, onToggleRefund, ignoredKeys, onIgnore }: ResultTableProps) {
   const rows = useMemo(() => {
     const all: RowData[] = [];
 
@@ -455,8 +462,8 @@ function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect
       }));
     }
 
-    return all.sort((a, b) => a.date.localeCompare(b.date));
-  }, [result, filter]);
+    return all.filter((r) => !ignoredKeys.has(r.key)).sort((a, b) => a.date.localeCompare(b.date));
+  }, [result, filter, ignoredKeys]);
 
   if (rows.length === 0) {
     return (
@@ -495,42 +502,75 @@ function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect
               {row.systemAmount !== undefined ? formatCurrency(row.systemAmount) : "—"}
             </TableCell>
             <TableCell className="text-right">
-              {row.type === "missing" && row.spreadsheetItem && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-primary"
-                  disabled={processingIds.has(`add-${row.spreadsheetItem.rowIndex}`)}
-                  onClick={() => onAdd(row.spreadsheetItem!)}
-                >
-                  <Plus className="h-3 w-3 mr-1" /> Incluir
-                </Button>
-              )}
-              {row.type === "extra" && row.systemTx && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-destructive"
-                  disabled={processingIds.has(`del-${row.systemTx.id}`)}
-                  onClick={() => onDelete(row.systemTx!)}
-                >
-                  <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                </Button>
-              )}
-              {row.type === "discrepancy" && row.spreadsheetItem && row.systemTx && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-chart-4"
-                  disabled={processingIds.has(`fix-${row.systemTx.id}`)}
-                  onClick={() => onCorrect(row.spreadsheetItem!, row.systemTx!)}
-                >
-                  <PenLine className="h-3 w-3 mr-1" /> Corrigir
-                </Button>
-              )}
-              {row.type === "matched" && (
-                <span className="text-xs text-muted-foreground">—</span>
-              )}
+              <div className="flex items-center justify-end gap-1">
+                {/* Refund toggle for missing and discrepancy items with spreadsheetItem */}
+                {(row.type === "missing" || row.type === "discrepancy") && row.spreadsheetItem && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("h-7 w-7 p-0", refundItems.has(row.spreadsheetItem.rowIndex) && "text-income bg-income/10")}
+                    title={refundItems.has(row.spreadsheetItem.rowIndex) ? "Desmarcar extorno" : "Marcar como extorno"}
+                    onClick={() => onToggleRefund(row.spreadsheetItem!.rowIndex)}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                  </Button>
+                )}
+                {row.type === "missing" && row.spreadsheetItem && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-primary"
+                    disabled={processingIds.has(`add-${row.spreadsheetItem.rowIndex}`)}
+                    onClick={() => onAdd(row.spreadsheetItem!)}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Incluir
+                  </Button>
+                )}
+                {row.type === "extra" && row.systemTx && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-destructive"
+                    disabled={processingIds.has(`del-${row.systemTx.id}`)}
+                    onClick={() => onDelete(row.systemTx!)}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                  </Button>
+                )}
+                {row.type === "discrepancy" && row.spreadsheetItem && row.systemTx && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-chart-4"
+                      disabled={processingIds.has(`fix-${row.systemTx.id}`)}
+                      onClick={() => onCorrect(row.spreadsheetItem!, row.systemTx!)}
+                    >
+                      <PenLine className="h-3 w-3 mr-1" /> Corrigir
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-primary"
+                      disabled={processingIds.has(`add-${row.spreadsheetItem.rowIndex}`)}
+                      onClick={() => onAdd(row.spreadsheetItem!)}
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Incluir
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={() => onIgnore(row.key)}
+                    >
+                      <EyeOff className="h-3 w-3 mr-1" /> Ignorar
+                    </Button>
+                  </>
+                )}
+                {row.type === "matched" && (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
             </TableCell>
           </TableRow>
         ))}
