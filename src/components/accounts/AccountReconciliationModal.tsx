@@ -512,7 +512,7 @@ export function AccountReconciliationModal({
 
       {/* Reconcile provisional with bank item */}
       <Dialog open={!!reconcileTarget} onOpenChange={(o) => !o && setReconcileTarget(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Link className="h-4 w-4" />
