@@ -444,6 +444,18 @@ export function ReconciliationCard({
           year={reopenModalData.year}
         />
       )}
+
+      {/* Spreadsheet Reconciliation Modal */}
+      {spreadsheetCard && (
+        <SpreadsheetReconciliationModal
+          open={true}
+          onOpenChange={(open) => !open && setSpreadsheetCard(null)}
+          creditCardId={spreadsheetCard.creditCardId}
+          creditCardName={spreadsheetCard.creditCardName}
+          month={month}
+          year={year}
+        />
+      )}
     </>
   );
 }
