@@ -263,22 +263,7 @@ export function useCreditCards() {
 
           if (bankError) throw bankError;
 
-          // Update account balance
-          const { data: account, error: accFetchError } = await supabase
-            .from("accounts")
-            .select("current_balance")
-            .eq("id", accountId)
-            .single();
-
-          if (accFetchError) throw accFetchError;
-
-          const newBalance = Number(account.current_balance) - personalAmount;
-          const { error: accUpdateError } = await supabase
-            .from("accounts")
-            .update({ current_balance: newBalance })
-            .eq("id", accountId);
-
-          if (accUpdateError) throw accUpdateError;
+          // Balance is now computed dynamically — no need to update current_balance
         } else if (personalPaymentType === "external") {
           // Create external payment record (income on card, no bank debit)
           const { error: extError } = await supabase.from("transactions").insert({
