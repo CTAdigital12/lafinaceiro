@@ -1,23 +1,49 @@
 
 
-# Fix: Ícone Extorno deve marcar transação como extorno diretamente
+# Corrigir Data das Parcelas em Debito em Conta
 
 ## Problema
 
-Ao clicar no ícone de extorno (RotateCcw) na lista de transações, o sistema abre um modal para **criar uma nova transação de extorno**, em vez de simplesmente marcar a transação existente como extorno. O usuário espera que o clique no ícone **alterne o flag `is_refund`** da transação, fazendo o valor mudar de negativo (despesa) para positivo (extorno) imediatamente.
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-## Solução
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-Mudar o comportamento do botão de extorno em `src/pages/Transactions.tsx`:
+```text
+const baseDate = date;  // usa data de compra (24/02)
+```
 
-- Em vez de chamar `handleCreateRefund(transaction)` (que abre modal para nova transação), chamar `updateTransaction.mutate({ id: transaction.id, is_refund: true })` diretamente
-- Isso marca a transação existente como extorno, fazendo o valor aparecer como positivo na listagem
-- Manter o botão visível apenas quando `!transaction.is_refund` (como já está)
-- Aplicar a mesma mudança na versão mobile da lista de transações (se houver o mesmo botão)
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
 
-### Arquivo: `src/pages/Transactions.tsx`
+## Solucao
 
-1. Substituir `onClick={() => handleCreateRefund(transaction)}` por uma chamada direta ao `updateTransaction.mutate({ id: transaction.id, is_refund: true })`
-2. Verificar se existe o mesmo botão na versão mobile da listagem e aplicar a mesma correção
-3. A função `handleCreateRefund` e o state `refundingTransaction` podem ser mantidos caso sejam usados em outro lugar, ou removidos se ficarem órfãos
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+
+## Secao Tecnica
+
+### Arquivo: `src/components/modals/TransactionModal.tsx`
+
+Alterar linha 220:
+
+```typescript
+// Antes:
+const baseDate = date;
+
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+```
+
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
+
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
+
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
+```
+
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
+
+Uma unica linha a alterar.
 
