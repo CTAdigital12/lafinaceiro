@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format, subMonths, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText, Lock, Unlock, Clock } from "lucide-react";
+import { AlertTriangle, CheckCircle, Scale, Briefcase, User, CreditCard, RotateCcw, ChevronLeft, ChevronRight, FileText, Lock, Unlock, Clock, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -12,6 +12,7 @@ import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import { CloseInvoiceModal } from "./CloseInvoiceModal";
 import { ReopenInvoiceModal } from "./ReopenInvoiceModal";
 import { ClosedInvoiceBanner } from "./ClosedInvoiceBanner";
+import { SpreadsheetReconciliationModal } from "./SpreadsheetReconciliationModal";
 import { useInvoiceCycles, type InvoiceStatus } from "@/hooks/useInvoiceCycles";
 
 interface ReconciliationCardProps {
@@ -156,6 +157,7 @@ export function ReconciliationCard({
   onPeriodChange,
 }: ReconciliationCardProps) {
   const [selectedCard, setSelectedCard] = useState<CardReconciliation | null>(null);
+  const [spreadsheetCard, setSpreadsheetCard] = useState<CardReconciliation | null>(null);
   const [closeModalData, setCloseModalData] = useState<{
     creditCardId: string;
     creditCardName: string;
@@ -349,6 +351,15 @@ export function ReconciliationCard({
                               variant="ghost"
                               size="sm"
                               className="h-7 text-xs"
+                              onClick={() => setSpreadsheetCard(card)}
+                            >
+                              <Upload className="h-3 w-3 mr-1" />
+                              Planilha
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
                               onClick={() => setSelectedCard(card)}
                             >
                               <FileText className="h-3 w-3 mr-1" />
@@ -431,6 +442,18 @@ export function ReconciliationCard({
           creditCardName={reopenModalData.creditCardName}
           month={reopenModalData.month}
           year={reopenModalData.year}
+        />
+      )}
+
+      {/* Spreadsheet Reconciliation Modal */}
+      {spreadsheetCard && (
+        <SpreadsheetReconciliationModal
+          open={true}
+          onOpenChange={(open) => !open && setSpreadsheetCard(null)}
+          creditCardId={spreadsheetCard.creditCardId}
+          creditCardName={spreadsheetCard.creditCardName}
+          month={month}
+          year={year}
         />
       )}
     </>
