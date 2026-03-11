@@ -389,18 +389,12 @@ export default function Dashboard() {
 
       {/* Summary Cards */}
       {(() => {
-        const provisionalAccountExpenses = transactions
-          .filter(t => t.is_provisional && !t.credit_card_id && t.type === "expense")
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-        const projectedBalance = totalBalance - provisionalAccountExpenses;
-        const hasProvisionals = provisionalAccountExpenses > 0;
-        
         return (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               title="Saldo Atual"
               value={`R$ ${totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
-              subtitle={hasProvisionals ? `Projetado: R$ ${projectedBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "Todas as contas"}
+              subtitle="Todas as contas"
               icon={Wallet}
               variant="balance"
             />

@@ -464,40 +464,14 @@ export function AccountReviewModal({
         }
       }
 
-      // If bank balance available, show sync dialog instead of incremental update
+      // Balance is now computed dynamically from transactions,
+      // no need for incremental current_balance updates.
+      // If bank balance available, show sync dialog to adjust initial_balance
       if (bankBalance != null) {
-        // Still apply incremental for now, then show sync option
-        const { data: currentAccount } = await supabase
-          .from("accounts")
-          .select("current_balance")
-          .eq("id", accountId)
-          .single();
-
-        if (currentAccount) {
-          const newBalance = Number(currentAccount.current_balance) + balanceChange;
-          await updateAccount.mutateAsync({
-            id: accountId,
-            current_balance: newBalance,
-          });
-        }
-
-        // Show balance sync dialog
         setShowBalanceSync(true);
       } else {
-        // No bank balance - use incremental as before
-        const { data: currentAccount } = await supabase
-          .from("accounts")
-          .select("current_balance")
-          .eq("id", accountId)
-          .single();
-
-        if (currentAccount) {
-          const newBalance = Number(currentAccount.current_balance) + balanceChange;
-          await updateAccount.mutateAsync({
-            id: accountId,
-            current_balance: newBalance,
-          });
-        }
+        // Just invalidate to recalculate
+        queryClient.invalidateQueries({ queryKey: ["accounts"] });
       }
 
       const skippedCount = reviewItems.length - itemsToImport.length;
