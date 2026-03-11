@@ -19,6 +19,8 @@ export interface SystemTransaction {
   is_corporate_expense: boolean;
   category_id: string | null;
   status: string;
+  is_provisional?: boolean;
+  recurring_rule_id?: string | null;
 }
 
 export interface ReconciliationResult {
@@ -93,12 +95,14 @@ export function reconcileSpreadsheet(
       usedSpreadsheetIndices.add(si);
       usedSystemIds.add(candidates[0].id);
     } else if (candidates.length > 1) {
-      // Pick the candidate with the highest description similarity
+      // Pick the candidate with the highest score: provisional gets a bonus
       let best = candidates[0];
       let bestScore = -1;
       for (const tx of candidates) {
         const txDesc = tx.original_description || tx.description;
-        const score = descriptionSimilarity(item.description, txDesc);
+        let score = descriptionSimilarity(item.description, txDesc);
+        // Provisional transactions get a bonus so they are "consumed" first
+        if (tx.is_provisional) score += 0.3;
         if (score > bestScore) {
           bestScore = score;
           best = tx;

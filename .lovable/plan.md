@@ -1,44 +1,49 @@
 
 
-# Conciliação inteligente de transações provisórias (recorrências)
+# Corrigir Data das Parcelas em Debito em Conta
 
 ## Problema
 
-Quando uma recorrência gera uma transação provisória (ex: "Seguro Apartamento 1/4") e o pagamento real aparece no OFX com descrição diferente (ex: "SEGURO PORTO SEG"), o sistema trata ambas como itens distintos. Resultado: o OFX pareia com a transação real e a provisória fica órfã na aba "Apenas Sistema", duplicando o valor.
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-## Solução em duas frentes
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-### 1. Auto-detecção: Provisórias entram no matching com prioridade
+```text
+const baseDate = date;  // usa data de compra (24/02)
+```
 
-**Arquivo:** `src/components/accounts/AccountReconciliationModal.tsx`
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
 
-- Adicionar `is_provisional` e `recurring_rule_id` ao `SELECT` de `fetchSystemTransactions`
+## Solucao
 
-**Arquivo:** `src/lib/spreadsheetReconciliation.ts`
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
 
-- Expandir `SystemTransaction` com `is_provisional?: boolean`
-- No Pass 1 (date+amount match), quando há múltiplos candidatos, dar **prioridade a transações provisórias** no tiebreaker (se uma provisória tem boa similaridade, ela deve ser preferida sobre uma transação real, pois o objetivo é "consumir" a provisória com o dado real)
+## Secao Tecnica
 
-### 2. Ação manual: "Conciliar" provisória com item do banco
+### Arquivo: `src/components/modals/TransactionModal.tsx`
 
-Quando uma provisória aparece na aba "Apenas Sistema" e existe um item na aba "Apenas Banco" que corresponde a ela (mesmo que com valor/data/descrição diferentes), o usuário precisa poder vinculá-los manualmente.
+Alterar linha 220:
 
-**Arquivo:** `src/components/accounts/AccountReconciliationModal.tsx`
+```typescript
+// Antes:
+const baseDate = date;
 
-- Na aba "Apenas Sistema", para transações provisórias, adicionar um botão **"Conciliar"** (além de "Excluir")
-- Ao clicar em "Conciliar", abrir um mini-seletor mostrando os itens da aba "Apenas Banco" para o usuário escolher qual corresponde
-- Ao confirmar: atualizar a transação provisória com os dados do item do banco (amount, description via `original_description`, `status: "completed"`, `is_provisional: false`) e re-rodar a reconciliação
-- Transações provisórias na tabela terão um badge visual "Provisória" para fácil identificação
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+```
 
-### 3. Identificação visual
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
 
-- Na tabela de resultados, exibir um badge "Provisória" ao lado da descrição de transações com `is_provisional === true`
-- Isso ajuda o usuário a entender rapidamente quais itens são previsões e podem ser conciliados/excluídos sem perda de dados reais
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
 
-### Resumo de arquivos alterados
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
+```
 
-| Arquivo | Mudança |
-|---|---|
-| `src/lib/spreadsheetReconciliation.ts` | Adicionar `is_provisional` ao tipo `SystemTransaction`; priorizar provisórias no tiebreaker |
-| `src/components/accounts/AccountReconciliationModal.tsx` | Buscar `is_provisional`; botão "Conciliar" para provisórias; badge visual; mini-seletor de itens do banco |
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
+
+Uma unica linha a alterar.
 

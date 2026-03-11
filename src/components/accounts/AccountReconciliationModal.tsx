@@ -42,6 +42,7 @@ import {
   RotateCcw,
   EyeOff,
   RefreshCw,
+  Link,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,11 +91,12 @@ export function AccountReconciliationModal({
   const [refundItems, setRefundItems] = useState<Set<number>>(new Set());
   const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
   const [syncingBalance, setSyncingBalance] = useState(false);
+  const [reconcileTarget, setReconcileTarget] = useState<SystemTransaction | null>(null);
 
   const fetchSystemTransactions = useCallback(async (minDate: string, maxDate: string): Promise<SystemTransaction[]> => {
     const { data, error } = await supabase
       .from("transactions")
-      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status")
+      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status, is_provisional, recurring_rule_id")
       .eq("account_id", accountId)
       .gte("date", minDate)
       .lte("date", maxDate);
@@ -246,6 +248,38 @@ export function AccountReconciliationModal({
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
   }, [updateTransaction, fetchSystemTransactions, getAllSpreadsheetItems, getDateRange, toast]);
+
+  const handleReconcileProvisional = useCallback(async (tx: SystemTransaction, bankItem: SpreadsheetItem) => {
+    const key = `reconcile-${tx.id}`;
+    setProcessingIds((prev) => new Set(prev).add(key));
+    try {
+      const { error } = await supabase
+        .from("transactions")
+        .update({
+          amount: bankItem.amount,
+          original_description: bankItem.description,
+          status: "completed",
+          is_provisional: false,
+          date: bankItem.date,
+        })
+        .eq("id", tx.id);
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast({ title: "Transação conciliada!" });
+      setReconcileTarget(null);
+
+      const { minDate, maxDate } = getDateRange();
+      const systemTx = await fetchSystemTransactions(minDate, maxDate);
+      const allItems = getAllSpreadsheetItems();
+      setResult(reconcileSpreadsheet(allItems, systemTx));
+    } catch (err: any) {
+      toast({ title: "Erro ao conciliar", description: err.message, variant: "destructive" });
+    } finally {
+      setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
+    }
+  }, [queryClient, fetchSystemTransactions, getAllSpreadsheetItems, getDateRange, toast]);
 
   const handleSyncBalance = useCallback(async () => {
     if (bankBalance === null) return;
@@ -424,6 +458,7 @@ export function AccountReconciliationModal({
                         onAdd={handleAddTransaction}
                         onDelete={setDeleteConfirm}
                         onCorrect={handleCorrectValue}
+                        onReconcile={setReconcileTarget}
                         refundItems={refundItems}
                         onToggleRefund={(rowIndex) => setRefundItems((prev) => {
                           const s = new Set(prev);
@@ -474,6 +509,51 @@ export function AccountReconciliationModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reconcile provisional with bank item */}
+      <Dialog open={!!reconcileTarget} onOpenChange={(o) => !o && setReconcileTarget(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link className="h-4 w-4" />
+              Conciliar Transação Provisória
+            </DialogTitle>
+          </DialogHeader>
+          {reconcileTarget && (
+            <div className="space-y-3">
+              <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
+                <p className="text-muted-foreground">Transação provisória:</p>
+                <p className="font-medium">{reconcileTarget.description}</p>
+                <p className="font-mono">{formatCurrency(Number(reconcileTarget.amount))} — {format(new Date(reconcileTarget.date + "T12:00:00"), "dd/MM/yyyy")}</p>
+              </div>
+              <p className="text-sm text-muted-foreground">Selecione o item do extrato bancário correspondente:</p>
+              <ScrollArea className="max-h-[300px]">
+                <div className="space-y-1">
+                  {result?.onlyInSpreadsheet.map((item, i) => (
+                    <button
+                      key={i}
+                      className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors text-sm"
+                      disabled={processingIds.has(`reconcile-${reconcileTarget.id}`)}
+                      onClick={() => handleReconcileProvisional(reconcileTarget, item)}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium truncate">{item.description}</p>
+                          <p className="text-muted-foreground">{format(new Date(item.date + "T12:00:00"), "dd/MM/yyyy")}</p>
+                        </div>
+                        <span className="font-mono font-semibold">{formatCurrency(item.amount)}</span>
+                      </div>
+                    </button>
+                  ))}
+                  {(!result?.onlyInSpreadsheet.length) && (
+                    <p className="text-center text-muted-foreground py-4">Nenhum item disponível no extrato.</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -487,6 +567,7 @@ interface AccountResultTableProps {
   onAdd: (item: SpreadsheetItem) => void;
   onDelete: (tx: SystemTransaction) => void;
   onCorrect: (item: SpreadsheetItem, tx: SystemTransaction) => void;
+  onReconcile: (tx: SystemTransaction) => void;
   refundItems: Set<number>;
   onToggleRefund: (rowIndex: number) => void;
   ignoredKeys: Set<string>;
@@ -505,7 +586,7 @@ type RowData = {
   systemTx?: SystemTransaction;
 };
 
-function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, refundItems, onToggleRefund, ignoredKeys, onIgnore }: AccountResultTableProps) {
+function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, onReconcile, refundItems, onToggleRefund, ignoredKeys, onIgnore }: AccountResultTableProps) {
   const rows = useMemo(() => {
     const all: RowData[] = [];
 
@@ -589,7 +670,16 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
             <TableCell className="whitespace-nowrap text-sm">
               {format(new Date(row.date + "T12:00:00"), "dd/MM/yyyy")}
             </TableCell>
-            <TableCell className="text-sm max-w-[250px] truncate">{row.description}</TableCell>
+            <TableCell className="text-sm max-w-[250px] truncate">
+              <span className="flex items-center gap-1.5">
+                {row.description}
+                {row.systemTx?.is_provisional && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-chart-4/10 text-chart-4 border-chart-4/20">
+                    Provisória
+                  </Badge>
+                )}
+              </span>
+            </TableCell>
             <TableCell className="text-right font-mono text-sm">
               {row.spreadsheetAmount !== undefined ? formatCurrency(row.spreadsheetAmount) : "—"}
             </TableCell>
@@ -621,15 +711,27 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
                   </Button>
                 )}
                 {row.type === "extra" && row.systemTx && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs text-destructive"
-                    disabled={processingIds.has(`del-${row.systemTx.id}`)}
-                    onClick={() => onDelete(row.systemTx!)}
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                  </Button>
+                  <>
+                    {row.systemTx.is_provisional && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-primary"
+                        onClick={() => onReconcile(row.systemTx!)}
+                      >
+                        <Link className="h-3 w-3 mr-1" /> Conciliar
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-destructive"
+                      disabled={processingIds.has(`del-${row.systemTx.id}`)}
+                      onClick={() => onDelete(row.systemTx!)}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                    </Button>
+                  </>
                 )}
                 {row.type === "discrepancy" && row.spreadsheetItem && row.systemTx && (
                   <>
