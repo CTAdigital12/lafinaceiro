@@ -1,26 +1,49 @@
 
 
-# Fix: Dialog "Conciliar" mostrando lista vazia
+# Corrigir Data das Parcelas em Debito em Conta
 
-## Diagnóstico
+## Problema
 
-O dialog de conciliação manual só mostra itens de `result.onlyInSpreadsheet` (itens que existem apenas no banco). Porém, o item "sisdeb porto seguro" de R$ 231,02 no dia 02/03 já foi **pareado automaticamente** com outra transação do sistema (provavelmente a transação "completed" correspondente), então ele não aparece em `onlyInSpreadsheet` — ele está em `result.matched`.
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-O "Seguro Apartamento 1/4" (pending/installment) ficou órfão em `onlyInSystem`, e ao clicar "Conciliar", o dialog mostra a lista vazia.
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-## Solução
+```text
+const baseDate = date;  // usa data de compra (24/02)
+```
 
-**Arquivo:** `src/components/accounts/AccountReconciliationModal.tsx`
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
 
-Mudar o dialog de conciliação para mostrar **todos os itens do extrato bancário** (matched + discrepancies + onlyInSpreadsheet), não apenas os não-pareados. Isso permite ao usuário:
+## Solucao
 
-1. Selecionar um item que já foi pareado com outra transação
-2. Ao confirmar, o sistema **desfaz o match anterior** (a transação que estava pareada volta para `onlyInSystem`) e **aplica o novo match** (atualiza a transação pendente com os dados do banco)
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
 
-### Mudanças específicas:
+## Secao Tecnica
 
-1. Criar uma lista `allSpreadsheetItems` que agrega todos os itens do extrato (já existe parcialmente no código como `allBankItems`, linha ~155-165)
-2. No dialog de conciliação (linha ~532), usar essa lista completa ao invés de `result.onlyInSpreadsheet`
-3. Adicionar indicador visual para itens já pareados (ex: "(já pareado)") para que o usuário saiba que está re-atribuindo
-4. Na função `handleReconcileProvisional`, se o item selecionado já estava pareado com outra transação, reverter aquele match (a outra transação não precisa de update no DB, apenas o re-run da reconciliação resolve)
+### Arquivo: `src/components/modals/TransactionModal.tsx`
+
+Alterar linha 220:
+
+```typescript
+// Antes:
+const baseDate = date;
+
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+```
+
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
+
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
+
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
+```
+
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
+
+Uma unica linha a alterar.
 

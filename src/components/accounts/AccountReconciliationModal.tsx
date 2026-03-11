@@ -529,25 +529,45 @@ export function AccountReconciliationModal({
               <p className="text-sm text-muted-foreground">Selecione o item do extrato bancário correspondente:</p>
               <ScrollArea className="max-h-[300px]">
                 <div className="space-y-1">
-                  {result?.onlyInSpreadsheet.map((item, i) => (
-                    <button
-                      key={i}
-                      className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors text-sm"
-                      disabled={processingIds.has(`reconcile-${reconcileTarget.id}`)}
-                      onClick={() => handleReconcileProvisional(reconcileTarget, item)}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-medium truncate">{item.description}</p>
-                          <p className="text-muted-foreground">{format(new Date(item.date + "T12:00:00"), "dd/MM/yyyy")}</p>
+                  {(() => {
+                    // Build list of ALL bank items (matched + discrepancies + unmatched)
+                    const allBankItems: Array<{ item: SpreadsheetItem; alreadyMatched: boolean }> = [];
+                    if (result) {
+                      for (const m of result.matched) {
+                        allBankItems.push({ item: m.spreadsheet, alreadyMatched: true });
+                      }
+                      for (const d of result.valueDiscrepancies) {
+                        allBankItems.push({ item: d.spreadsheet, alreadyMatched: true });
+                      }
+                      for (const s of result.onlyInSpreadsheet) {
+                        allBankItems.push({ item: s, alreadyMatched: false });
+                      }
+                    }
+                    if (allBankItems.length === 0) {
+                      return <p className="text-center text-muted-foreground py-4">Nenhum item disponível no extrato.</p>;
+                    }
+                    return allBankItems.map((entry, i) => (
+                      <button
+                        key={i}
+                        className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors text-sm"
+                        disabled={processingIds.has(`reconcile-${reconcileTarget.id}`)}
+                        onClick={() => handleReconcileProvisional(reconcileTarget, entry.item)}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium truncate">
+                              {entry.item.description}
+                              {entry.alreadyMatched && (
+                                <span className="text-xs text-muted-foreground ml-2">(já pareado)</span>
+                              )}
+                            </p>
+                            <p className="text-muted-foreground">{format(new Date(entry.item.date + "T12:00:00"), "dd/MM/yyyy")}</p>
+                          </div>
+                          <span className="font-mono font-semibold">{formatCurrency(entry.item.amount)}</span>
                         </div>
-                        <span className="font-mono font-semibold">{formatCurrency(item.amount)}</span>
-                      </div>
-                    </button>
-                  ))}
-                  {(!result?.onlyInSpreadsheet.length) && (
-                    <p className="text-center text-muted-foreground py-4">Nenhum item disponível no extrato.</p>
-                  )}
+                      </button>
+                    ));
+                  })()}
                 </div>
               </ScrollArea>
             </div>
