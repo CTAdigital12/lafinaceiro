@@ -527,7 +527,8 @@ export function AccountReviewModal({
         variant: errorCount > 0 ? "destructive" : "default",
       });
 
-      if (!showBalanceSync) {
+      const shouldPromptSync = bankBalance != null;
+      if (!shouldPromptSync) {
         onOpenChange(false);
       }
     } catch (error) {
