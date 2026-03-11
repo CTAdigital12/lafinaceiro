@@ -410,7 +410,7 @@ type RowData = {
   systemTx?: SystemTransaction;
 };
 
-function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect }: ResultTableProps) {
+function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, refundItems, onToggleRefund, ignoredKeys, onIgnore }: ResultTableProps) {
   const rows = useMemo(() => {
     const all: RowData[] = [];
 
@@ -462,8 +462,8 @@ function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect
       }));
     }
 
-    return all.sort((a, b) => a.date.localeCompare(b.date));
-  }, [result, filter]);
+    return all.filter((r) => !ignoredKeys.has(r.key)).sort((a, b) => a.date.localeCompare(b.date));
+  }, [result, filter, ignoredKeys]);
 
   if (rows.length === 0) {
     return (
