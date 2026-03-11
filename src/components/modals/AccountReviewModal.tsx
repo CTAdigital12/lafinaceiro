@@ -122,6 +122,7 @@ export function AccountReviewModal({
   const { createTransaction } = useTransactions();
   const { updateAccount } = useAccounts();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
