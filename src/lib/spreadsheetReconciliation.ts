@@ -19,6 +19,8 @@ export interface SystemTransaction {
   is_corporate_expense: boolean;
   category_id: string | null;
   status: string;
+  is_provisional?: boolean;
+  recurring_rule_id?: string | null;
 }
 
 export interface ReconciliationResult {
