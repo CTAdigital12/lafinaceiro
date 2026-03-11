@@ -567,6 +567,7 @@ interface AccountResultTableProps {
   onAdd: (item: SpreadsheetItem) => void;
   onDelete: (tx: SystemTransaction) => void;
   onCorrect: (item: SpreadsheetItem, tx: SystemTransaction) => void;
+  onReconcile: (tx: SystemTransaction) => void;
   refundItems: Set<number>;
   onToggleRefund: (rowIndex: number) => void;
   ignoredKeys: Set<string>;
