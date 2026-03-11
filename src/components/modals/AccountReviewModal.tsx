@@ -522,9 +522,28 @@ export function AccountReviewModal({
   const handleSyncBalance = async () => {
     if (bankBalance == null) return;
     try {
+      // To sync: we need initial_balance such that initial_balance + sum(realized_tx) = bankBalance
+      // So: new_initial_balance = bankBalance - sum(realized_tx)
+      // Fetch realized tx sum for this account
+      const today = new Date().toISOString().split("T")[0];
+      const { data: txData } = await supabase
+        .from("transactions")
+        .select("type, amount, status, is_provisional, date")
+        .eq("account_id", accountId)
+        .eq("status", "completed")
+        .eq("is_provisional", false)
+        .lte("date", today);
+
+      const txNet = (txData || []).reduce((sum, tx) => {
+        const sign = tx.type === "income" ? 1 : -1;
+        return sum + sign * Number(tx.amount);
+      }, 0);
+
+      const newInitialBalance = bankBalance - txNet;
+
       await updateAccount.mutateAsync({
         id: accountId,
-        current_balance: bankBalance,
+        initial_balance: newInitialBalance,
       });
       toast({
         title: "Saldo sincronizado!",

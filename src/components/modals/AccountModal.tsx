@@ -86,16 +86,18 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const balanceValue = parseFloat(balance) || 0;
     const accountData = {
       name,
       type,
-      current_balance: parseFloat(balance) || 0,
+      current_balance: balanceValue,
       icon: detectedBank ? icon : (selectedType?.icon || "🏦"),
       color,
     };
 
     if (isEditing && account) {
-      await updateAccount.mutateAsync({ id: account.id, ...accountData });
+      // When editing, update initial_balance to reflect new desired balance
+      await updateAccount.mutateAsync({ id: account.id, ...accountData, initial_balance: balanceValue });
     } else {
       await createAccount.mutateAsync(accountData);
     }
