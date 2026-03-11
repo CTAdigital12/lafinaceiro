@@ -1050,8 +1050,8 @@ export default function Transactions() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
-                                  onClick={() => handleCreateRefund(transaction)}
-                                  title="Criar Extorno"
+                                  onClick={() => updateTransaction.mutate({ id: transaction.id, is_refund: true })}
+                                  title="Marcar como Extorno"
                                 >
                                   <RotateCcw className="h-4 w-4" />
                                 </Button>
