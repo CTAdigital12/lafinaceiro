@@ -102,6 +102,7 @@ export function AccountReviewModal({
 
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [showBalanceSync, setShowBalanceSync] = useState(false);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [openCategoryIndex, setOpenCategoryIndex] = useState<number | null>(null);
   const [categorySearch, setCategorySearch] = useState("");
