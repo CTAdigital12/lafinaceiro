@@ -253,14 +253,20 @@ export function AccountReconciliationModal({
     const key = `reconcile-${tx.id}`;
     setProcessingIds((prev) => new Set(prev).add(key));
     try {
-      await updateTransaction.mutateAsync({
-        id: tx.id,
-        amount: bankItem.amount,
-        original_description: bankItem.description,
-        status: "completed",
-        is_provisional: false,
-        date: bankItem.date,
-      });
+      const { error } = await supabase
+        .from("transactions")
+        .update({
+          amount: bankItem.amount,
+          original_description: bankItem.description,
+          status: "completed",
+          is_provisional: false,
+          date: bankItem.date,
+        })
+        .eq("id", tx.id);
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast({ title: "Transação conciliada!" });
       setReconcileTarget(null);
 
@@ -273,7 +279,7 @@ export function AccountReconciliationModal({
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
-  }, [updateTransaction, fetchSystemTransactions, getAllSpreadsheetItems, getDateRange, toast]);
+  }, [queryClient, fetchSystemTransactions, getAllSpreadsheetItems, getDateRange, toast]);
 
   const handleSyncBalance = useCallback(async () => {
     if (bankBalance === null) return;
