@@ -318,28 +318,26 @@ export function SpreadsheetReconciliationModal({
                 </TabsList>
 
                 <ScrollArea className="flex-1 min-h-0 mt-3" style={{ maxHeight: "calc(90vh - 280px)" }}>
-                  <TabsContent value="all" className="mt-0">
-                    <ResultTable
-                      result={result}
-                      filter="all"
-                      processingIds={processingIds}
-                      onAdd={handleAddTransaction}
-                      onDelete={setDeleteConfirm}
-                      onCorrect={handleCorrectValue}
-                    />
-                  </TabsContent>
-                  <TabsContent value="matched" className="mt-0">
-                    <ResultTable result={result} filter="matched" processingIds={processingIds} onAdd={handleAddTransaction} onDelete={setDeleteConfirm} onCorrect={handleCorrectValue} />
-                  </TabsContent>
-                  <TabsContent value="discrepancies" className="mt-0">
-                    <ResultTable result={result} filter="discrepancies" processingIds={processingIds} onAdd={handleAddTransaction} onDelete={setDeleteConfirm} onCorrect={handleCorrectValue} />
-                  </TabsContent>
-                  <TabsContent value="missing" className="mt-0">
-                    <ResultTable result={result} filter="missing" processingIds={processingIds} onAdd={handleAddTransaction} onDelete={setDeleteConfirm} onCorrect={handleCorrectValue} />
-                  </TabsContent>
-                  <TabsContent value="extra" className="mt-0">
-                    <ResultTable result={result} filter="extra" processingIds={processingIds} onAdd={handleAddTransaction} onDelete={setDeleteConfirm} onCorrect={handleCorrectValue} />
-                  </TabsContent>
+                  {["all", "matched", "discrepancies", "missing", "extra"].map((tab) => (
+                    <TabsContent key={tab} value={tab} className="mt-0">
+                      <ResultTable
+                        result={result}
+                        filter={tab as any}
+                        processingIds={processingIds}
+                        onAdd={handleAddTransaction}
+                        onDelete={setDeleteConfirm}
+                        onCorrect={handleCorrectValue}
+                        refundItems={refundItems}
+                        onToggleRefund={(rowIndex) => setRefundItems((prev) => {
+                          const s = new Set(prev);
+                          s.has(rowIndex) ? s.delete(rowIndex) : s.add(rowIndex);
+                          return s;
+                        })}
+                        ignoredKeys={ignoredKeys}
+                        onIgnore={(key) => setIgnoredKeys((prev) => new Set(prev).add(key))}
+                      />
+                    </TabsContent>
+                  ))}
                 </ScrollArea>
               </Tabs>
 
