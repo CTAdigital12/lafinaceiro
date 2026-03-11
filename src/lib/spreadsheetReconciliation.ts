@@ -50,43 +50,37 @@ export function reconcileSpreadsheet(
   const matched: ReconciliationResult["matched"] = [];
   const valueDiscrepancies: ReconciliationResult["valueDiscrepancies"] = [];
 
-  // Pass 1: Exact match (description + date + amount)
+  // Pass 1: Exact match (date + amount)
   for (let si = 0; si < spreadsheetItems.length; si++) {
     const item = spreadsheetItems[si];
-    const normalizedItemDesc = normalizeString(item.description);
     const normalizedItemDate = normalizeDate(item.date);
 
     for (const tx of systemTransactions) {
       if (usedSystemIds.has(tx.id)) continue;
 
-      const normalizedTxDesc = normalizeString(tx.original_description || tx.description);
       const normalizedTxDate = normalizeDate(tx.date);
 
-      if (normalizedItemDesc === normalizedTxDesc && normalizedItemDate === normalizedTxDate) {
-        if (Math.abs(item.amount - Number(tx.amount)) <= TOLERANCE) {
-          matched.push({ spreadsheet: item, transaction: tx });
-          usedSpreadsheetIndices.add(si);
-          usedSystemIds.add(tx.id);
-          break;
-        }
+      if (normalizedItemDate === normalizedTxDate && Math.abs(item.amount - Number(tx.amount)) <= TOLERANCE) {
+        matched.push({ spreadsheet: item, transaction: tx });
+        usedSpreadsheetIndices.add(si);
+        usedSystemIds.add(tx.id);
+        break;
       }
     }
   }
 
-  // Pass 2: Partial match (description + date, different amount) for unmatched items
+  // Pass 2: Date-only match (different amount → discrepancy)
   for (let si = 0; si < spreadsheetItems.length; si++) {
     if (usedSpreadsheetIndices.has(si)) continue;
     const item = spreadsheetItems[si];
-    const normalizedItemDesc = normalizeString(item.description);
     const normalizedItemDate = normalizeDate(item.date);
 
     for (const tx of systemTransactions) {
       if (usedSystemIds.has(tx.id)) continue;
 
-      const normalizedTxDesc = normalizeString(tx.original_description || tx.description);
       const normalizedTxDate = normalizeDate(tx.date);
 
-      if (normalizedItemDesc === normalizedTxDesc && normalizedItemDate === normalizedTxDate) {
+      if (normalizedItemDate === normalizedTxDate) {
         const diff = item.amount - Number(tx.amount);
         valueDiscrepancies.push({ spreadsheet: item, transaction: tx, difference: diff });
         usedSpreadsheetIndices.add(si);
