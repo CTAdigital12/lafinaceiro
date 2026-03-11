@@ -61,19 +61,11 @@ const isCardPaymentDescription = (description: string): boolean => {
   return CARD_PAYMENT_PATTERNS.some(pattern => upperDesc.includes(pattern));
 };
 
-// Helper component to show current system balance in sync dialog
+// Helper component to show current system balance (computed dynamically) in sync dialog
 function SyncSystemBalance({ accountId }: { accountId: string }) {
-  const [balance, setBalance] = useState<number | null>(null);
-  useEffect(() => {
-    supabase
-      .from("accounts")
-      .select("current_balance")
-      .eq("id", accountId)
-      .single()
-      .then(({ data }) => {
-        if (data) setBalance(Number(data.current_balance));
-      });
-  }, [accountId]);
+  const { accounts } = useAccounts();
+  const account = accounts.find((a) => a.id === accountId);
+  const balance = account ? account.computed_balance : null;
   
   if (balance === null) return <Loader2 className="h-4 w-4 animate-spin mx-auto" />;
   return (
