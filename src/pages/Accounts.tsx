@@ -142,6 +142,7 @@ export default function Accounts() {
     setIsReviewModalOpen(open);
     if (!open) {
       setImportedItems([]);
+      setImportBankBalance(null);
       setImportingAccount(null);
     }
   };
