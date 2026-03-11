@@ -249,6 +249,32 @@ export function AccountReconciliationModal({
     }
   }, [updateTransaction, fetchSystemTransactions, getAllSpreadsheetItems, getDateRange, toast]);
 
+  const handleReconcileProvisional = useCallback(async (tx: SystemTransaction, bankItem: SpreadsheetItem) => {
+    const key = `reconcile-${tx.id}`;
+    setProcessingIds((prev) => new Set(prev).add(key));
+    try {
+      await updateTransaction.mutateAsync({
+        id: tx.id,
+        amount: bankItem.amount,
+        original_description: bankItem.description,
+        status: "completed",
+        is_provisional: false,
+        date: bankItem.date,
+      });
+      toast({ title: "Transação conciliada!" });
+      setReconcileTarget(null);
+
+      const { minDate, maxDate } = getDateRange();
+      const systemTx = await fetchSystemTransactions(minDate, maxDate);
+      const allItems = getAllSpreadsheetItems();
+      setResult(reconcileSpreadsheet(allItems, systemTx));
+    } catch (err: any) {
+      toast({ title: "Erro ao conciliar", description: err.message, variant: "destructive" });
+    } finally {
+      setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
+    }
+  }, [updateTransaction, fetchSystemTransactions, getAllSpreadsheetItems, getDateRange, toast]);
+
   const handleSyncBalance = useCallback(async () => {
     if (bankBalance === null) return;
     setSyncingBalance(true);
