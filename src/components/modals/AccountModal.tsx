@@ -53,7 +53,7 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
     if (account) {
       setName(account.name);
       setType(account.type);
-      setBalance(String(account.initial_balance || account.current_balance));
+      setBalance(String(account.computed_balance));
       setColor(account.color);
       setIcon(account.icon);
     } else {
