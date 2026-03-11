@@ -1,43 +1,49 @@
 
-Objetivo: corrigir o bug que impede a sincronização do saldo após importar OFX, para que o saldo da conta possa bater com o banco.
 
-Diagnóstico confirmado
-- O parser do OFX já extrai o saldo (`BALAMT`) corretamente.
-- O fluxo atual executa `PATCH` no saldo incremental e fecha o modal antes de mostrar a tela “Sincronizar saldo”.
-- Causa raiz em `AccountReviewModal.tsx`:
-  - `setShowBalanceSync(true)` é chamado, mas logo depois existe `if (!showBalanceSync) onOpenChange(false)`.
-  - Como `setState` é assíncrono, `showBalanceSync` ainda está `false` nessa execução, então o modal fecha indevidamente.
-- Evidência prática: houve `PATCH` com `current_balance: -442.84` e não houve segundo `PATCH` para `69.15`.
+# Corrigir Data das Parcelas em Debito em Conta
 
-Plano de implementação
-1) Ajustar controle de fechamento do modal (arquivo `src/components/modals/AccountReviewModal.tsx`)
-- No `handleImport`, substituir a decisão baseada no estado React (`showBalanceSync`) por uma flag local síncrona, por exemplo:
-  - `const shouldPromptSync = bankBalance != null;`
-- Se `shouldPromptSync` for `true`:
-  - manter o modal aberto,
-  - setar `setShowBalanceSync(true)`,
-  - não chamar `onOpenChange(false)` nesse ciclo.
-- Se `shouldPromptSync` for `false`:
-  - manter comportamento atual de fechamento.
+## Problema
 
-2) Garantir comportamento consistente no pós-importação
-- Manter a tela de sincronização aparecendo mesmo quando:
-  - todas as transações forem duplicadas, ou
-  - não houver novos lançamentos criados (ainda assim o usuário precisa escolher sincronizar/manter).
-- Manter os handlers já existentes:
-  - `Sincronizar` → grava `current_balance = bankBalance`;
-  - `Manter saldo atual` → fecha sem sobrescrever.
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-3) Validação funcional (end-to-end)
-- Reimportar o OFX da conta corrente.
-- Esperado:
-  - após “Confirmar Importação”, abrir modal “Sincronizar Saldo” (não fechar direto).
-  - ao clicar “Sincronizar”, fazer `PATCH` com `current_balance = 69.15`.
-  - cartão de conta e saldo total refletirem o novo valor.
-- Cenário alternativo:
-  - clicar “Manter saldo atual” deve preservar o saldo incremental e fechar normalmente.
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-Seção técnica (resumo)
-- Arquivo afetado: `src/components/modals/AccountReviewModal.tsx`.
-- Mudança central: remover dependência de estado assíncrono para decidir fechamento imediato do modal.
-- Não requer migração de banco nem mudança de RLS.
+```text
+const baseDate = date;  // usa data de compra (24/02)
+```
+
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
+
+## Solucao
+
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+
+## Secao Tecnica
+
+### Arquivo: `src/components/modals/TransactionModal.tsx`
+
+Alterar linha 220:
+
+```typescript
+// Antes:
+const baseDate = date;
+
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+```
+
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
+
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
+
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
+```
+
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
+
+Uma unica linha a alterar.
+
