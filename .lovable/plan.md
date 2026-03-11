@@ -1,53 +1,49 @@
-# Exportar Extrato + Conciliação OFX para Contas
 
-## 1. Exportar Extrato (dropdown do card de conta)
 
-Adicionar opção "Exportar Extrato" no menu de 3 pontinhos do `AccountCard`. Ao clicar, gera um arquivo CSV com todas as transações da conta (completed, do mês atual ou todas), com colunas: Data, Descrição, Valor, Tipo, Categoria.
+# Corrigir Data das Parcelas em Debito em Conta
 
-**Arquivo:** `src/pages/Accounts.tsx`
+## Problema
 
-- Adicionar item "Exportar Extrato" no `DropdownMenu`
-- Função que busca transações da conta no Supabase, monta CSV ou XLSX e faz download via `Blob`/`URL.createObjectURL`
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-## 2. Conciliação OFX para Contas Bancárias
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-Criar um modal de conciliação baseado no `SpreadsheetReconciliationModal` existente, adaptado para contas bancárias com suporte a OFX.
+```text
+const baseDate = date;  // usa data de compra (24/02)
+```
 
-### Novos arquivos:
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
 
-`**src/components/accounts/AccountReconciliationModal.tsx**`
+## Solucao
 
-- Modal que aceita upload de OFX (ou CSV/XLSX)
-- Usa `parseOFXWithBalance` para extrair transações do arquivo
-- Busca transações do sistema para a conta (filtrando por período do OFX)
-- Reutiliza `reconcileSpreadsheet` da lib existente para matching (data + valor)
-- Mesma UI de tabs: Conciliados, Divergentes, Apenas Banco, Apenas Sistema
-- Ações: Incluir, Excluir, Corrigir valor (idêntico ao credit card)
-- Se o OFX tiver saldo (`BALAMT`), mostrar comparação com saldo calculado do sistema e opção de sincronizar `initial_balance`
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
 
-### Alterações:
+## Secao Tecnica
 
-`**src/pages/Accounts.tsx**`
+### Arquivo: `src/components/modals/TransactionModal.tsx`
 
-- Adicionar item "Conciliar Extrato" no dropdown do card
-- State para controlar abertura do modal de conciliação
-- Passar account selecionada para o modal
+Alterar linha 220:
 
-`**src/lib/spreadsheetReconciliation.ts**`
+```typescript
+// Antes:
+const baseDate = date;
 
-- Sem alterações — a lógica de matching já é genérica (data + valor com tolerância)
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+```
 
-### Fluxo do usuário:
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
 
-1. Clica nos 3 pontinhos → "Conciliar Extrato"
-2. Faz upload do OFX (ou CSV/XLSX)
-3. Vê resultado da conciliação em tabs
-4. Pode incluir transações faltantes, excluir extras, corrigir valores
-5. Se o OFX tiver saldo do banco, pode sincronizar o saldo
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
 
-### Seção técnica
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
+```
 
-- Para buscar transações do sistema, o modal detecta o range de datas do arquivo OFX (min/max date das transações) e filtra `transactions` por `account_id` + `date` dentro desse range
-- As transações do OFX são convertidas para `SpreadsheetItem[]` para reutilizar `reconcileSpreadsheet`
-- Para incluir novas transações, usa `createTransaction` do `useTransactions` com `account_id` preenchido e `credit_card_id = null`
-- O saldo OFX é comparado com `computed_balance` da conta; sincronização ajusta `initial_balance = bankBalance - realized_net`
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
+
+Uma unica linha a alterar.
+
