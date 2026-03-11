@@ -711,15 +711,27 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
                   </Button>
                 )}
                 {row.type === "extra" && row.systemTx && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs text-destructive"
-                    disabled={processingIds.has(`del-${row.systemTx.id}`)}
-                    onClick={() => onDelete(row.systemTx!)}
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                  </Button>
+                  <>
+                    {row.systemTx.is_provisional && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-primary"
+                        onClick={() => onReconcile(row.systemTx!)}
+                      >
+                        <Link className="h-3 w-3 mr-1" /> Conciliar
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-destructive"
+                      disabled={processingIds.has(`del-${row.systemTx.id}`)}
+                      onClick={() => onDelete(row.systemTx!)}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                    </Button>
+                  </>
                 )}
                 {row.type === "discrepancy" && row.spreadsheetItem && row.systemTx && (
                   <>
