@@ -72,6 +72,8 @@ interface ReviewItem extends AccountImportedItem {
   corporate_keyword: string;
   is_card_payment: boolean;
   original_description: string;
+  matchedPendingId: string | null;
+  matchedPendingDescription: string | null;
 }
 
 interface AccountReviewModalProps {
@@ -80,6 +82,7 @@ interface AccountReviewModalProps {
   items: AccountImportedItem[];
   accountId: string;
   accountName: string;
+  bankBalance?: number | null;
 }
 
 export function AccountReviewModal({
