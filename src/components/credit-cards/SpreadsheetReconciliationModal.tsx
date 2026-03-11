@@ -84,6 +84,8 @@ export function SpreadsheetReconciliationModal({
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<SystemTransaction | null>(null);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [refundItems, setRefundItems] = useState<Set<number>>(new Set());
+  const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
 
   // Fetch system transactions for this card/month
   const fetchSystemTransactions = useCallback(async (): Promise<SystemTransaction[]> => {
