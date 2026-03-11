@@ -657,6 +657,12 @@ export function AccountReviewModal({
                             Pag. Fatura
                           </Badge>
                         )}
+                        {item.matchedPendingId && !item.isDuplicate && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0 bg-accent text-accent-foreground border-accent">
+                            <ArrowRightLeft className="h-3 w-3 mr-1" />
+                            Previsto: {item.matchedPendingDescription}
+                          </Badge>
+                        )}
                       </div>
                       <Input
                         value={item.description}
