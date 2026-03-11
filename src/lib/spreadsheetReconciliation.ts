@@ -160,10 +160,114 @@ function parseDate(value: string | number | undefined): string | null {
   return null;
 }
 
+// ── CSV helpers ──────────────────────────────────────────────────────
+
+function detectDelimiter(line: string): string {
+  const delimiters = [";", ",", "\t", "|"];
+  let maxCount = 0;
+  let best = ",";
+  for (const d of delimiters) {
+    const count = (line.match(new RegExp(d === "|" ? "\\|" : d === "\t" ? "\t" : d, "g")) || []).length;
+    if (count > maxCount) {
+      maxCount = count;
+      best = d;
+    }
+  }
+  return best;
+}
+
+function parseCSVLine(line: string, delimiter: string): string[] {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"' && !inQuotes) {
+      inQuotes = true;
+    } else if (char === '"' && inQuotes) {
+      if (line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = false;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  values.push(current.trim());
+  return values;
+}
+
+function detectColumns(header: string[]) {
+  const datePatterns = ["data", "date", "dt", "data compra", "data transação", "data transacao"];
+  const descPatterns = ["descrição", "descricao", "description", "desc", "estabelecimento", "lançamento", "lancamento"];
+  const amountPatterns = ["valor", "amount", "value", "vlr", "total"];
+
+  let dateCol = -1, descCol = -1, amountCol = -1;
+  header.forEach((h, i) => {
+    const low = h.toLowerCase().trim().replace(/["']/g, "");
+    if (dateCol === -1 && datePatterns.some((p) => low.includes(p))) dateCol = i;
+    if (descCol === -1 && descPatterns.some((p) => low.includes(p))) descCol = i;
+    if (amountCol === -1 && amountPatterns.some((p) => low.includes(p))) amountCol = i;
+  });
+
+  if (dateCol === -1) dateCol = 0;
+  if (descCol === -1) descCol = 1;
+  if (amountCol === -1) amountCol = 2;
+
+  return { dateCol, descCol, amountCol };
+}
+
+function rowsToItems(rows: string[][], startRow: number, cols: { dateCol: number; descCol: number; amountCol: number }): SpreadsheetItem[] {
+  const items: SpreadsheetItem[] = [];
+  for (let i = startRow; i < rows.length; i++) {
+    const row = rows[i];
+    const date = parseDate(row[cols.dateCol]);
+    const description = String(row[cols.descCol] || "").trim();
+    const amount = parseAmount(row[cols.amountCol]);
+    if (!date || !description || amount === 0) continue;
+    items.push({ date, description, amount: Math.abs(amount), rowIndex: i });
+  }
+  return items;
+}
+
 /**
  * Parse a CSV or XLSX file into SpreadsheetItem[].
  */
 export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetItem[]> {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+
+  if (ext === "csv" || ext === "tsv" || ext === "txt") {
+    // Manual CSV parsing with encoding fallback
+    let text: string;
+    try {
+      text = await file.text(); // UTF-8
+      // If we detect replacement characters, try Latin-1
+      if (text.includes("\uFFFD")) {
+        const buffer = await file.arrayBuffer();
+        text = new TextDecoder("iso-8859-1").decode(buffer);
+      }
+    } catch {
+      const buffer = await file.arrayBuffer();
+      text = new TextDecoder("iso-8859-1").decode(buffer);
+    }
+
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return [];
+
+    const delimiter = detectDelimiter(lines[0]);
+    const headerRow = parseCSVLine(lines[0], delimiter);
+    const cols = detectColumns(headerRow);
+
+    const allRows = lines.map((l) => parseCSVLine(l, delimiter));
+    return rowsToItems(allRows, 1, cols);
+  }
+
+  // XLSX / XLS
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -171,34 +275,9 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetItem[
 
   if (rows.length < 2) return [];
 
-  // Detect columns from header
-  const header = rows[0].map((c: any) => String(c).toLowerCase().trim());
-  const datePatterns = ["data", "date", "dt", "data compra", "data transação", "data transacao"];
-  const descPatterns = ["descrição", "descricao", "description", "desc", "estabelecimento", "lançamento", "lancamento"];
-  const amountPatterns = ["valor", "amount", "value", "vlr", "total"];
+  const header = rows[0].map((c: any) => String(c));
+  const cols = detectColumns(header);
 
-  let dateCol = -1, descCol = -1, amountCol = -1;
-  header.forEach((h, i) => {
-    if (dateCol === -1 && datePatterns.some((p) => h.includes(p))) dateCol = i;
-    if (descCol === -1 && descPatterns.some((p) => h.includes(p))) descCol = i;
-    if (amountCol === -1 && amountPatterns.some((p) => h.includes(p))) amountCol = i;
-  });
-
-  if (dateCol === -1) dateCol = 0;
-  if (descCol === -1) descCol = 1;
-  if (amountCol === -1) amountCol = 2;
-
-  const items: SpreadsheetItem[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const date = parseDate(row[dateCol]);
-    const description = String(row[descCol] || "").trim();
-    const amount = parseAmount(row[amountCol]);
-
-    if (!date || !description || amount === 0) continue;
-
-    items.push({ date, description, amount: Math.abs(amount), rowIndex: i });
-  }
-
-  return items;
+  const stringRows = rows.map((r) => r.map((c: any) => String(c)));
+  return rowsToItems(stringRows, 1, cols);
 }
