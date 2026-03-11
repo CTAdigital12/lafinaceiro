@@ -527,7 +527,7 @@ export function AccountReconciliationModal({
                 <p className="font-mono">{formatCurrency(Number(reconcileTarget.amount))} — {format(new Date(reconcileTarget.date + "T12:00:00"), "dd/MM/yyyy")}</p>
               </div>
               <p className="text-sm text-muted-foreground">Selecione o item do extrato bancário correspondente:</p>
-              <ScrollArea className="max-h-[300px]">
+              <ScrollArea className="h-[40vh] border rounded-lg">
                 <div className="space-y-1">
                   {(() => {
                     // Build list of ALL bank items (matched + discrepancies + unmatched)
