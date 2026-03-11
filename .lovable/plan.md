@@ -1,49 +1,25 @@
 
 
-# Corrigir Data das Parcelas em Debito em Conta
+# Fix: CSV parsing no modulo de conciliacao por planilha
 
 ## Problema
 
-Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
-
-O bug esta na linha 220 do `TransactionModal.tsx`:
-
-```text
-const baseDate = date;  // usa data de compra (24/02)
-```
-
-As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
+O `parseSpreadsheetFile` usa `XLSX.read()` para parsear CSV, mas essa biblioteca nao detecta corretamente o delimitador `;` usado em CSVs brasileiros de bancos. Resultado: todas as colunas ficam concatenadas em uma so, a deteccao de data/descricao/valor falha, e nenhum item passa o filtro.
 
 ## Solucao
 
-Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+Tratar CSVs separadamente do XLSX. Para arquivos `.csv`, usar parsing manual com auto-deteccao de delimitador (`;`, `,`, `\t`), como ja e feito em `csvParser.ts` e `csvInvoiceParser.ts`. Manter o `XLSX.read()` apenas para arquivos `.xlsx`/`.xls`.
 
-## Secao Tecnica
+## Mudancas
 
-### Arquivo: `src/components/modals/TransactionModal.tsx`
+### `src/lib/spreadsheetReconciliation.ts`
 
-Alterar linha 220:
+1. Adicionar funcao `detectDelimiter(line)` - conta ocorrencias de `;`, `,`, `\t` e escolhe o mais frequente
+2. Adicionar funcao `parseCSVLine(line, delimiter)` - respeita aspas
+3. No `parseSpreadsheetFile`, verificar extensao do arquivo:
+   - Se `.csv`: ler como texto (`file.text()`), detectar delimitador, parsear manualmente linha a linha
+   - Se `.xlsx`/`.xls`: manter o `XLSX.read()` atual
+4. Tratar encoding: ler o CSV com fallback para Latin-1 caso UTF-8 produza caracteres invalidos
 
-```typescript
-// Antes:
-const baseDate = date;
-
-// Depois:
-const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
-```
-
-Isso garante que:
-- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
-- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
-
-Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
-
-```typescript
-date: format(installmentDate, "yyyy-MM-dd"),
-due_date: format(installmentDate, "yyyy-MM-dd"),
-```
-
-Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
-
-Uma unica linha a alterar.
+A logica de deteccao de colunas (datePatterns, descPatterns, amountPatterns) e as funcoes `parseDate`/`parseAmount` permanecem inalteradas.
 
