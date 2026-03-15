@@ -103,17 +103,24 @@ export function CashFlowTab() {
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
+    const entry = payload[0]?.payload;
+    const monthlyBalance = entry?.saldoMensal ?? 0;
     return (
       <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-sm">
         <p className="font-medium text-foreground mb-1 capitalize">{label}</p>
         {payload.map((p: any) => {
-          const isNegative = p.dataKey === "saldo" && p.value < 0;
+          const isNegative = (p.dataKey === "saldo" || p.dataKey === "saldoMensal") && p.value < 0;
           return (
             <p key={p.dataKey} style={{ color: isNegative ? "hsl(var(--destructive))" : p.color }}>
               {p.name}: {formatCurrency(p.value)}
             </p>
           );
         })}
+        <div className="border-t border-border mt-1.5 pt-1.5">
+          <p className={monthlyBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>
+            Saldo do mês: {formatCurrency(monthlyBalance)}
+          </p>
+        </div>
       </div>
     );
   };
