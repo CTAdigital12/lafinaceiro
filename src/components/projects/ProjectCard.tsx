@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { formatCurrency } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import type { Project } from "@/hooks/useProjects";
 
