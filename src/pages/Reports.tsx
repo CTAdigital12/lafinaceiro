@@ -237,8 +237,8 @@ export default function Reports() {
                             </span>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-foreground">
+                        <div className="text-right flex-shrink-0">
+                          <p className="font-semibold text-foreground text-sm sm:text-base whitespace-nowrap">
                             R$ {category.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </p>
                         </div>
