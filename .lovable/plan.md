@@ -1,90 +1,49 @@
 
 
-## Reformulação Completa: Relatórios → Financial Intelligence Hub
+# Corrigir Data das Parcelas em Debito em Conta
 
-### Estrutura Geral
+## Problema
 
-Substituir o conteúdo atual de `Reports.tsx` por 4 abas com `ScrollArea` horizontal no `TabsList` para mobile. Cada aba será um componente separado em `src/components/reports/`.
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-### Arquivos a Criar
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/reports/CashFlowTab.tsx` | Aba 1: Fluxo de Caixa |
-| `src/components/reports/ExpenseXRayTab.tsx` | Aba 2: Raio-X de Despesas |
-| `src/components/reports/NetWorthTab.tsx` | Aba 3: Patrimônio |
-| `src/components/reports/ProjectsPlanningTab.tsx` | Aba 4: Projetos e Planejamento |
-
-### Arquivo a Editar
-
-- `src/pages/Reports.tsx` — Reescrever com 4 tabs + ScrollArea horizontal
-
-### Aba 1: Fluxo de Caixa (`CashFlowTab`)
-
-- **Dados**: Últimos 12 meses de transações (usa `useTransactions` com `showAll: true`)
-- **Cards de Insight**: "Meses Positivos" (contagem de meses onde receita > despesa) e "Taxa de Poupança Média" (% da renda que sobra)
-- **Gráfico**: `ComposedChart` do Recharts — barras verdes (receitas), barras vermelhas (despesas), linha azul (saldo acumulado)
-- **Filtro de dados**: Exclui `is_card_payment`, `is_provisional`, `status: 'pending'`, deduz `is_refund`
-- **Agrupamento temporal**: `due_date` para transações de cartão, `date` para as demais
-
-### Aba 2: Raio-X de Despesas (`ExpenseXRayTab`)
-
-- **Comparativo MoM**: Top 5 categorias do mês atual com badge de variação vs mês anterior (+15% vermelho, -5% verde)
-- **Composição de Gastos**: Gráfico `Treemap` do Recharts com categorias pai, proporcional ao valor
-- **Fuga de Capital**: Card com as 5 maiores despesas individuais do mês (transações avulsas, não categorias)
-- **Reutiliza** a lógica de filtragem existente já presente no Reports atual (linhas 41-52)
-
-### Aba 3: Patrimônio (`NetWorthTab`)
-
-- **Ativos**: `useAccounts` (soma `computed_balance`) + `useInvestments` (soma via `getAssetPatrimony`)
-- **Passivos**: Faturas abertas de cartão (`useCreditCards` → `current_invoice`) + parcelas pendentes (`usePendingInstallments` → `summary.totalAmount`)
-- **Patrimônio Líquido**: Ativos - Passivos em destaque grande
-- **Gráfico**: `AreaChart` — evolução patrimonial simplificada (baseada nos saldos atuais, sem histórico armazenado; nota: mostrará snapshot atual com projeção baseada nas transações dos últimos meses)
-
-### Aba 4: Projetos e Planejamento (`ProjectsPlanningTab`)
-
-- **Radar Chart**: Usa `useBudgets` (mês/ano atual) para pegar categorias com orçamento. Compara `planned_amount` vs gasto real calculado das transações do mês
-- **Análise de Caixinhas**: `useProjects` → gráfico de barras empilhadas mostrando quanto cada projeto consumiu do gasto mensal total (% do gasto atribuído a projetos)
-
-### Regras de Cálculo (aplicadas em TODAS as abas)
-
-Função utilitária compartilhada `filterPureExpenses(transactions)`:
-```ts
-// Retorna apenas despesas "puras" para cálculos
-t.type === 'expense' && !t.is_card_payment && !t.is_provisional && t.status !== 'pending' && !t.is_refund
+```text
+const baseDate = date;  // usa data de compra (24/02)
 ```
 
-Função `getTransactionCompetenceDate(t)`:
-```ts
-// Retorna due_date para cartão, date para o resto
-t.credit_card_id && t.due_date ? t.due_date : t.date
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
+
+## Solucao
+
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+
+## Secao Tecnica
+
+### Arquivo: `src/components/modals/TransactionModal.tsx`
+
+Alterar linha 220:
+
+```typescript
+// Antes:
+const baseDate = date;
+
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
 ```
 
-### Responsividade Mobile-First
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
 
-- `TabsList` dentro de `ScrollArea` horizontal com `w-max` para scroll por deslize
-- Gráficos com `h-[300px]` fixo
-- Legendas posicionadas com `verticalAlign="bottom"`
-- Cards de insight em `grid-cols-2` no mobile
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
 
-### Reports.tsx (estrutura final)
-
-```tsx
-<Tabs defaultValue="fluxo">
-  <ScrollArea orientation="horizontal">
-    <TabsList className="w-max">
-      <TabsTrigger value="fluxo">Fluxo de Caixa</TabsTrigger>
-      <TabsTrigger value="raio-x">Raio-X</TabsTrigger>
-      <TabsTrigger value="patrimonio">Patrimônio</TabsTrigger>
-      <TabsTrigger value="projetos">Projetos</TabsTrigger>
-    </TabsList>
-  </ScrollArea>
-  <TabsContent value="fluxo"><CashFlowTab /></TabsContent>
-  <TabsContent value="raio-x"><ExpenseXRayTab /></TabsContent>
-  <TabsContent value="patrimonio"><NetWorthTab /></TabsContent>
-  <TabsContent value="projetos"><ProjectsPlanningTab /></TabsContent>
-</Tabs>
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
 ```
 
-A aba de Reembolsos existente (`RefundReport`) será mantida como sub-aba dentro do Raio-X de Despesas.
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
+
+Uma unica linha a alterar.
 
