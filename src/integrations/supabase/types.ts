@@ -486,6 +486,45 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          status: string
+          target_amount: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          status?: string
+          target_amount?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          status?: string
+          target_amount?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       recurring_rules: {
         Row: {
           account_id: string | null
@@ -594,6 +633,7 @@ export type Database = {
           is_refund: boolean
           is_reimbursable: boolean
           original_description: string | null
+          project_id: string | null
           recurring_rule_id: string | null
           refunded_transaction_id: string | null
           reimbursement_status: string | null
@@ -622,6 +662,7 @@ export type Database = {
           is_refund?: boolean
           is_reimbursable?: boolean
           original_description?: string | null
+          project_id?: string | null
           recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
@@ -650,6 +691,7 @@ export type Database = {
           is_refund?: boolean
           is_reimbursable?: boolean
           original_description?: string | null
+          project_id?: string | null
           recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
           reimbursement_status?: string | null
@@ -679,6 +721,13 @@ export type Database = {
             columns: ["credit_card_id"]
             isOneToOne: false
             referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
