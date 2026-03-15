@@ -39,14 +39,13 @@ export function EditBudgetModal({ open, onOpenChange, budget, month, year }: Edi
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Editar Meta de Orçamento</DialogTitle>
-          <DialogDescription>
-            {budget?.categories?.icon} {budget?.categories?.name}
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Editar Meta de Orçamento"
+      description={<>{budget?.categories?.icon} {budget?.categories?.name}</>}
+      className="sm:max-w-md"
+    >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="amount">Valor Planejado (R$)</Label>
