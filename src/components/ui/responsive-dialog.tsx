@@ -19,8 +19,8 @@ import { cn } from "@/lib/utils";
 interface ResponsiveDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  title: string;
-  description?: string;
+  title: React.ReactNode;
+  description?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }

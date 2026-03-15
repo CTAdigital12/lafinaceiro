@@ -1,11 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -99,11 +93,12 @@ export function UpdatePricesModal({
   }, {} as Record<string, InvestmentAsset[]>);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Atualizar Carteira</DialogTitle>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Atualizar Carteira"
+      className="max-w-lg"
+    >
 
         <div className="space-y-6 py-4">
           {/* Variable Income Section */}
@@ -229,15 +224,14 @@ export function UpdatePricesModal({
           )}
         </div>
 
-        <DialogFooter>
+        <div className="flex justify-end gap-2 pt-4 border-t border-border">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting || assets.length === 0}>
             {isSubmitting ? "Salvando..." : "Salvar Atualizações"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+    </ResponsiveDialog>
   );
 }

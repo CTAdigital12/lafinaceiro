@@ -16,14 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { logError } from "@/lib/errorHandler";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -278,29 +271,28 @@ export function PayInvoiceModal({
 
   if (isLoadingTransactions) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Pagar Fatura" className="sm:max-w-lg">
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </ResponsiveDialog>
     );
   }
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-primary" />
-              Pagar Fatura
-            </DialogTitle>
-            <DialogDescription>
-              {creditCard?.name} - {creditCard?.brand}
-            </DialogDescription>
-          </DialogHeader>
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title={
+          <span className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-primary" />
+            Pagar Fatura
+          </span>
+        }
+        description={`${creditCard?.name} - ${creditCard?.brand}`}
+        className="sm:max-w-lg"
+      >
 
           <div className="space-y-4 py-2">
             {/* Invoice Composition Section */}
@@ -879,7 +871,7 @@ export function PayInvoiceModal({
             </div>
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-2 pt-4 border-t border-border">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancelar
             </Button>
@@ -893,9 +885,8 @@ export function PayInvoiceModal({
                 "Confirmar Pagamento"
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+      </ResponsiveDialog>
 
       {/* Invoice Items Modal */}
       <InvoiceItemsModal

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,14 +55,13 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nova Meta de Orçamento</DialogTitle>
-          <DialogDescription>
-            Defina uma meta de gastos para uma categoria
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Nova Meta de Orçamento"
+      description="Defina uma meta de gastos para uma categoria"
+      className="sm:max-w-md"
+    >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="category">Categoria</Label>
@@ -149,7 +148,6 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

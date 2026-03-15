@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,14 +39,13 @@ export function EditBudgetModal({ open, onOpenChange, budget, month, year }: Edi
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Editar Meta de Orçamento</DialogTitle>
-          <DialogDescription>
-            {budget?.categories?.icon} {budget?.categories?.name}
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Editar Meta de Orçamento"
+      description={<>{budget?.categories?.icon} {budget?.categories?.name}</>}
+      className="sm:max-w-md"
+    >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="amount">Valor Planejado (R$)</Label>
@@ -77,7 +76,6 @@ export function EditBudgetModal({ open, onOpenChange, budget, month, year }: Edi
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

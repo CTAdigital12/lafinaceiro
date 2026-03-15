@@ -1,12 +1,6 @@
 import { useState, useCallback } from "react";
 import { Upload, FileText, Loader2, X, Check, AlertCircle } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { parseOFXWithBalance, OFXTransaction } from "@/lib/ofxParser";
@@ -187,14 +181,13 @@ export function AccountImportModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Importar Extrato</DialogTitle>
-          <DialogDescription>
-            {accountName} - Envie o extrato em OFX, CSV, PDF ou imagem
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={handleClose}
+      title="Importar Extrato"
+      description={`${accountName} - Envie o extrato em OFX, CSV, PDF ou imagem`}
+      className="sm:max-w-md"
+    >
 
         <div className="space-y-4">
           {!file ? (
@@ -298,7 +291,6 @@ export function AccountImportModal({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

@@ -2,14 +2,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Unlock, AlertTriangle } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useInvoiceCycles } from "@/hooks/useInvoiceCycles";
@@ -52,18 +45,18 @@ export function ReopenInvoiceModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-chart-4">
-            <Unlock className="h-5 w-5" />
-            Reabrir Fatura
-          </DialogTitle>
-          <DialogDescription>
-            Desbloquear a fatura de {creditCardName} para edição
-          </DialogDescription>
-        </DialogHeader>
-
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={
+        <span className="flex items-center gap-2 text-chart-4">
+          <Unlock className="h-5 w-5" />
+          Reabrir Fatura
+        </span>
+      }
+      description={`Desbloquear a fatura de ${creditCardName} para edição`}
+      className="sm:max-w-md"
+    >
         <div className="space-y-4 py-4">
           {/* Summary */}
           <div className="bg-muted/50 rounded-lg p-4">
@@ -84,7 +77,7 @@ export function ReopenInvoiceModal({
           </Alert>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <div className="flex justify-end gap-2 pt-4 border-t border-border">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isReopening}>
             Cancelar
           </Button>
@@ -96,8 +89,7 @@ export function ReopenInvoiceModal({
           >
             {isReopening ? "Reabrindo..." : "Reabrir Fatura"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+    </ResponsiveDialog>
   );
 }
