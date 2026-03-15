@@ -27,6 +27,14 @@ interface HeaderProps {
 export function Header({ currentDate, onDateChange }: HeaderProps) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries();
+    setIsRefreshing(false);
+  };
 
   const navigateMonth = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate);
