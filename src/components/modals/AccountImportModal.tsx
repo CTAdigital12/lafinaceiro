@@ -181,14 +181,13 @@ export function AccountImportModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Importar Extrato</DialogTitle>
-          <DialogDescription>
-            {accountName} - Envie o extrato em OFX, CSV, PDF ou imagem
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={handleClose}
+      title="Importar Extrato"
+      description={`${accountName} - Envie o extrato em OFX, CSV, PDF ou imagem`}
+      className="sm:max-w-md"
+    >
 
         <div className="space-y-4">
           {!file ? (
