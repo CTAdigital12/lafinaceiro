@@ -47,6 +47,7 @@ const secondaryNavItems: NavItemWithPath[] = [
   { icon: Layers, label: "Regras", path: "/categorization-rules" },
   { icon: RefreshCw, label: "Recorrências", path: "/recurring" },
   { icon: Calculator, label: "Planejamento", path: "/planning" },
+  { icon: FolderKanban, label: "Projetos", path: "/projects" },
   { icon: FileText, label: "Relatórios", path: "/reports" },
   { icon: Building2, label: "Despesas Empresa", path: "/corporate-expenses" },
   { icon: Receipt, label: "Reembolsos", path: "/reimbursements" },

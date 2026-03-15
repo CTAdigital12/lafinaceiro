@@ -31,6 +31,7 @@ const navItems = [
   { icon: BookMarked, label: "Regras", path: "/categorization-rules" },
   { icon: RefreshCw, label: "Recorrências", path: "/recurring" },
   { icon: Target, label: "Planejamento", path: "/planning" },
+  { icon: FolderKanban, label: "Projetos", path: "/projects" },
   { icon: TrendingUp, label: "Investimentos", path: "/investments" },
   { icon: BarChart3, label: "Relatórios", path: "/reports" },
   { icon: Briefcase, label: "Despesas Empresa", path: "/corporate-expenses" },
