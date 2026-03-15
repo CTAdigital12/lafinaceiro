@@ -84,13 +84,12 @@ export function InvoiceItemsModal({
   const personalTransactions = transactions.filter((t) => !t.is_corporate_expense && !t.is_reimbursable);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            📋 Revisar Itens da Fatura
-          </DialogTitle>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="📋 Revisar Itens da Fatura"
+      className="sm:max-w-lg"
+    >
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
