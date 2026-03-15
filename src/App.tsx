@@ -12,6 +12,7 @@ import Transactions from "./pages/Transactions";
 import CreditCards from "./pages/CreditCards";
 import Categories from "./pages/Categories";
 import Planning from "./pages/Planning";
+import Projects from "./pages/Projects";
 import Reports from "./pages/Reports";
 import CorporateExpenses from "./pages/CorporateExpenses";
 import Reimbursements from "./pages/Reimbursements";
