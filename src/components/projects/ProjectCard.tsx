@@ -36,14 +36,7 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
         </div>
 
         <div className="space-y-1">
-          <Progress
-            value={Math.min(percentage, 100)}
-            className="h-2"
-            style={{ ["--progress-color" as string]: undefined }}
-          />
-          <div
-            className="h-2 rounded-full overflow-hidden bg-secondary"
-          >
+          <div className="h-2 rounded-full overflow-hidden bg-secondary">
             <div
               className={`h-full transition-all ${progressColor}`}
               style={{ width: `${Math.min(percentage, 100)}%` }}
