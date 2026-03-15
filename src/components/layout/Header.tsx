@@ -89,6 +89,18 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
 
       {/* Right Side */}
       <div className="flex items-center gap-4">
+        {/* Refresh */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          aria-label="Atualizar dados"
+          title="Atualizar dados"
+        >
+          <RefreshCw className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`} />
+        </Button>
+
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
