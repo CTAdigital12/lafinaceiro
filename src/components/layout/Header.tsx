@@ -88,7 +88,7 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
       </div>
 
       {/* Right Side */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-1 md:gap-4">
         {/* Refresh */}
         <Button
           variant="ghost"
