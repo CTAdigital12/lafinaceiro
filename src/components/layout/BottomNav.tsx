@@ -175,6 +175,7 @@ export function BottomNav() {
               <span>Sair</span>
             </Button>
           </nav>
+          </ScrollArea>
         </SheetContent>
       </Sheet>
 
