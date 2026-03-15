@@ -58,18 +58,18 @@ export function CloseInvoiceModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" />
-            Fechar Fatura
-          </DialogTitle>
-          <DialogDescription>
-            Confirme o fechamento da fatura de {creditCardName}
-          </DialogDescription>
-        </DialogHeader>
-
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Lock className="h-5 w-5" />
+          Fechar Fatura
+        </span>
+      }
+      description={`Confirme o fechamento da fatura de ${creditCardName}`}
+      className="sm:max-w-md"
+    >
         <div className="space-y-4 py-4">
           {/* Summary */}
           <div className="bg-muted/50 rounded-lg p-4 space-y-2">
@@ -94,15 +94,14 @@ export function CloseInvoiceModal({
           </Alert>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <div className="flex justify-end gap-2 pt-4 border-t border-border">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isClosing}>
             Cancelar
           </Button>
           <Button onClick={handleClose} disabled={isClosing}>
             {isClosing ? "Fechando..." : "Fechar Fatura"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+    </ResponsiveDialog>
   );
 }
