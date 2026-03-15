@@ -101,8 +101,8 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
           <RefreshCw className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`} />
         </Button>
 
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
+        {/* Notifications - hidden on mobile */}
+        <Button variant="ghost" size="icon" className="relative hidden md:inline-flex">
           <Bell className="h-5 w-5" />
         </Button>
 
