@@ -163,19 +163,22 @@ export function TransactionFiltersModal({
     (localFilters.cardPaymentFilter !== "all" ? 1 : 0);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filtros Avançados
-            {activeFiltersCount > 0 && (
-              <span className="ml-2 px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
-                {activeFiltersCount}
-              </span>
-            )}
-          </DialogTitle>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Filter className="h-5 w-5" />
+          Filtros Avançados
+          {activeFiltersCount > 0 && (
+            <span className="ml-2 px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
+              {activeFiltersCount}
+            </span>
+          )}
+        </span>
+      }
+      className="sm:max-w-lg"
+    >
 
         <div className="space-y-6 py-4">
           {/* Tipo de Transação */}
