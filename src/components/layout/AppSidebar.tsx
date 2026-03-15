@@ -11,6 +11,7 @@ import {
   Tags,
   Briefcase,
   TrendingUp,
+  FolderKanban,
   BookMarked,
   ReceiptText,
   History,
