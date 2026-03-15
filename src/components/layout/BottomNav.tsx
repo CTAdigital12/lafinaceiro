@@ -142,7 +142,8 @@ export function BottomNav() {
           <SheetHeader className="pb-4">
             <SheetTitle>Menu</SheetTitle>
           </SheetHeader>
-          <nav className="grid gap-1 overflow-y-auto pb-8">
+          <ScrollArea className="h-[calc(70vh-80px)]" data-vaul-no-drag>
+          <nav className="grid gap-1 pb-8" data-vaul-no-drag>
             {secondaryNavItems.map((item) => {
               const active = isActive(item.path);
               return (
