@@ -64,11 +64,13 @@ export interface Transaction {
   total_installments: number | null;
   is_provisional: boolean;
   recurring_rule_id: string | null;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
   categories?: { id: string; name: string; icon: string; color: string } | null;
   accounts?: { name: string } | null;
   credit_cards?: { id: string; name: string; last_digits: string; color: string | null } | null;
+  projects?: { id: string; name: string; icon: string | null; color: string | null } | null;
 }
 
 interface UseTransactionsOptions {
