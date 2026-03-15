@@ -1,36 +1,49 @@
 
 
-## Reformulação da aba Projetos — Orçamento vs Realizado
+# Corrigir Data das Parcelas em Debito em Conta
 
-### O que muda
+## Problema
 
-**1. Orçamento vs Realizado — Apenas categorias pai (com expansão)**
-- Agrupar os budgets por categoria pai: somar planejado e realizado das subcategorias sob cada pai
-- Mostrar apenas as categorias pai como linhas colapsáveis (usando Collapsible)
-- Ao clicar, expande para mostrar as subcategorias com seus valores individuais
-- Categorias sem pai (leaf) continuam aparecendo normalmente
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-**2. Novo gráfico: Orçado vs Realizado mensal com variação %**
-- Gráfico de barras agrupadas (Orçado vs Realizado) dos últimos 6 meses usando ComposedChart do Recharts
-- Linha sobreposta mostrando a variação % mensal do custo (crescimento ou diminuição vs mês anterior)
-- Cores: verde quando despesa diminuiu, vermelho quando aumentou
-- Tooltip mostrando os 3 valores (orçado, realizado, variação %)
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-**3. Novo card: Acumulado do período**
-- Card no topo mostrando o total orçado vs total realizado acumulado dos 6 meses
-- Barra de progresso geral + diferença em R$ e %
+```text
+const baseDate = date;  // usa data de compra (24/02)
+```
 
-### Arquivos alterados
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
 
-**`src/components/reports/ProjectsPlanningTab.tsx`** — reescrita completa:
-- Buscar budgets dos últimos 6 meses (não só o mês atual) usando queries diretas ao Supabase
-- Agrupar categorias pai/filho com estado de expansão via `useState`
-- Adicionar ComposedChart com barras (orçado/realizado) + linha de variação %
-- Cards de resumo acumulado no topo
-- Manter a seção de Projetos Ativos como está (já funciona bem)
+## Solucao
 
-### Dados necessários
-- Budgets de 6 meses: query direta ao Supabase filtrando pelo range de meses (não depende do hook `useBudgets` que só busca 1 mês)
-- Transações já carregadas com `showAll: true`
-- Categorias para mapear parent_id
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+
+## Secao Tecnica
+
+### Arquivo: `src/components/modals/TransactionModal.tsx`
+
+Alterar linha 220:
+
+```typescript
+// Antes:
+const baseDate = date;
+
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+```
+
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
+
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
+
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
+```
+
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
+
+Uma unica linha a alterar.
 
