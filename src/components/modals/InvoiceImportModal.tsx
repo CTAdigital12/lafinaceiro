@@ -295,14 +295,13 @@ export function InvoiceImportModal({
   const currentMonthName = MONTHS.find(m => m.value === String(month))?.label || "";
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Importar Fatura</DialogTitle>
-        <DialogDescription>
-            {creditCardName} - Envie a fatura em PDF, Excel, CSV ou imagem
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={handleClose}
+      title="Importar Fatura"
+      description={`${creditCardName} - Envie a fatura em PDF, Excel, CSV ou imagem`}
+      className="sm:max-w-md"
+    >
 
         <div className="space-y-4">
           {/* Month/Year selector - MANDATORY */}
