@@ -671,6 +671,61 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           )}
 
 
+          {/* Project / Caixinha */}
+          {activeProjects.length > 0 && (
+            <div className="space-y-2">
+              <Label>Projeto / Caixinha</Label>
+              <Popover open={openProjectPopover} onOpenChange={setOpenProjectPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {projectId ? (
+                      <span className="flex items-center gap-2">
+                        {activeProjects.find(p => p.id === projectId)?.icon}
+                        {activeProjects.find(p => p.id === projectId)?.name}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Nenhum projeto</span>
+                    )}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar projeto..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum projeto encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="none"
+                          onSelect={() => { setProjectId(null); setOpenProjectPopover(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", !projectId ? "opacity-100" : "opacity-0")} />
+                          Nenhum projeto
+                        </CommandItem>
+                        {activeProjects.map((proj) => (
+                          <CommandItem
+                            key={proj.id}
+                            value={proj.name}
+                            onSelect={() => { setProjectId(proj.id); setOpenProjectPopover(false); }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", projectId === proj.id ? "opacity-100" : "opacity-0")} />
+                            <span className="mr-2">{proj.icon}</span>
+                            {proj.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
+
+
           {/* Date */}
           <div className="space-y-2">
             <Label>Data</Label>
