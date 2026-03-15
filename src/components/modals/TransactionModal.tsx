@@ -83,6 +83,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const { incomeCategories, expenseCategories, categories: allCategories } = useCategories();
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
+  const { activeProjects } = useProjects();
   const { createTransaction, updateTransaction } = useTransactions();
   const { createRule } = useCategorizationRules();
 
