@@ -249,6 +249,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           installment_group_id: groupId,
           installment_number: i,
           total_installments: totalInstallments,
+          project_id: projectId || null,
         };
 
         await createTransaction.mutateAsync(installmentData);
