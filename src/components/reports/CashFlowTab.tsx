@@ -29,7 +29,7 @@ export function CashFlowTab() {
     loadedCount: 10000,
   });
 
-  const { chartData, positiveMonths, totalMonths, avgSavingRate, periodBalance } = useMemo(() => {
+  const { chartData, positiveMonths, totalMonths, avgSavingRate, periodBalance, lastMonthBalance } = useMemo(() => {
     if (!transactions.length) return { chartData: [], positiveMonths: 0, totalMonths: 0, avgSavingRate: 0, periodBalance: 0 };
 
     const now = new Date();
