@@ -124,7 +124,7 @@ export default function Reports() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -144,12 +144,12 @@ export default function Reports() {
 
         <TabsContent value="expenses" className="space-y-6">
           {/* Header actions for expenses tab */}
-          <div className="flex items-center gap-3 justify-end">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
             <div className="flex items-center gap-1">
               <Button variant="outline" size="icon" onClick={handlePreviousMonth}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button variant="outline" className="gap-2 min-w-[160px]">
+              <Button variant="outline" className="gap-2 min-w-[140px] text-sm">
                 <Calendar className="h-4 w-4" />
                 {format(currentDate, "MMMM yyyy", { locale: ptBR })}
               </Button>
@@ -157,7 +157,10 @@ export default function Reports() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" size="icon" className="sm:hidden">
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" className="gap-2 hidden sm:inline-flex">
               <Download className="h-4 w-4" />
               Exportar
             </Button>
@@ -234,8 +237,8 @@ export default function Reports() {
                             </span>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-foreground">
+                        <div className="text-right flex-shrink-0">
+                          <p className="font-semibold text-foreground text-sm sm:text-base whitespace-nowrap">
                             R$ {category.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </p>
                         </div>
