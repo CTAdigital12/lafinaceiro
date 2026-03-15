@@ -88,12 +88,14 @@ export function CashFlowTab() {
       };
     });
 
+    const lastMonth = data[data.length - 1];
     return {
       chartData: data,
       positiveMonths: posCount,
       totalMonths: months.length,
       avgSavingRate: monthsWithIncome > 0 ? Math.round(savingRateSum / monthsWithIncome) : 0,
       periodBalance: cumBalance,
+      lastMonthBalance: lastMonth?.saldoMensal ?? 0,
     };
   }, [transactions]);
 
