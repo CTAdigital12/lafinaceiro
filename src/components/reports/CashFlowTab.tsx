@@ -130,7 +130,7 @@ export function CashFlowTab() {
   return (
     <div className="space-y-4">
       {/* Insight Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="pt-4 pb-4 px-4">
             <div className="flex items-center gap-2 mb-1">
@@ -156,12 +156,27 @@ export function CashFlowTab() {
         <Card>
           <CardContent className="pt-4 pb-4 px-4">
             <div className="flex items-center gap-2 mb-1">
+              {lastMonthBalance >= 0 ? (
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-destructive" />
+              )}
+              <span className="text-xs text-muted-foreground">Último mês</span>
+            </div>
+            <p className={`text-lg font-bold ${lastMonthBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+              {formatCurrency(lastMonthBalance)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-1">
               {balanceIsPositive ? (
                 <Wallet className="h-4 w-4 text-emerald-500" />
               ) : (
                 <TrendingDown className="h-4 w-4 text-destructive" />
               )}
-              <span className="text-xs text-muted-foreground">Saldo</span>
+              <span className="text-xs text-muted-foreground">Acumulado</span>
             </div>
             <p className={`text-lg font-bold ${balanceIsPositive ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
               {formatCurrency(periodBalance)}
