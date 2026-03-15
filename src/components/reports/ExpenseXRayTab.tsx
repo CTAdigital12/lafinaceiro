@@ -216,20 +216,7 @@ export function ExpenseXRayTab() {
                     dataKey="value"
                     nameKey="name"
                     stroke="hsl(var(--border))"
-                    content={({ x, y, width, height, name, value }: any) => {
-                      if (width < 40 || height < 30) return null;
-                      return (
-                        <g>
-                          <rect x={x} y={y} width={width} height={height} rx={4} fill={treemapData.find(d => d.name === name)?.color || "#6B7280"} fillOpacity={0.85} stroke="hsl(var(--background))" strokeWidth={2} />
-                          {width > 60 && height > 40 && (
-                            <>
-                              <text x={x + 8} y={y + 18} fill="white" fontSize={11} fontWeight={600}>{name?.length > 12 ? name.substring(0, 12) + "…" : name}</text>
-                              <text x={x + 8} y={y + 32} fill="white" fontSize={10} opacity={0.8}>{formatCurrency(value)}</text>
-                            </>
-                          )}
-                        </g>
-                      );
-                    }}
+                    fill="hsl(var(--chart-1))"
                   >
                     <Tooltip content={<TreemapTooltip />} />
                   </Treemap>

@@ -23,6 +23,7 @@ import {
 import { filterPureExpenses, getCompetenceDate } from "@/lib/reportUtils";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Target, FolderKanban } from "lucide-react";
 
 export function ProjectsPlanningTab() {
