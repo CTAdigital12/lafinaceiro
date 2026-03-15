@@ -313,6 +313,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         installment_group_id: isEditing && transaction ? transaction.installment_group_id : null,
         installment_number: isEditing && transaction ? transaction.installment_number : null,
         total_installments: isEditing && transaction ? transaction.total_installments : null,
+        project_id: projectId || null,
       };
 
       if (isEditing && transaction) {
