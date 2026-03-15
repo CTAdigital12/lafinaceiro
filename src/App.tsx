@@ -12,6 +12,7 @@ import Transactions from "./pages/Transactions";
 import CreditCards from "./pages/CreditCards";
 import Categories from "./pages/Categories";
 import Planning from "./pages/Planning";
+import Projects from "./pages/Projects";
 import Reports from "./pages/Reports";
 import CorporateExpenses from "./pages/CorporateExpenses";
 import Reimbursements from "./pages/Reimbursements";
@@ -55,6 +56,7 @@ const App = () => (
                       <Route path="/credit-cards" element={<CreditCards />} />
                       <Route path="/categories" element={<Categories />} />
                       <Route path="/planning" element={<Planning />} />
+                      <Route path="/projects" element={<Projects />} />
                       <Route path="/reports" element={<Reports />} />
                       <Route path="/corporate-expenses" element={<CorporateExpenses />} />
                       <Route path="/reimbursements" element={<Reimbursements />} />

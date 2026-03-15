@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Home, List, Plus, CreditCard, Menu, LogOut, TrendingUp, Wallet, Tag, Calculator, FileText, Building2, Receipt, Settings, Layers, History, RefreshCw, LucideIcon } from "lucide-react";
+import { Home, List, Plus, CreditCard, Menu, LogOut, TrendingUp, Wallet, Tag, Calculator, FileText, Building2, Receipt, Settings, Layers, History, RefreshCw, FolderKanban, LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -47,6 +47,7 @@ const secondaryNavItems: NavItemWithPath[] = [
   { icon: Layers, label: "Regras", path: "/categorization-rules" },
   { icon: RefreshCw, label: "Recorrências", path: "/recurring" },
   { icon: Calculator, label: "Planejamento", path: "/planning" },
+  { icon: FolderKanban, label: "Projetos", path: "/projects" },
   { icon: FileText, label: "Relatórios", path: "/reports" },
   { icon: Building2, label: "Despesas Empresa", path: "/corporate-expenses" },
   { icon: Receipt, label: "Reembolsos", path: "/reimbursements" },

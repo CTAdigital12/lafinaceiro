@@ -35,6 +35,8 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
+import { useProjects } from "@/hooks/useProjects";
+import { FolderKanban } from "lucide-react";
 
 interface TransactionModalProps {
   open: boolean;
@@ -70,6 +72,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [openCategoryPopover, setOpenCategoryPopover] = useState(false);
   const [openAccountPopover, setOpenAccountPopover] = useState(false);
   const [openCardPopover, setOpenCardPopover] = useState(false);
+  const [openProjectPopover, setOpenProjectPopover] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
   
   // Installment-related state
   const [isInstallment, setIsInstallment] = useState(false);
@@ -79,6 +83,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const { incomeCategories, expenseCategories, categories: allCategories } = useCategories();
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
+  const { activeProjects } = useProjects();
   const { createTransaction, updateTransaction } = useTransactions();
   const { createRule } = useCategorizationRules();
 
@@ -136,6 +141,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsRefund(true);
       setIsCardPayment(false);
       setRefundedTransactionId(refundFrom.id);
+      setProjectId(null);
       setSaveRule(false);
       setRuleKeyword("");
     } else if (sourceData) {
@@ -166,6 +172,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsRefund(sourceData.is_refund || false);
       setIsCardPayment(sourceData.is_card_payment || false);
       setRefundedTransactionId(sourceData.refunded_transaction_id || null);
+      setProjectId((sourceData as any).project_id || null);
       setSaveRule(false);
       setRuleKeyword("");
     } else {
@@ -183,6 +190,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsRefund(false);
       setIsCardPayment(false);
       setRefundedTransactionId(null);
+      setProjectId(null);
       setSaveRule(false);
       setRuleKeyword("");
       setIsInstallment(false);
@@ -241,6 +249,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           installment_group_id: groupId,
           installment_number: i,
           total_installments: totalInstallments,
+          project_id: projectId || null,
         };
 
         await createTransaction.mutateAsync(installmentData);
@@ -304,6 +313,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         installment_group_id: isEditing && transaction ? transaction.installment_group_id : null,
         installment_number: isEditing && transaction ? transaction.installment_number : null,
         total_installments: isEditing && transaction ? transaction.total_installments : null,
+        project_id: projectId || null,
       };
 
       if (isEditing && transaction) {
@@ -657,6 +667,61 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                   </p>
                 </div>
               )}
+            </div>
+          )}
+
+
+          {/* Project / Caixinha */}
+          {activeProjects.length > 0 && (
+            <div className="space-y-2">
+              <Label>Projeto / Caixinha</Label>
+              <Popover open={openProjectPopover} onOpenChange={setOpenProjectPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {projectId ? (
+                      <span className="flex items-center gap-2">
+                        {activeProjects.find(p => p.id === projectId)?.icon}
+                        {activeProjects.find(p => p.id === projectId)?.name}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Nenhum projeto</span>
+                    )}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar projeto..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum projeto encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="none"
+                          onSelect={() => { setProjectId(null); setOpenProjectPopover(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", !projectId ? "opacity-100" : "opacity-0")} />
+                          Nenhum projeto
+                        </CommandItem>
+                        {activeProjects.map((proj) => (
+                          <CommandItem
+                            key={proj.id}
+                            value={proj.name}
+                            onSelect={() => { setProjectId(proj.id); setOpenProjectPopover(false); }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", projectId === proj.id ? "opacity-100" : "opacity-0")} />
+                            <span className="mr-2">{proj.icon}</span>
+                            {proj.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 

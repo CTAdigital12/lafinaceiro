@@ -64,11 +64,13 @@ export interface Transaction {
   total_installments: number | null;
   is_provisional: boolean;
   recurring_rule_id: string | null;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
   categories?: { id: string; name: string; icon: string; color: string } | null;
   accounts?: { name: string } | null;
   credit_cards?: { id: string; name: string; last_digits: string; color: string | null } | null;
+  projects?: { id: string; name: string; icon: string | null; color: string | null } | null;
 }
 
 interface UseTransactionsOptions {
@@ -106,7 +108,8 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
           *,
           categories (id, name, icon, color),
           accounts (name),
-          credit_cards (id, name, last_digits, color)
+          credit_cards (id, name, last_digits, color),
+          projects (id, name, icon, color)
         `, { count: "exact" });
 
       // Apply date filter only if not showing all
@@ -159,7 +162,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const hasMore = transactions.length < totalCount;
 
   const createTransaction = useMutation({
-    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "due_date" | "imported_at" | "reimbursement_status" | "is_provisional" | "recurring_rule_id"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; is_provisional?: boolean; recurring_rule_id?: string | null; original_description?: string | null; silent?: boolean; skipInvoiceCheck?: boolean }) => {
+    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "projects" | "due_date" | "imported_at" | "reimbursement_status" | "is_provisional" | "recurring_rule_id" | "project_id"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; is_provisional?: boolean; recurring_rule_id?: string | null; project_id?: string | null; original_description?: string | null; silent?: boolean; skipInvoiceCheck?: boolean }) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
@@ -201,6 +204,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
       
       // Sync credit card invoice if this was a credit card transaction
       if (result.creditCardId) {
@@ -268,6 +272,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
       
       // Sync credit card invoices if affected
       if (result.oldCreditCardId) {
