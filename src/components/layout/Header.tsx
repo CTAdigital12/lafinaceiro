@@ -61,9 +61,9 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuário";
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)', minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))' }}>
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-3 md:px-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)', minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))' }}>
       {/* Month/Year Selector */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 md:gap-2">
         <Button
           variant="ghost"
           size="icon"
@@ -72,7 +72,7 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="min-w-[160px] text-center">
+        <div className="min-w-[120px] md:min-w-[160px] text-center">
           <span className="text-lg font-semibold">
             {months[currentDate.getMonth()]} {currentDate.getFullYear()}
           </span>
@@ -88,7 +88,7 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
       </div>
 
       {/* Right Side */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-1 md:gap-4">
         {/* Refresh */}
         <Button
           variant="ghost"
@@ -101,8 +101,8 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
           <RefreshCw className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`} />
         </Button>
 
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
+        {/* Notifications - hidden on mobile */}
+        <Button variant="ghost" size="icon" className="relative hidden md:inline-flex">
           <Bell className="h-5 w-5" />
         </Button>
 

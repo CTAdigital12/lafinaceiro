@@ -42,7 +42,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Sidebar - hidden on mobile */}
       <div className="hidden md:block">
         <AppSidebar />

@@ -1,19 +1,49 @@
 
 
-## Corrigir Header cortado no mobile
+# Corrigir Data das Parcelas em Debito em Conta
 
-O problema visível no screenshot é que o **Header** está cortado à direita — o avatar/perfil está parcialmente visível. O Header tem `px-6` (24px cada lado) + seletor de mês com `min-w-[160px]` + 3 botões à direita, totalizando mais de 390px.
+## Problema
 
-### Alterações
+Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
 
-**Arquivo: `src/components/layout/Header.tsx`**
+O bug esta na linha 220 do `TransactionModal.tsx`:
 
-1. Reduzir padding horizontal no mobile: `px-3 md:px-6`
-2. Reduzir `min-w-[160px]` do seletor de mês para `min-w-[120px] md:min-w-[160px]`
-3. Reduzir `gap-4` dos botões da direita para `gap-1 md:gap-4`
-4. Esconder o botão de notificações (Bell) no mobile — já não tem funcionalidade visível
+```text
+const baseDate = date;  // usa data de compra (24/02)
+```
 
-**Arquivo: `src/components/layout/MainLayout.tsx`**
+As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
 
-5. Adicionar `overflow-x-hidden` ao container principal para prevenir qualquer scroll horizontal residual
+## Solucao
+
+Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+
+## Secao Tecnica
+
+### Arquivo: `src/components/modals/TransactionModal.tsx`
+
+Alterar linha 220:
+
+```typescript
+// Antes:
+const baseDate = date;
+
+// Depois:
+const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
+```
+
+Isso garante que:
+- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
+- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
+
+Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
+
+```typescript
+date: format(installmentDate, "yyyy-MM-dd"),
+due_date: format(installmentDate, "yyyy-MM-dd"),
+```
+
+Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
+
+Uma unica linha a alterar.
 
