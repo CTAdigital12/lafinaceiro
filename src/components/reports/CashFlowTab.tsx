@@ -30,7 +30,7 @@ export function CashFlowTab() {
   });
 
   const { chartData, positiveMonths, totalMonths, avgSavingRate, periodBalance, lastMonthBalance } = useMemo(() => {
-    if (!transactions.length) return { chartData: [], positiveMonths: 0, totalMonths: 0, avgSavingRate: 0, periodBalance: 0 };
+    if (!transactions.length) return { chartData: [], positiveMonths: 0, totalMonths: 0, avgSavingRate: 0, periodBalance: 0, lastMonthBalance: 0 };
 
     const now = new Date();
     // Last 6 months only
