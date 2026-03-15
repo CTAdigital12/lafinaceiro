@@ -272,6 +272,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
       
       // Sync credit card invoices if affected
       if (result.oldCreditCardId) {
