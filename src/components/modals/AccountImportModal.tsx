@@ -1,12 +1,6 @@
 import { useState, useCallback } from "react";
 import { Upload, FileText, Loader2, X, Check, AlertCircle } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { parseOFXWithBalance, OFXTransaction } from "@/lib/ofxParser";

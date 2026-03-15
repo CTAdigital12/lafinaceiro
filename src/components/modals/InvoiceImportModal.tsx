@@ -1,12 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Upload, FileText, Loader2, X, Check, AlertCircle, Calendar, Settings } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Select,
