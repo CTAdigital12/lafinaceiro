@@ -291,7 +291,6 @@ export function AccountImportModal({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

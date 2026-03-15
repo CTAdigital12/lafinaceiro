@@ -76,7 +76,6 @@ export function EditBudgetModal({ open, onOpenChange, budget, month, year }: Edi
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

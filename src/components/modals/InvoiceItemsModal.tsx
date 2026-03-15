@@ -212,7 +212,7 @@ export function InvoiceItemsModal({
           </div>
         </div>
 
-        <DialogFooter>
+        <div className="flex justify-end gap-2 pt-4 border-t border-border">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -220,9 +220,8 @@ export function InvoiceItemsModal({
             <Check className="h-4 w-4 mr-2" />
             Aplicar Seleção
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+    </ResponsiveDialog>
   );
 }
 

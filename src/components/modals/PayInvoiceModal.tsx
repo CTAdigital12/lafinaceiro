@@ -871,7 +871,7 @@ export function PayInvoiceModal({
             </div>
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-2 pt-4 border-t border-border">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancelar
             </Button>
@@ -885,9 +885,8 @@ export function PayInvoiceModal({
                 "Confirmar Pagamento"
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+      </ResponsiveDialog>
 
       {/* Invoice Items Modal */}
       <InvoiceItemsModal

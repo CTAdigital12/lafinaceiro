@@ -681,7 +681,6 @@ export function TransactionFiltersModal({
             <Button onClick={handleApply}>Aplicar Filtros</Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

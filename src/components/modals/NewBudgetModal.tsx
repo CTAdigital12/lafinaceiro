@@ -148,7 +148,6 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

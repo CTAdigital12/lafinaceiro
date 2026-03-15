@@ -480,7 +480,6 @@ export function InvoiceImportModal({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }
