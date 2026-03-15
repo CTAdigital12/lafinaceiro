@@ -83,6 +83,7 @@ export function CashFlowTab() {
         name: label,
         receitas: Math.round(income),
         despesas: Math.round(expense),
+        saldoMensal: Math.round(balance),
         saldo: Math.round(cumBalance),
       };
     });
