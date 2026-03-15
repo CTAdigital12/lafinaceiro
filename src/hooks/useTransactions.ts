@@ -108,7 +108,8 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
           *,
           categories (id, name, icon, color),
           accounts (name),
-          credit_cards (id, name, last_digits, color)
+          credit_cards (id, name, last_digits, color),
+          projects (id, name, icon, color)
         `, { count: "exact" });
 
       // Apply date filter only if not showing all
