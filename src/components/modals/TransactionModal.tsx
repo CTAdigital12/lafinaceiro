@@ -141,6 +141,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsRefund(true);
       setIsCardPayment(false);
       setRefundedTransactionId(refundFrom.id);
+      setProjectId(null);
       setSaveRule(false);
       setRuleKeyword("");
     } else if (sourceData) {
