@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Home, List, Plus, CreditCard, Menu, LogOut, TrendingUp, Wallet, Tag, Calculator, FileText, Building2, Receipt, Settings, Layers, History, RefreshCw, LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -141,7 +142,8 @@ export function BottomNav() {
           <SheetHeader className="pb-4">
             <SheetTitle>Menu</SheetTitle>
           </SheetHeader>
-          <nav className="grid gap-1 overflow-y-auto pb-8">
+          <ScrollArea className="h-[calc(70vh-80px)]" data-vaul-no-drag>
+          <nav className="grid gap-1 pb-8" data-vaul-no-drag>
             {secondaryNavItems.map((item) => {
               const active = isActive(item.path);
               return (
@@ -173,6 +175,7 @@ export function BottomNav() {
               <span>Sair</span>
             </Button>
           </nav>
+          </ScrollArea>
         </SheetContent>
       </Sheet>
 
