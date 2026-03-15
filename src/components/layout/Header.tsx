@@ -72,7 +72,7 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="min-w-[160px] text-center">
+        <div className="min-w-[120px] md:min-w-[160px] text-center">
           <span className="text-lg font-semibold">
             {months[currentDate.getMonth()]} {currentDate.getFullYear()}
           </span>
