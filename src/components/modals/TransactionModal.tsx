@@ -72,6 +72,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [openCategoryPopover, setOpenCategoryPopover] = useState(false);
   const [openAccountPopover, setOpenAccountPopover] = useState(false);
   const [openCardPopover, setOpenCardPopover] = useState(false);
+  const [openProjectPopover, setOpenProjectPopover] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
   
   // Installment-related state
   const [isInstallment, setIsInstallment] = useState(false);
