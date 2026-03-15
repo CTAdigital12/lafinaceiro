@@ -1,4 +1,5 @@
-import { ChevronLeft, ChevronRight, Bell, LogOut } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, Bell, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 const months = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -25,6 +27,14 @@ interface HeaderProps {
 export function Header({ currentDate, onDateChange }: HeaderProps) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries();
+    setIsRefreshing(false);
+  };
 
   const navigateMonth = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate);
@@ -79,6 +89,18 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
 
       {/* Right Side */}
       <div className="flex items-center gap-4">
+        {/* Refresh */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          aria-label="Atualizar dados"
+          title="Atualizar dados"
+        >
+          <RefreshCw className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`} />
+        </Button>
+
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
