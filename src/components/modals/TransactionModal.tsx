@@ -190,6 +190,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsRefund(false);
       setIsCardPayment(false);
       setRefundedTransactionId(null);
+      setProjectId(null);
       setSaveRule(false);
       setRuleKeyword("");
       setIsInstallment(false);
