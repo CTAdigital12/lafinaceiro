@@ -29,8 +29,8 @@ export function CashFlowTab() {
     loadedCount: 10000,
   });
 
-  const { chartData, positiveMonths, totalMonths, avgSavingRate, periodBalance } = useMemo(() => {
-    if (!transactions.length) return { chartData: [], positiveMonths: 0, totalMonths: 0, avgSavingRate: 0, periodBalance: 0 };
+  const { chartData, positiveMonths, totalMonths, avgSavingRate, periodBalance, lastMonthBalance } = useMemo(() => {
+    if (!transactions.length) return { chartData: [], positiveMonths: 0, totalMonths: 0, avgSavingRate: 0, periodBalance: 0, lastMonthBalance: 0 };
 
     const now = new Date();
     // Last 6 months only
@@ -83,16 +83,19 @@ export function CashFlowTab() {
         name: label,
         receitas: Math.round(income),
         despesas: Math.round(expense),
+        saldoMensal: Math.round(balance),
         saldo: Math.round(cumBalance),
       };
     });
 
+    const lastMonth = data[data.length - 1];
     return {
       chartData: data,
       positiveMonths: posCount,
       totalMonths: months.length,
       avgSavingRate: monthsWithIncome > 0 ? Math.round(savingRateSum / monthsWithIncome) : 0,
       periodBalance: cumBalance,
+      lastMonthBalance: lastMonth?.saldoMensal ?? 0,
     };
   }, [transactions]);
 
@@ -102,17 +105,24 @@ export function CashFlowTab() {
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
+    const entry = payload[0]?.payload;
+    const monthlyBalance = entry?.saldoMensal ?? 0;
     return (
       <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-sm">
         <p className="font-medium text-foreground mb-1 capitalize">{label}</p>
         {payload.map((p: any) => {
-          const isNegative = p.dataKey === "saldo" && p.value < 0;
+          const isNegative = (p.dataKey === "saldo" || p.dataKey === "saldoMensal") && p.value < 0;
           return (
             <p key={p.dataKey} style={{ color: isNegative ? "hsl(var(--destructive))" : p.color }}>
               {p.name}: {formatCurrency(p.value)}
             </p>
           );
         })}
+        <div className="border-t border-border mt-1.5 pt-1.5">
+          <p className={monthlyBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>
+            Saldo do mês: {formatCurrency(monthlyBalance)}
+          </p>
+        </div>
       </div>
     );
   };
@@ -122,7 +132,7 @@ export function CashFlowTab() {
   return (
     <div className="space-y-4">
       {/* Insight Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="pt-4 pb-4 px-4">
             <div className="flex items-center gap-2 mb-1">
@@ -148,12 +158,27 @@ export function CashFlowTab() {
         <Card>
           <CardContent className="pt-4 pb-4 px-4">
             <div className="flex items-center gap-2 mb-1">
+              {lastMonthBalance >= 0 ? (
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-destructive" />
+              )}
+              <span className="text-xs text-muted-foreground">Último mês</span>
+            </div>
+            <p className={`text-lg font-bold ${lastMonthBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+              {formatCurrency(lastMonthBalance)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-1">
               {balanceIsPositive ? (
                 <Wallet className="h-4 w-4 text-emerald-500" />
               ) : (
                 <TrendingDown className="h-4 w-4 text-destructive" />
               )}
-              <span className="text-xs text-muted-foreground">Saldo</span>
+              <span className="text-xs text-muted-foreground">Acumulado</span>
             </div>
             <p className={`text-lg font-bold ${balanceIsPositive ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
               {formatCurrency(periodBalance)}
