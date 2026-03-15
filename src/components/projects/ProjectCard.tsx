@@ -1,6 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
-import { formatCurrency } from "@/lib/utils";
 import type { Project } from "@/hooks/useProjects";
 
 interface ProjectCardProps {
