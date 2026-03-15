@@ -1,49 +1,53 @@
 
 
-# Corrigir Data das Parcelas em Debito em Conta
+## Auditoria de Scroll Mobile - Problemas Encontrados
 
-## Problema
+Após analisar todos os componentes, identifiquei os seguintes modais que usam `Dialog` diretamente (em vez de `ResponsiveDialog`) e podem cortar conteúdo no mobile por não se adaptarem como Drawer:
 
-Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
+### Modais com problema potencial de scroll no mobile
 
-O bug esta na linha 220 do `TransactionModal.tsx`:
+Estes usam `Dialog` com `overflow-y-auto` mas **não** convertem para `Drawer` no mobile, o que pode causar corte de conteúdo em telas pequenas:
 
-```text
-const baseDate = date;  // usa data de compra (24/02)
-```
+1. **`TransactionFiltersModal.tsx`** - Modal de filtros avançados (689 linhas, muito conteúdo)
+2. **`PayInvoiceModal.tsx`** - Modal de pagamento de fatura
+3. **`NewBudgetModal.tsx`** - Modal de nova meta de orçamento
+4. **`EditBudgetModal.tsx`** - Modal de edição de orçamento
+5. **`AccountImportModal.tsx`** - Modal de importação de extrato
+6. **`InvoiceImportModal.tsx`** - Modal de importação de fatura
+7. **`InvoiceReviewModal.tsx`** - Modal de revisão de fatura (1277 linhas, o maior)
+8. **`InvoiceItemsModal.tsx`** - Modal de itens da fatura
+9. **`AccountReviewModal.tsx`** - Modal de revisão de conta
+10. **`UpdatePricesModal.tsx`** (investments) - Modal de atualização de preços
+11. **`SpreadsheetReconciliationModal.tsx`** - Modal de reconciliação
+12. **`ReconciliationDetailModal.tsx`** - Detalhes de reconciliação
+13. **`CloseInvoiceModal.tsx`** / **`ReopenInvoiceModal.tsx`** - Modais de fatura
 
-As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
+### Modais que já estão OK
+- `TransactionModal`, `AccountModal`, `CreditCardModal`, `RecurringRuleModal`, `AddInstallmentsModal`, `EditInstallmentsModal` - usam `ResponsiveDialog` (converte para Drawer no mobile)
+- `CategoryDetailSheet`, `ParentCategoryDetailSheet` - já usam Drawer no mobile com `data-vaul-no-drag`
+- `BottomNav` - já corrigido com ScrollArea
 
-## Solucao
+### Plano de Correção
 
-Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+Migrar os modais mais críticos (os que o usuário mais acessa no mobile) de `Dialog` para `ResponsiveDialog`, que já tem tratamento de scroll e `data-vaul-no-drag` embutido.
 
-## Secao Tecnica
+**Prioridade alta** (mais usados no mobile):
+1. `TransactionFiltersModal.tsx` - Converter para `ResponsiveDialog`
+2. `PayInvoiceModal.tsx` - Converter para `ResponsiveDialog`
+3. `NewBudgetModal.tsx` - Converter para `ResponsiveDialog`
+4. `EditBudgetModal.tsx` - Converter para `ResponsiveDialog`
 
-### Arquivo: `src/components/modals/TransactionModal.tsx`
+**Prioridade média** (importações/revisões, menos frequentes):
+5. `AccountImportModal.tsx` - Converter para `ResponsiveDialog`
+6. `InvoiceImportModal.tsx` - Converter para `ResponsiveDialog`
+7. `InvoiceReviewModal.tsx` - Converter para `ResponsiveDialog`
+8. `InvoiceItemsModal.tsx` - Converter para `ResponsiveDialog`
 
-Alterar linha 220:
+**Prioridade baixa** (modais complexos com layout especial):
+9-13. Modais de reconciliação e review (estes têm layouts mais complexos com flex columns e podem precisar de adaptação individual)
 
-```typescript
-// Antes:
-const baseDate = date;
-
-// Depois:
-const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
-```
-
-Isso garante que:
-- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
-- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
-
-Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
-
-```typescript
-date: format(installmentDate, "yyyy-MM-dd"),
-due_date: format(installmentDate, "yyyy-MM-dd"),
-```
-
-Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
-
-Uma unica linha a alterar.
+Para cada modal, a conversão envolve:
+- Substituir `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle` por `ResponsiveDialog`
+- Mover o conteúdo para dentro do `ResponsiveDialog` como children
+- Remover classes de `max-h` e `overflow-y-auto` (o ResponsiveDialog já cuida disso)
 
