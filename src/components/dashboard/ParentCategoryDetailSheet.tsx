@@ -133,6 +133,7 @@ export function ParentCategoryDetailSheet({
       imported_at: null,
       is_provisional: false,
       recurring_rule_id: null,
+      project_id: null,
     });
     setIsModalOpen(true);
   };
