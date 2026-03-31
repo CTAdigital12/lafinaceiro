@@ -21,6 +21,7 @@ import CategorizationRules from "./pages/CategorizationRules";
 import Settings from "./pages/Settings";
 import Activities from "./pages/Activities";
 import RecurringExpenses from "./pages/RecurringExpenses";
+import Connections from "./pages/Connections";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -65,6 +66,7 @@ const App = () => (
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/activities" element={<Activities />} />
                       <Route path="/recurring" element={<RecurringExpenses />} />
+                      <Route path="/connections" element={<Connections />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </MainLayout>

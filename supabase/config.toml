@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.add-member]
 verify_jwt = false
+
+[functions.pluggy-connect]
+verify_jwt = false
+
+[functions.pluggy-webhook]
+verify_jwt = false

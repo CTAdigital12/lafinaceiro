@@ -23,6 +23,7 @@ export type Database = {
           id: string
           initial_balance: number
           name: string
+          pluggy_account_id: string | null
           type: string
           updated_at: string
           user_id: string
@@ -35,6 +36,7 @@ export type Database = {
           id?: string
           initial_balance?: number
           name: string
+          pluggy_account_id?: string | null
           type: string
           updated_at?: string
           user_id: string
@@ -47,6 +49,7 @@ export type Database = {
           id?: string
           initial_balance?: number
           name?: string
+          pluggy_account_id?: string | null
           type?: string
           updated_at?: string
           user_id?: string
@@ -235,6 +238,7 @@ export type Database = {
           id: string
           last_digits: string
           name: string
+          pluggy_account_id: string | null
           status: string
           updated_at: string
           user_id: string
@@ -250,6 +254,7 @@ export type Database = {
           id?: string
           last_digits: string
           name: string
+          pluggy_account_id?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -265,6 +270,7 @@ export type Database = {
           id?: string
           last_digits?: string
           name?: string
+          pluggy_account_id?: string | null
           status?: string
           updated_at?: string
           user_id?: string
@@ -458,6 +464,63 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      pluggy_items: {
+        Row: {
+          account_id: string | null
+          connector_logo: string | null
+          connector_name: string | null
+          created_at: string
+          credit_card_id: string | null
+          id: string
+          last_sync_at: string | null
+          pluggy_item_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          connector_logo?: string | null
+          connector_name?: string | null
+          created_at?: string
+          credit_card_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          pluggy_item_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          connector_logo?: string | null
+          connector_name?: string | null
+          created_at?: string
+          credit_card_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          pluggy_item_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pluggy_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pluggy_items_credit_card_id_fkey"
+            columns: ["credit_card_id"]
+            isOneToOne: false
+            referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
