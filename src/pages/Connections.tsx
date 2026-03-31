@@ -115,10 +115,35 @@ export default function Connections() {
     },
   });
 
+  function waitForPluggyConnect(timeout = 3000): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (window.PluggyConnect) {
+        resolve(true);
+        return;
+      }
+      const interval = 100;
+      let elapsed = 0;
+      const timer = setInterval(() => {
+        elapsed += interval;
+        if (window.PluggyConnect) {
+          clearInterval(timer);
+          resolve(true);
+        } else if (elapsed >= timeout) {
+          clearInterval(timer);
+          resolve(false);
+        }
+      }, interval);
+    });
+  }
+
   function openPluggyWidget(accessToken: string) {
-    // Load Pluggy Connect SDK dynamically
+    // Remove stale script if PluggyConnect global is missing
     const existingScript = document.getElementById("pluggy-connect-script");
-    if (existingScript) {
+    if (existingScript && !window.PluggyConnect) {
+      existingScript.remove();
+    }
+
+    if (window.PluggyConnect) {
       launchWidget(accessToken);
       return;
     }
@@ -126,29 +151,48 @@ export default function Connections() {
     const script = document.createElement("script");
     script.id = "pluggy-connect-script";
     script.src = "https://cdn.pluggy.ai/pluggy-connect/v2.pluggy-connect.js";
-    script.onload = () => launchWidget(accessToken);
+    script.onload = async () => {
+      const available = await waitForPluggyConnect();
+      if (available) {
+        launchWidget(accessToken);
+      } else {
+        console.warn("PluggyConnect global not found after script load, falling back to iframe");
+        openPluggyIframe(accessToken);
+      }
+    };
     script.onerror = () => {
-      toast({
-        title: "Erro ao carregar widget",
-        description: "Não foi possível carregar o Pluggy Connect.",
-        variant: "destructive",
-      });
-      setIsConnecting(false);
+      console.warn("Failed to load Pluggy SDK script, falling back to iframe");
+      openPluggyIframe(accessToken);
     };
     document.body.appendChild(script);
   }
 
-  function launchWidget(accessToken: string) {
-    if (!window.PluggyConnect) {
+  function openPluggyIframe(accessToken: string) {
+    const url = `https://connect.pluggy.ai/?connect_token=${encodeURIComponent(accessToken)}`;
+    const popup = window.open(url, "pluggy_connect", "width=500,height=700,left=200,top=100");
+    if (!popup) {
       toast({
-        title: "Widget não disponível",
-        description: "Recarregue a página e tente novamente.",
+        title: "Popup bloqueado",
+        description: "Permita popups para conectar sua conta bancária.",
         variant: "destructive",
       });
       setIsConnecting(false);
       return;
     }
 
+    // Poll for popup close
+    const pollTimer = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollTimer);
+        setIsConnecting(false);
+        queryClient.invalidateQueries({ queryKey: ["pluggy_items"] });
+        queryClient.invalidateQueries({ queryKey: ["accounts"] });
+        queryClient.invalidateQueries({ queryKey: ["credit-cards"] });
+      }
+    }, 1000);
+  }
+
+  function launchWidget(accessToken: string) {
     const pluggyConnect = new window.PluggyConnect({
       connectToken: accessToken,
       onSuccess: (data: { item: { id: string } }) => {
