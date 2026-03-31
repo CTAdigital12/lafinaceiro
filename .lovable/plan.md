@@ -1,49 +1,34 @@
 
 
-# Corrigir Data das Parcelas em Debito em Conta
+## Problem
 
-## Problema
+The Pluggy Connect widget fails with "Widget não disponível" because the script loads from `https://cdn.pluggy.ai/pluggy-connect/v2.pluggy-connect.js` but `window.PluggyConnect` is not available when `launchWidget` is called. This is a race condition — the script is marked as existing (by ID) on second click, but the global may not have been set, or the CDN script URL/export name may have changed.
 
-Ao criar "Seguro Apartamento" com primeiro pagamento em 02/03/2026, as parcelas estao sendo geradas a partir da data de compra (24/02/2026) em vez da data de vencimento (02/03/2026).
+## Plan
 
-O bug esta na linha 220 do `TransactionModal.tsx`:
+### 1. Fix widget loading logic
 
-```text
-const baseDate = date;  // usa data de compra (24/02)
-```
+**File: `src/pages/Connections.tsx`**
 
-As parcelas sao calculadas com `addMonths(baseDate, i - installmentNumber)`, entao saem em 24/02, 24/03, 24/04... em vez de 02/03, 02/04, 02/05...
+- Add a retry/wait mechanism: after script loads, wait briefly for `window.PluggyConnect` to be defined before giving up
+- When the script already exists but `PluggyConnect` is undefined, remove the old script and reload it
+- Update the CDN URL to the latest Pluggy Connect SDK (v2 may have changed their bundle path — check if `PluggyConnect` is the correct global name, as newer versions may use a different constructor or require `init()` differently)
 
-## Solucao
+### 2. Add fallback with iframe approach
 
-Para parcelas em conta, usar a `dueDate` (data de vencimento) como base para calcular as datas das parcelas. Para parcelas em cartao, manter o comportamento atual (baseado na data de compra, pois o vencimento e calculado pelo fechamento do cartao).
+If the CDN script continues to fail (e.g., blocked by CSP or changed API), add a fallback that opens the Pluggy Connect widget via iframe URL directly:
+- `https://connect.pluggy.ai/?connect_token={accessToken}`
+- This is more resilient than relying on a JS SDK global
 
-## Secao Tecnica
+### Technical Details
 
-### Arquivo: `src/components/modals/TransactionModal.tsx`
+The root cause is likely one of:
+1. **Race condition**: Script tag exists from prior attempt but `PluggyConnect` global wasn't set (script errored silently)
+2. **CDN URL change**: The v2 SDK path may be outdated
+3. **CSP blocking**: The sandbox preview may block external scripts
 
-Alterar linha 220:
-
-```typescript
-// Antes:
-const baseDate = date;
-
-// Depois:
-const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
-```
-
-Isso garante que:
-- Parcelas em **conta** usam a data de vencimento informada pelo usuario (02/03 -> 02/04 -> 02/05...)
-- Parcelas em **cartao** continuam usando a data de compra (o due_date do cartao e calculado automaticamente pelo fechamento)
-
-Tambem ajustar a linha 233-234 para que, no caso de conta com dueDate, o `date` da parcela tambem use a data base correta:
-
-```typescript
-date: format(installmentDate, "yyyy-MM-dd"),
-due_date: format(installmentDate, "yyyy-MM-dd"),
-```
-
-Isso ja esta correto pois `installmentDate` sera derivado de `baseDate`, que agora sera `dueDate` para contas.
-
-Uma unica linha a alterar.
+The fix will:
+- Remove stale script tags before reloading
+- Add a polling check (up to 3s) for `window.PluggyConnect` after script load
+- Fall back to iframe-based widget if JS SDK fails
 
