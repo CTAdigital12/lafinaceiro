@@ -66,6 +66,7 @@ const App = () => (
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/activities" element={<Activities />} />
                       <Route path="/recurring" element={<RecurringExpenses />} />
+                      <Route path="/connections" element={<Connections />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </MainLayout>

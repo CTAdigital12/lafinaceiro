@@ -37,6 +37,7 @@ const navItems = [
   { icon: BarChart3, label: "Relatórios", path: "/reports" },
   { icon: Briefcase, label: "Despesas Empresa", path: "/corporate-expenses" },
   { icon: ReceiptText, label: "Reembolsos", path: "/reimbursements" },
+  { icon: Link2, label: "Conexões", path: "/connections" },
   { icon: History, label: "Atividades", path: "/activities" },
   { icon: Settings, label: "Configurações", path: "/settings" },
 ];
