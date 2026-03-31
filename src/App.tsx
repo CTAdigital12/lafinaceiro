@@ -21,6 +21,7 @@ import CategorizationRules from "./pages/CategorizationRules";
 import Settings from "./pages/Settings";
 import Activities from "./pages/Activities";
 import RecurringExpenses from "./pages/RecurringExpenses";
+import Connections from "./pages/Connections";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
