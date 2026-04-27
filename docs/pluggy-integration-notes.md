@@ -1,3 +1,7 @@
+# Pluggy integration — notas técnicas
+
+> Notas migradas de `.lovable/plan.md` em 2026-04-27 durante a saída do Lovable. Conteúdo é sobre o widget Pluggy Connect, não sobre o Lovable platform.
+
 
 
 ## Problem
@@ -31,4 +35,3 @@ The fix will:
 - Remove stale script tags before reloading
 - Add a polling check (up to 3s) for `window.PluggyConnect` after script load
 - Fall back to iframe-based widget if JS SDK fails
-
