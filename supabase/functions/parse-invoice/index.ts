@@ -1,7 +1,45 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+
+// ----------------------------------------------------------------------------
+// Zod schemas for validating the JSON returned by Gemini (R23).
+// ----------------------------------------------------------------------------
+// The Gemini prompts ask for two different shapes depending on `mode`:
+//   - account     -> { items: [{ date, description, amount }] }
+//   - credit_card -> { metadata: { due_date, invoice_total }, items: [...] }
+// We validate strictly: unknown fields are rejected so a hostile/malformed
+// model answer cannot smuggle extra columns into our DB inserts.
+
+const RawInvoiceItemSchema = z
+  .object({
+    // Gemini is told to return "DD/MM"; we accept "D/M" through "DD/MM" too.
+    date: z.string().min(3).max(5).regex(/^\d{1,2}\/\d{1,2}$/),
+    description: z.string().min(1).max(500),
+    amount: z.number().finite(),
+  })
+  .strict();
+
+const InvoiceMetadataSchema = z
+  .object({
+    // "DD/MM/YYYY" — kept loose enough for the existing split('/') parser.
+    due_date: z
+      .string()
+      .regex(/^\d{1,2}\/\d{1,2}\/\d{4}$/)
+      .nullable()
+      .optional(),
+    invoice_total: z.number().finite().nullable().optional(),
+  })
+  .strict();
+
+const ParsedInvoiceSchema = z
+  .object({
+    metadata: InvoiceMetadataSchema.optional(),
+    items: z.array(RawInvoiceItemSchema).max(2000),
+  })
+  .strict();
 
 interface RawInvoiceItem {
   date: string;
@@ -137,6 +175,7 @@ function generateFutureInstallments(
 
 serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req.headers.get('origin'));
+  const requestId = crypto.randomUUID();
 
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -361,35 +400,60 @@ IMPORTANTE:
       );
     }
 
-    // Parse JSON from AI response
+    // ================================================================
+    // SECURITY (R23): Strictly validate Gemini's JSON output before any
+    // database access. Unknown fields are rejected; malformed shapes
+    // return 422 with a request_id for log correlation (we never echo
+    // the PDF content).
+    // ================================================================
     let rawItems: RawInvoiceItem[] = [];
-    let metadata: InvoiceMetadata = { due_date: null, invoice_total: null };
-    
+    const metadata: InvoiceMetadata = { due_date: null, invoice_total: null };
+
+    let parsedJson: unknown;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        rawItems = parsed.items || [];
-        
-        if (parsed.metadata) {
-          if (parsed.metadata.due_date) {
-            const dueDateParts = parsed.metadata.due_date.split('/');
-            if (dueDateParts.length === 3) {
-              metadata.due_date = `${dueDateParts[2]}-${dueDateParts[1].padStart(2, '0')}-${dueDateParts[0].padStart(2, '0')}`;
-            }
-          }
-          metadata.invoice_total = parsed.metadata.invoice_total || null;
-        }
+      if (!jsonMatch) {
+        throw new Error("no_json_block");
       }
+      parsedJson = JSON.parse(jsonMatch[0]);
     } catch (parseError) {
-      console.error("Failed to parse AI response");
+      console.error(`[parse-invoice] ${requestId} JSON.parse failed`);
       return new Response(
-        JSON.stringify({ error: "Erro ao processar resposta do documento" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "invalid_ai_output", request_id: requestId }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Extracted ${rawItems.length} raw items from AI`);
+    const validation = ParsedInvoiceSchema.safeParse(parsedJson);
+    if (!validation.success) {
+      console.error(
+        `[parse-invoice] ${requestId} Zod validation failed:`,
+        JSON.stringify(validation.error.issues)
+      );
+      return new Response(
+        JSON.stringify({
+          error: "invalid_ai_output",
+          request_id: requestId,
+          issues: validation.error.issues,
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    rawItems = validation.data.items;
+
+    if (validation.data.metadata) {
+      const meta = validation.data.metadata;
+      if (meta.due_date) {
+        const dueDateParts = meta.due_date.split('/');
+        if (dueDateParts.length === 3) {
+          metadata.due_date = `${dueDateParts[2]}-${dueDateParts[1].padStart(2, '0')}-${dueDateParts[0].padStart(2, '0')}`;
+        }
+      }
+      metadata.invoice_total = meta.invoice_total ?? null;
+    }
+
+    console.log(`[parse-invoice] ${requestId} Extracted ${rawItems.length} raw items from AI`);
 
     const defaultDueDate = `${invoiceYear}-${String(invoiceMonth).padStart(2, '0')}-15`;
     const dueDate = metadata.due_date || defaultDueDate;
