@@ -1,0 +1,37 @@
+title = "La Financeiro gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "supabase-service-role"
+description = "Supabase service_role JWT (privileged, NEVER in repo)"
+regex = '''eyJhbGciOi[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{30,}'''
+keywords = ["service_role", "SUPABASE_SERVICE_ROLE"]
+tags = ["supabase", "critical"]
+
+[[rules]]
+id = "pluggy-secret"
+description = "Pluggy CLIENT_SECRET"
+regex = '''(?i)pluggy[_-]?(client[_-]?)?secret['"]?\s*[:=]\s*['"][A-Za-z0-9_-]{20,}['"]'''
+keywords = ["PLUGGY_CLIENT_SECRET", "PLUGGY_WEBHOOK_SECRET"]
+tags = ["pluggy"]
+
+[[rules]]
+id = "google-ai-key"
+description = "Google AI / Gemini API key"
+regex = '''AIza[0-9A-Za-z_-]{35}'''
+keywords = ["GOOGLE_AI_API_KEY", "GEMINI"]
+tags = ["google", "ai"]
+
+[allowlist]
+description = "Allowlist for false positives"
+paths = [
+  '''(.*?)(jpg|jpeg|png|gif|svg|webp|woff2?|ttf|eot|pdf)$''',
+  '''bun\.lock$''',
+  '''bun\.lockb$''',
+  '''package-lock\.json$''',
+  '''pnpm-lock\.yaml$''',
+]
+# Anon key da Supabase eh publica por design (R2) — pode aparecer em .env.example mas NAO em .env
+regexes = []
