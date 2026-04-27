@@ -182,6 +182,22 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // ================================================================
+  // SECURITY (R24): AI kill-switch. Toggled in <1min via Supabase
+  // secrets without redeploy. Convention: explicitly === "true";
+  // anything else (missing, "false", "yes", "1") means OFF.
+  // ================================================================
+  if (Deno.env.get('AI_PARSE_INVOICE_ENABLED') !== 'true') {
+    console.warn(`[parse-invoice] ${requestId} kill-switch off — request rejected`);
+    return new Response(
+      JSON.stringify({
+        error: 'feature_disabled',
+        message: 'Parse de fatura por IA está temporariamente desabilitado.',
+      }),
+      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
     // ================================================================
     // SECURITY: Authentication Validation (Zero Trust)
