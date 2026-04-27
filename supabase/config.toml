@@ -15,5 +15,8 @@ verify_jwt = false
 [functions.pluggy-connect]
 verify_jwt = false
 
+# pluggy-webhook is server-to-server from Pluggy and authenticates via
+# shared-secret header + optional HMAC (see supabase/functions/pluggy-webhook).
+# JWT is intentionally disabled — HMAC/secret replaces it (R16).
 [functions.pluggy-webhook]
 verify_jwt = false
