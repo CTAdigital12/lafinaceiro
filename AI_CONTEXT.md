@@ -2,7 +2,7 @@
 
 > **Última Atualização:** Março 2026  
 > **Versão:** 3.1  
-> **URL de Produção:** https://lafinaceiro.lovable.app  
+> **URL de Produção:** https://lafinaceiro.vercel.app  
 > **Propósito:** Fonte de verdade única para IAs assistentes. Leia ANTES de qualquer modificação.
 
 ---
@@ -36,7 +36,7 @@
 | **Estilização** | Tailwind CSS + shadcn/ui + Radix UI |
 | **Estado** | TanStack React Query v5 |
 | **Roteamento** | React Router v6 |
-| **Backend** | Lovable Cloud (Supabase) |
+| **Backend** | Supabase |
 | **Banco de Dados** | PostgreSQL (via Supabase) |
 | **Autenticação** | Supabase Auth (email/password) |
 | **OCR/IA** | Google Gemini 2.5 Pro |
@@ -60,7 +60,7 @@
 └──────────────────────────┼───────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     LOVABLE CLOUD                            │
+│                       SUPABASE                               │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │  PostgreSQL │  │    Auth     │  │   Edge Functions    │  │
 │  │ (14 tables) │  │             │  │  (4 functions)      │  │
