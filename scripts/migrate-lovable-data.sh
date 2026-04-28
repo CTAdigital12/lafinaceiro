@@ -241,7 +241,8 @@ cmd_import() {
       rows=$(($(wc -l < "$file") - 1))   # subtract header
       [ "$rows" -lt 0 ] && rows=0
       echo "\\echo === Importing $table ($rows rows from ${csv}.csv) ==="
-      echo "\\copy $table FROM '$file' WITH (FORMAT csv, HEADER true);"
+      # Lovable SQL editor exports use ';' as delimiter (pt-BR locale).
+      echo "\\copy $table FROM '$file' WITH (FORMAT csv, HEADER true, DELIMITER ';');"
       echo ""
     done
 
