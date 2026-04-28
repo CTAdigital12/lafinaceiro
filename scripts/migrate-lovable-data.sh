@@ -266,9 +266,21 @@ cmd_import() {
       local rows
       rows=$(($(wc -l < "$file") - 1))   # subtract header
       [ "$rows" -lt 0 ] && rows=0
+
+      # Lovable SQL editor exports columns alphabetically, not in the order we
+      # asked. PostgreSQL \copy is POSITIONAL by default — it would shove
+      # column #1 of the file into column #1 of the table regardless of names.
+      # To map by name, we must enumerate the columns explicitly:
+      #   \copy table (col1, col2, ...) FROM file ...
+      # Read the header (first line) and convert ';' to ',' to use as the
+      # column list.
+      local header_line cols
+      header_line=$(head -1 "$file")
+      cols=$(printf '%s' "$header_line" | tr ';' ',')
+
       echo "\\echo === Importing $table ($rows rows from ${csv}.csv) ==="
       # Lovable SQL editor exports use ';' as delimiter (pt-BR locale).
-      echo "\\copy $table FROM '$file' WITH (FORMAT csv, HEADER true, DELIMITER ';');"
+      echo "\\copy $table ($cols) FROM '$file' WITH (FORMAT csv, HEADER true, DELIMITER ';');"
       echo ""
     done
 
