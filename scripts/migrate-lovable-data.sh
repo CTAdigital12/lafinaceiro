@@ -67,13 +67,19 @@ IMPORT_ORDER=(
 # Counts known from the Lovable Cloud overview snapshot. The script prints
 # these next to the live count in the NEW project so the operator can spot
 # mismatches at a glance. Tables not listed here are validated visually.
-declare -A EXPECTED_COUNTS=(
-  ["auth.users"]=2
-  ["public.transactions"]=698
-  ["public.budgets"]=220
-  ["public.categories"]=103
-  ["public.categorization_rules"]=31
-)
+# Implemented as a function (not associative array) for bash 3.2 compatibility
+# — macOS still ships /bin/bash 3.2.x by default and `declare -A` was added
+# in bash 4.0.
+expected_count() {
+  case "$1" in
+    "auth.users") echo 2 ;;
+    "public.transactions") echo 698 ;;
+    "public.budgets") echo 220 ;;
+    "public.categories") echo 103 ;;
+    "public.categorization_rules") echo 31 ;;
+    *) echo "" ;;
+  esac
+}
 
 # -----------------------------------------------------------------------------
 # Logging (stderr only)
@@ -320,7 +326,9 @@ cmd_counts() {
     esac
     [ -z "$new_count" ] && new_count="?"
 
-    local expected="${EXPECTED_COUNTS[$table]:-?}"
+    local expected
+    expected=$(expected_count "$table")
+    [ -z "$expected" ] && expected="?"
     local delta=""
     if [[ "$expected" =~ ^[0-9]+$ && "$new_count" =~ ^[0-9]+$ ]]; then
       delta=$((new_count - expected))
