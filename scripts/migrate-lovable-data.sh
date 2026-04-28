@@ -1,36 +1,37 @@
 #!/usr/bin/env bash
-# migrate-lovable-data.sh — exports data from the Lovable Supabase project and
-# imports it into the new self-managed Supabase project. Phase 3.5 of the
-# Lovable -> Vercel + new Supabase migration (~/.claude/plans/1-manter-o-vite-peppy-bunny.md).
+# migrate-lovable-data.sh — Phase 3.5 of the Lovable -> Vercel + new Supabase
+# migration. See ~/.claude/plans/1-manter-o-vite-peppy-bunny.md.
 #
-# This script never accepts secrets as arguments. All sensitive values come from
-# the calling shell environment so they don't end up in process listings, shell
-# history, or repo files.
+# CONTEXT
+# -------
+# The Lovable Cloud panel does NOT expose the project's SUPABASE_SERVICE_ROLE_KEY
+# (only edge-function-level secrets like PLUGGY_*, GOOGLE_AI_API_KEY). Without
+# service_role on the old side, REST/Admin/Storage exports are not possible.
+# The operator therefore exports CSVs MANUALLY from the Lovable SQL editor
+# (see docs/MIGRATION_QUERIES.md), saving 18 files into /tmp/lovable-export/.
+# This script imports those CSVs into the new Supabase via psql \copy.
 #
-# Required env (export in YOUR terminal before running):
-#   OLD_URL   = https://rmxqigouctwqkpwiapbu.supabase.co
-#   OLD_SR    = service_role JWT of the Lovable project (Lovable Cloud -> Secrets)
-#   NEW_URL   = https://vbrdtxgsiwhgeexihgwk.supabase.co
-#   NEW_SR    = service_role JWT of the new project (Supabase -> Settings -> API)
+# The Storage bucket 'documents' was confirmed empty in the old project, so it
+# is intentionally not migrated. It will be recreated as a private bucket on
+# the new project at first use (R10/R11).
 #
-# Optional env:
-#   NEW_DB_URL = postgres://... of the new project, used to toggle triggers
-#                during import. If unset, the trigger toggle is skipped and
-#                the operator must run the SQL manually before/after import.
+# REQUIRED ENV (export in YOUR shell before running)
+# --------------------------------------------------
+#   NEW_DB_URL = postgresql://postgres.<ref>:<encoded_pass>@<host>:5432/postgres
+#                (Session pooler URI from Supabase Dashboard -> Connect -> Direct,
+#                 with the password percent-encoded)
+#   NEW_SR     = service_role JWT of the new project
+#                (Settings -> API -> service_role secret)
+#   NEW_URL    = https://<new-ref>.supabase.co
 #
 # Usage:
-#   ./scripts/migrate-lovable-data.sh check         # validate env + connectivity
-#   ./scripts/migrate-lovable-data.sh export        # export old -> /tmp/lovable-export
-#   ./scripts/migrate-lovable-data.sh storage       # export+upload bucket 'documents'
-#   ./scripts/migrate-lovable-data.sh import        # import /tmp/lovable-export -> new
-#   ./scripts/migrate-lovable-data.sh counts        # count rows in old vs new
-#   ./scripts/migrate-lovable-data.sh cleanup       # delete /tmp/lovable-export
-#   ./scripts/migrate-lovable-data.sh all           # check -> export -> storage -> import -> counts
+#   ./scripts/migrate-lovable-data.sh check     # validate env + connectivity + CSVs
+#   ./scripts/migrate-lovable-data.sh import    # \copy each CSV into the new DB
+#   ./scripts/migrate-lovable-data.sh counts    # show row counts in NEW + expected
+#   ./scripts/migrate-lovable-data.sh cleanup   # rm -rf /tmp/lovable-export
 #
-# Reads from old Supabase via PostgREST + Storage API with service_role.
-# auth.users migration is deliberately NOT automated — it is performed
-# manually via the Supabase SQL editors so the bcrypt hash is preserved.
-# See plan section 3.5.4 (Caminho A).
+# auth.users migration is included in 'import' (preserves bcrypt hash so
+# existing logins keep working without a password reset).
 
 set -euo pipefail
 
@@ -39,37 +40,43 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 
 EXPORT_DIR="/tmp/lovable-export"
-TABLES_FILE="$EXPORT_DIR/tables"
-STORAGE_DIR="$EXPORT_DIR/storage"
-LOG_FILE="$EXPORT_DIR/migrate.log"
 
-# Domain tables in dependency order (FK-safe). auth.users + profiles are NOT here
-# — auth.users is migrated manually (preserves bcrypt hash); profiles is imported
-# explicitly as the second step because most domain tables reference it.
-DOMAIN_TABLES=(
-  profiles
-  categories
-  accounts
-  credit_cards
-  credit_card_invoices
-  categorization_rules
-  budgets
-  recurring_rules
-  pluggy_items
-  projects
-  investment_institutions
-  investment_assets
-  investment_transactions
-  transactions
-  shared_access
-  invitations
+# (csv_basename, target_table) pairs in FK-safe order. Order is critical:
+# parents before children, otherwise \copy fails on foreign key violations.
+IMPORT_ORDER=(
+  "auth_users:auth.users"
+  "auth_identities:auth.identities"
+  "profiles:public.profiles"
+  "categories:public.categories"
+  "accounts:public.accounts"
+  "credit_cards:public.credit_cards"
+  "credit_card_invoices:public.credit_card_invoices"
+  "categorization_rules:public.categorization_rules"
+  "budgets:public.budgets"
+  "recurring_rules:public.recurring_rules"
+  "pluggy_items:public.pluggy_items"
+  "projects:public.projects"
+  "investment_institutions:public.investment_institutions"
+  "investment_assets:public.investment_assets"
+  "investment_transactions:public.investment_transactions"
+  "transactions:public.transactions"
+  "shared_access:public.shared_access"
+  "invitations:public.invitations"
 )
 
-PAGE_SIZE=1000
-SLEEP_BETWEEN_PAGES=0.1   # tame rate-limits
+# Counts known from the Lovable Cloud overview snapshot. The script prints
+# these next to the live count in the NEW project so the operator can spot
+# mismatches at a glance. Tables not listed here are validated visually.
+declare -A EXPECTED_COUNTS=(
+  ["auth.users"]=2
+  ["public.transactions"]=698
+  ["public.budgets"]=220
+  ["public.categories"]=103
+  ["public.categorization_rules"]=31
+)
 
 # -----------------------------------------------------------------------------
-# Pretty logging (stderr; stdout reserved for tool output)
+# Logging (stderr only)
 # -----------------------------------------------------------------------------
 
 if [ -t 2 ]; then
@@ -89,12 +96,12 @@ err()   { printf '%s[%s] ERROR%s %s\n' "$C_ERR" "$(date +%H:%M:%S)" "$C_RESET" "
 die()   { err "$*"; exit 1; }
 
 # -----------------------------------------------------------------------------
-# Pre-flight
+# Pre-flight helpers
 # -----------------------------------------------------------------------------
 
 require_env() {
   local missing=()
-  for var in OLD_URL OLD_SR NEW_URL NEW_SR; do
+  for var in NEW_DB_URL NEW_SR NEW_URL; do
     if [ -z "${!var:-}" ]; then
       missing+=("$var")
     fi
@@ -105,23 +112,17 @@ require_env() {
 }
 
 require_tools() {
-  for tool in curl jq; do
-    command -v "$tool" >/dev/null 2>&1 || die "$tool is required (try: brew install $tool)"
+  for tool in curl psql jq; do
+    command -v "$tool" >/dev/null 2>&1 \
+      || die "$tool is required (try: brew install $tool / brew install postgresql@17)"
   done
 }
 
-ensure_export_dir() {
-  mkdir -p "$EXPORT_DIR" "$STORAGE_DIR"
-  chmod 700 "$EXPORT_DIR"
-  : > "$LOG_FILE"
-}
-
-# Decode JWT payload (no validation) to confirm role + project ref.
-decode_jwt_role() {
+# Decode a JWT payload (no signature check) so we can validate role + ref.
+decode_jwt_payload() {
   local jwt="$1"
   local payload
   payload=$(printf '%s' "$jwt" | cut -d. -f2)
-  # base64url -> base64
   payload="${payload//-/+}"
   payload="${payload//_/\/}"
   case $((${#payload} % 4)) in
@@ -131,340 +132,211 @@ decode_jwt_role() {
   printf '%s' "$payload" | base64 -d 2>/dev/null || true
 }
 
+# -----------------------------------------------------------------------------
+# check
+# -----------------------------------------------------------------------------
+
 cmd_check() {
   require_env
   require_tools
-  ensure_export_dir
 
-  log "Validating service_role keys..."
-  local old_payload new_payload
-  old_payload=$(decode_jwt_role "$OLD_SR")
-  new_payload=$(decode_jwt_role "$NEW_SR")
+  log "Validating NEW_SR JWT..."
+  local payload role ref
+  payload=$(decode_jwt_payload "$NEW_SR")
+  role=$(printf '%s' "$payload" | jq -r '.role // "missing"' 2>/dev/null || echo missing)
+  ref=$(printf '%s' "$payload" | jq -r '.ref // "missing"' 2>/dev/null || echo missing)
+  [ "$role" = "service_role" ] || die "NEW_SR is not a service_role JWT (role=$role)"
+  ok "NEW_SR -> role=service_role, ref=$ref"
 
-  local old_role new_role old_ref new_ref
-  old_role=$(printf '%s' "$old_payload" | jq -r '.role // "missing"')
-  new_role=$(printf '%s' "$new_payload" | jq -r '.role // "missing"')
-  old_ref=$(printf '%s' "$old_payload" | jq -r '.ref // "missing"')
-  new_ref=$(printf '%s' "$new_payload" | jq -r '.ref // "missing"')
-
-  [ "$old_role" = "service_role" ] || die "OLD_SR is not a service_role JWT (role=$old_role)"
-  [ "$new_role" = "service_role" ] || die "NEW_SR is not a service_role JWT (role=$new_role)"
-
-  ok "OLD_SR -> role=service_role, ref=$old_ref"
-  ok "NEW_SR -> role=service_role, ref=$new_ref"
-
-  [ "$old_ref" != "$new_ref" ] || die "OLD_SR and NEW_SR have the same ref — refuse to migrate onto itself."
-
-  log "Probing OLD project connectivity..."
+  log "Probing NEW project via PostgREST..."
   local probe
-  probe=$(curl -sS -o /dev/null -w '%{http_code}' \
-    -H "apikey: $OLD_SR" -H "Authorization: Bearer $OLD_SR" \
-    "$OLD_URL/rest/v1/profiles?select=id&limit=1" || echo "000")
-  [ "$probe" = "200" ] || die "OLD project probe failed (HTTP $probe)"
-  ok "OLD project responsive"
-
-  log "Probing NEW project connectivity..."
   probe=$(curl -sS -o /dev/null -w '%{http_code}' \
     -H "apikey: $NEW_SR" -H "Authorization: Bearer $NEW_SR" \
     "$NEW_URL/rest/v1/profiles?select=id&limit=1" || echo "000")
-  [ "$probe" = "200" ] || die "NEW project probe failed (HTTP $probe)"
-  ok "NEW project responsive"
-}
+  [ "$probe" = "200" ] || die "PostgREST probe failed (HTTP $probe)"
+  ok "PostgREST responsive"
 
-# -----------------------------------------------------------------------------
-# Export domain tables from OLD via PostgREST
-# -----------------------------------------------------------------------------
+  log "Probing NEW DB via psql..."
+  if ! psql "$NEW_DB_URL" -c 'SELECT 1' >/dev/null 2>&1; then
+    die "psql connect to NEW_DB_URL failed"
+  fi
+  ok "DB connection OK"
 
-export_one_table() {
-  local table="$1"
-  local outfile="$EXPORT_DIR/${table}.json"
-  local offset=0
-  local total=0
-  : > "$outfile.tmp"
-  echo '[' > "$outfile.tmp"
-
-  local first_chunk=1
-  while :; do
-    local response
-    local status
-    response=$(curl -sS -w '\n%{http_code}' \
-      -H "apikey: $OLD_SR" \
-      -H "Authorization: Bearer $OLD_SR" \
-      -H "Range-Unit: items" \
-      -H "Range: ${offset}-$((offset + PAGE_SIZE - 1))" \
-      "$OLD_URL/rest/v1/${table}?select=*&order=created_at.asc.nullslast,id.asc")
-    status="${response##*$'\n'}"
-    response="${response%$'\n'*}"
-
-    if [ "$status" != "200" ] && [ "$status" != "206" ]; then
-      err "Table $table page offset=$offset HTTP $status"
-      err "Body: $(printf '%s' "$response" | head -c 300)"
-      return 1
-    fi
-
-    local count
-    count=$(printf '%s' "$response" | jq 'length')
-    if [ "$count" = "0" ]; then
-      break
-    fi
-
-    if [ "$first_chunk" = "1" ]; then
-      first_chunk=0
-    else
-      echo "," >> "$outfile.tmp"
-    fi
-    # Strip outer brackets and append the items
-    printf '%s' "$response" | jq -c '.[]' | paste -sd ',' - >> "$outfile.tmp"
-
-    total=$((total + count))
-    offset=$((offset + PAGE_SIZE))
-    [ "$count" -lt "$PAGE_SIZE" ] && break
-    sleep "$SLEEP_BETWEEN_PAGES"
-  done
-
-  echo ']' >> "$outfile.tmp"
-  mv "$outfile.tmp" "$outfile"
-  printf '%s\t%d\n' "$table" "$total" >> "$EXPORT_DIR/_export-counts.tsv"
-  ok "exported $table: $total rows -> $outfile"
-}
-
-cmd_export() {
-  cmd_check
-  log "Starting export of ${#DOMAIN_TABLES[@]} tables to $EXPORT_DIR..."
-  : > "$EXPORT_DIR/_export-counts.tsv"
-
-  for table in "${DOMAIN_TABLES[@]}"; do
-    export_one_table "$table"
-  done
-
-  ok "Export complete. Summary:"
-  column -t -s $'\t' "$EXPORT_DIR/_export-counts.tsv" >&2
-}
-
-# -----------------------------------------------------------------------------
-# Storage bucket 'documents' export + import
-# -----------------------------------------------------------------------------
-
-cmd_storage() {
-  cmd_check
-  log "Listing files in OLD bucket 'documents'..."
-
-  local list_resp
-  list_resp=$(curl -sS \
-    -H "apikey: $OLD_SR" \
-    -H "Authorization: Bearer $OLD_SR" \
-    -H "Content-Type: application/json" \
-    -X POST \
-    -d '{"prefix":"","limit":10000,"sortBy":{"column":"name","order":"asc"}}' \
-    "$OLD_URL/storage/v1/object/list/documents")
-
-  local file_count
-  file_count=$(printf '%s' "$list_resp" | jq 'length')
-  echo "$list_resp" > "$EXPORT_DIR/_storage-list.json"
-  log "Found $file_count files in old 'documents' bucket"
-
-  if [ "$file_count" = "0" ]; then
-    warn "Bucket is empty. Skipping download/upload."
+  log "Verifying CSV files in $EXPORT_DIR..."
+  if [ ! -d "$EXPORT_DIR" ]; then
+    warn "$EXPORT_DIR does not exist yet — that is fine for 'check' alone, but"
+    warn "'import' needs the 18 CSVs from the Lovable SQL editor first"
+    warn "(see docs/MIGRATION_QUERIES.md)."
     return 0
   fi
 
-  # Ensure bucket exists in NEW (private)
-  log "Ensuring bucket 'documents' exists in NEW (private)..."
-  local bucket_create_status
-  bucket_create_status=$(curl -sS -o /dev/null -w '%{http_code}' \
-    -H "apikey: $NEW_SR" -H "Authorization: Bearer $NEW_SR" \
-    -H "Content-Type: application/json" \
-    -X POST \
-    -d '{"id":"documents","name":"documents","public":false}' \
-    "$NEW_URL/storage/v1/bucket")
-  case "$bucket_create_status" in
-    200|201|409) ok "bucket OK (HTTP $bucket_create_status)" ;;
-    *) die "bucket create failed (HTTP $bucket_create_status)" ;;
-  esac
-
-  log "Downloading + uploading files..."
-  local downloaded=0 uploaded=0 failed=0
-  while IFS= read -r path; do
-    [ -z "$path" ] && continue
-    local local_file="$STORAGE_DIR/$path"
-    mkdir -p "$(dirname "$local_file")"
-
-    # Download from OLD
-    local dl_status
-    dl_status=$(curl -sS -o "$local_file" -w '%{http_code}' \
-      -H "apikey: $OLD_SR" -H "Authorization: Bearer $OLD_SR" \
-      "$OLD_URL/storage/v1/object/documents/$path")
-    if [ "$dl_status" != "200" ]; then
-      err "DL fail [$path] HTTP $dl_status"
-      failed=$((failed + 1))
-      continue
+  local missing_csvs=()
+  for pair in "${IMPORT_ORDER[@]}"; do
+    local csv="${pair%%:*}"
+    local file="$EXPORT_DIR/${csv}.csv"
+    if [ ! -f "$file" ]; then
+      missing_csvs+=("$csv.csv")
     fi
-    downloaded=$((downloaded + 1))
+  done
 
-    # Upload to NEW
-    local up_status
-    up_status=$(curl -sS -o /dev/null -w '%{http_code}' \
-      -H "apikey: $NEW_SR" -H "Authorization: Bearer $NEW_SR" \
-      -H "Content-Type: application/octet-stream" \
-      -H "x-upsert: true" \
-      --data-binary "@$local_file" \
-      -X POST \
-      "$NEW_URL/storage/v1/object/documents/$path")
-    if [ "$up_status" != "200" ] && [ "$up_status" != "201" ]; then
-      err "UP fail [$path] HTTP $up_status"
-      failed=$((failed + 1))
-      continue
-    fi
-    uploaded=$((uploaded + 1))
-  done < <(printf '%s' "$list_resp" | jq -r '.[] | select(.name != null) | .name')
-
-  ok "Storage migration: downloaded=$downloaded, uploaded=$uploaded, failed=$failed"
-  [ "$failed" = "0" ] || die "Storage migration had $failed failures — fix and rerun"
-}
-
-# -----------------------------------------------------------------------------
-# Import domain tables into NEW via PostgREST
-# -----------------------------------------------------------------------------
-
-set_replication_role() {
-  local role="$1"
-  if [ -n "${NEW_DB_URL:-}" ]; then
-    log "Setting session_replication_role=$role via NEW_DB_URL..."
-    psql "$NEW_DB_URL" -c "ALTER DATABASE postgres SET session_replication_role TO '$role';" >/dev/null
-    psql "$NEW_DB_URL" -c "SELECT pg_reload_conf();" >/dev/null
+  if [ "${#missing_csvs[@]}" -gt 0 ]; then
+    warn "Missing CSVs (${#missing_csvs[@]} of ${#IMPORT_ORDER[@]}):"
+    printf '  - %s\n' "${missing_csvs[@]}" >&2
+    warn "Run the queries from docs/MIGRATION_QUERIES.md and download each result"
+    warn "as CSV into $EXPORT_DIR before running 'import'."
   else
-    warn "NEW_DB_URL not set; cannot toggle session_replication_role automatically."
-    warn "Run this in the NEW Supabase SQL editor BEFORE import:"
-    warn "  ALTER DATABASE postgres SET session_replication_role TO 'replica';"
-    warn "And AFTER import:"
-    warn "  ALTER DATABASE postgres SET session_replication_role TO 'origin';"
-    read -rp "Confirmed it's set to '$role' in NEW? [y/N] " ack
-    [[ "$ack" =~ ^[Yy]$ ]] || die "Aborting; set the role and retry."
+    ok "All ${#IMPORT_ORDER[@]} CSVs present"
+  fi
+
+  local perm
+  perm=$(stat -f '%Lp' "$EXPORT_DIR" 2>/dev/null || stat -c '%a' "$EXPORT_DIR" 2>/dev/null || echo "?")
+  if [ "$perm" != "700" ]; then
+    warn "$EXPORT_DIR perm is $perm (expected 700). Fix with: chmod 700 $EXPORT_DIR"
+  else
+    ok "$EXPORT_DIR perm = 700"
   fi
 }
 
-import_one_table() {
-  local table="$1"
-  local infile="$EXPORT_DIR/${table}.json"
-  [ -f "$infile" ] || die "Missing $infile — run 'export' first"
-
-  local rows
-  rows=$(jq 'length' "$infile")
-  log "Importing $table: $rows rows..."
-
-  if [ "$rows" = "0" ]; then
-    warn "$table has 0 rows; skipping"
-    return 0
-  fi
-
-  # Batch upserts in chunks of 500 rows
-  local chunk_size=500
-  local i=0
-  local imported=0
-  while [ $i -lt $rows ]; do
-    local chunk
-    chunk=$(jq -c --argjson off $i --argjson sz $chunk_size '.[$off:$off+$sz]' "$infile")
-
-    local status
-    status=$(curl -sS -o "$EXPORT_DIR/_last-import-error.json" -w '%{http_code}' \
-      -H "apikey: $NEW_SR" \
-      -H "Authorization: Bearer $NEW_SR" \
-      -H "Content-Type: application/json" \
-      -H "Prefer: return=minimal,resolution=merge-duplicates" \
-      -X POST \
-      -d "$chunk" \
-      "$NEW_URL/rest/v1/${table}")
-
-    if [ "$status" != "201" ] && [ "$status" != "200" ] && [ "$status" != "204" ]; then
-      err "Import $table chunk offset=$i HTTP $status"
-      err "Response: $(head -c 500 "$EXPORT_DIR/_last-import-error.json")"
-      return 1
-    fi
-
-    imported=$((imported + $(printf '%s' "$chunk" | jq 'length')))
-    i=$((i + chunk_size))
-  done
-
-  ok "imported $table: $imported rows"
-}
+# -----------------------------------------------------------------------------
+# import
+# -----------------------------------------------------------------------------
 
 cmd_import() {
-  cmd_check
-  set_replication_role "replica"
+  require_env
+  require_tools
 
-  for table in "${DOMAIN_TABLES[@]}"; do
-    import_one_table "$table"
+  if [ ! -d "$EXPORT_DIR" ]; then
+    die "$EXPORT_DIR not found. Export CSVs from the Lovable SQL editor first."
+  fi
+
+  # Verify all 18 CSVs are present before starting — partial imports are bad.
+  for pair in "${IMPORT_ORDER[@]}"; do
+    local csv="${pair%%:*}"
+    local file="$EXPORT_DIR/${csv}.csv"
+    if [ ! -f "$file" ]; then
+      die "Missing $file. Run 'check' to see all missing CSVs."
+    fi
   done
+  ok "All 18 CSVs found"
 
-  set_replication_role "origin"
-  ok "All domain tables imported"
+  log "Starting transactional import (triggers off, FK-safe order)..."
+
+  # Build a single psql script so the whole import runs in ONE transaction.
+  # If anything fails, the transaction rolls back and the new DB stays clean.
+  local sql_script
+  sql_script=$(mktemp)
+  trap 'rm -f "$sql_script"' EXIT
+
+  {
+    echo "\\set ON_ERROR_STOP on"
+    echo "BEGIN;"
+    echo "SET LOCAL session_replication_role = 'replica';"
+    echo ""
+
+    for pair in "${IMPORT_ORDER[@]}"; do
+      local csv="${pair%%:*}"
+      local table="${pair##*:}"
+      local file="$EXPORT_DIR/${csv}.csv"
+      local rows
+      rows=$(($(wc -l < "$file") - 1))   # subtract header
+      [ "$rows" -lt 0 ] && rows=0
+      echo "\\echo === Importing $table ($rows rows from ${csv}.csv) ==="
+      echo "\\copy $table FROM '$file' WITH (FORMAT csv, HEADER true);"
+      echo ""
+    done
+
+    echo "SET LOCAL session_replication_role = 'origin';"
+    echo "COMMIT;"
+    echo "\\echo === Import committed ==="
+  } > "$sql_script"
+
+  if psql "$NEW_DB_URL" -v ON_ERROR_STOP=1 -f "$sql_script"; then
+    ok "Import committed successfully"
+  else
+    die "Import failed — transaction rolled back. New DB is unchanged."
+  fi
 }
 
 # -----------------------------------------------------------------------------
-# Counts comparison
+# counts
 # -----------------------------------------------------------------------------
 
-count_rows() {
-  local url="$1" key="$2" table="$3"
+count_new() {
+  local table="$1"
   curl -sS \
-    -H "apikey: $key" \
-    -H "Authorization: Bearer $key" \
+    -H "apikey: $NEW_SR" \
+    -H "Authorization: Bearer $NEW_SR" \
     -H "Range-Unit: items" \
     -H "Range: 0-0" \
     -H "Prefer: count=exact" \
     -I \
-    "$url/rest/v1/${table}?select=id" 2>/dev/null \
-    | grep -i '^content-range:' \
-    | sed -E 's/.*\///' \
-    | tr -d '\r\n '
+    "$NEW_URL/rest/v1/${table#public.}?select=id" 2>/dev/null \
+    | awk -F/ '/[Cc]ontent-[Rr]ange:/ {gsub(/[\r\n ]/, "", $2); print $2}'
+}
+
+count_new_sql() {
+  # For tables PostgREST does not expose (e.g. auth.users), use psql directly.
+  local table="$1"
+  psql "$NEW_DB_URL" -At -c "SELECT count(*) FROM $table;" 2>/dev/null | tr -d '[:space:]'
 }
 
 cmd_counts() {
-  cmd_check
-  log "Counting rows in OLD vs NEW for all domain tables..."
+  require_env
+  require_tools
 
-  printf '%-30s %-12s %-12s %s\n' "table" "old" "new" "delta" >&2
-  printf '%-30s %-12s %-12s %s\n' "------------------------------" "------------" "------------" "------" >&2
+  printf '%-35s %-10s %-10s %s\n' "table" "new" "expected" "delta" >&2
+  printf '%-35s %-10s %-10s %s\n' "-----------------------------------" "----------" "----------" "------" >&2
 
-  local fail=0
-  for table in "${DOMAIN_TABLES[@]}"; do
-    local old_count new_count
-    old_count=$(count_rows "$OLD_URL" "$OLD_SR" "$table" || echo "?")
-    new_count=$(count_rows "$NEW_URL" "$NEW_SR" "$table" || echo "?")
+  local mismatch=0
+  for pair in "${IMPORT_ORDER[@]}"; do
+    local csv="${pair%%:*}"
+    local table="${pair##*:}"
+    local new_count
+
+    case "$table" in
+      auth.*) new_count=$(count_new_sql "$table") ;;
+      *)      new_count=$(count_new "$table") ;;
+    esac
+    [ -z "$new_count" ] && new_count="?"
+
+    local expected="${EXPECTED_COUNTS[$table]:-?}"
     local delta=""
-    if [[ "$old_count" =~ ^[0-9]+$ ]] && [[ "$new_count" =~ ^[0-9]+$ ]]; then
-      delta=$((new_count - old_count))
+    if [[ "$expected" =~ ^[0-9]+$ && "$new_count" =~ ^[0-9]+$ ]]; then
+      delta=$((new_count - expected))
       if [ "$delta" -ne 0 ]; then
-        fail=$((fail + 1))
-        printf "%-30s %-12s %-12s %s%s%s\n" "$table" "$old_count" "$new_count" "$C_WARN" "$delta" "$C_RESET" >&2
+        mismatch=$((mismatch + 1))
+        printf "%-35s %-10s %-10s %s%s%s\n" "$table" "$new_count" "$expected" \
+          "$C_WARN" "$delta" "$C_RESET" >&2
       else
-        printf "%-30s %-12s %-12s %s%s%s\n" "$table" "$old_count" "$new_count" "$C_OK" "$delta" "$C_RESET" >&2
+        printf "%-35s %-10s %-10s %s%s%s\n" "$table" "$new_count" "$expected" \
+          "$C_OK" "$delta" "$C_RESET" >&2
       fi
     else
-      fail=$((fail + 1))
-      printf "%-30s %-12s %-12s %s?%s\n" "$table" "$old_count" "$new_count" "$C_ERR" "$C_RESET" >&2
+      printf "%-35s %-10s %-10s -\n" "$table" "$new_count" "$expected" >&2
     fi
   done
 
-  if [ "$fail" -eq 0 ]; then
-    ok "All counts match between OLD and NEW"
+  if [ "$mismatch" -eq 0 ]; then
+    ok "All known counts match. Eyeball the '?' rows against Lovable SQL editor."
   else
-    err "$fail table(s) with mismatch — investigate"
+    err "$mismatch mismatch(es) — investigate before proceeding."
     return 1
   fi
 }
 
 # -----------------------------------------------------------------------------
-# Cleanup
+# cleanup
 # -----------------------------------------------------------------------------
 
 cmd_cleanup() {
   if [ -d "$EXPORT_DIR" ]; then
-    log "Removing $EXPORT_DIR (PII may live in those PDFs)..."
+    log "Removing $EXPORT_DIR (PII may be in those CSVs)..."
     rm -rf "$EXPORT_DIR"
-    ok "cleaned"
+    ok "deleted"
+  else
+    log "$EXPORT_DIR already gone"
   fi
-  warn "Don't forget to: unset OLD_SR NEW_SR OLD_URL NEW_URL NEW_DB_URL"
+  warn "Don't forget: unset NEW_SR NEW_DB_URL SUPABASE_DB_PASSWORD SUPABASE_ACCESS_TOKEN"
 }
 
 # -----------------------------------------------------------------------------
@@ -472,7 +344,7 @@ cmd_cleanup() {
 # -----------------------------------------------------------------------------
 
 usage() {
-  sed -n '1,30p' "$0" >&2
+  sed -n '1,40p' "$0" >&2
   exit 1
 }
 
@@ -480,19 +352,8 @@ usage() {
 
 case "$1" in
   check)    cmd_check ;;
-  export)   cmd_export ;;
-  storage)  cmd_storage ;;
   import)   cmd_import ;;
   counts)   cmd_counts ;;
   cleanup)  cmd_cleanup ;;
-  all)
-    cmd_check
-    cmd_export
-    cmd_storage
-    cmd_import
-    cmd_counts
-    warn "auth.users still need manual migration via SQL editors (Caminho A)."
-    warn "When done, run './$(basename "$0") cleanup'."
-    ;;
   *) usage ;;
 esac
