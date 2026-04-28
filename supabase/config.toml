@@ -1,19 +1,30 @@
-project_id = "rmxqigouctwqkpwiapbu"
+project_id = "vbrdtxgsiwhgeexihgwk"
+
+# User-bound functions: platform-level JWT verification (R7/R17).
+# Each function still re-validates JWT internally and extracts claims, but
+# unauthenticated requests are now rejected at the edge before any code runs
+# (fail-closed early).
 
 [functions.parse-invoice]
-verify_jwt = false
+verify_jwt = true
 
 [functions.migrate-installments]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-reset-password]
-verify_jwt = false
+verify_jwt = true
 
 [functions.add-member]
-verify_jwt = false
+verify_jwt = true
 
-[functions.pluggy-connect]
-verify_jwt = false
-
-[functions.pluggy-webhook]
-verify_jwt = false
+# Pluggy integration disabled during the Vercel migration (Phase 5).
+# Both functions stay in the repo but are NOT deployed. Re-enable by
+# uncommenting and running `supabase functions deploy pluggy-{connect,webhook}`.
+# [functions.pluggy-connect]
+# verify_jwt = true
+#
+# pluggy-webhook is server-to-server from Pluggy and authenticates via
+# shared-secret header + optional HMAC (see supabase/functions/pluggy-webhook).
+# JWT is intentionally disabled — HMAC/secret replaces it (R16).
+# [functions.pluggy-webhook]
+# verify_jwt = false

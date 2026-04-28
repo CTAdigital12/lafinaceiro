@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+
+# R4: scan de segredos no que está staged
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "ERROR: gitleaks not installed. brew install gitleaks" >&2
+  exit 1
+fi
+
+gitleaks protect --staged --redact --verbose
+GITLEAKS_EXIT=$?
+
+if [ $GITLEAKS_EXIT -ne 0 ]; then
+  echo ""
+  echo "gitleaks detectou possivel segredo no commit."
+  echo "   Se for falso-positivo: ajuste .gitleaks.toml ou allowlist o arquivo."
+  echo "   NAO use --no-verify (W3 do SECURITY_RULES.md)."
+  exit 1
+fi

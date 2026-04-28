@@ -1,73 +1,53 @@
-# Welcome to your Lovable project
+# La Financeiro
 
-## Project info
+App de gestão financeira pessoal e familiar — controle de transações, cartões de crédito, contas bancárias, orçamentos, investimentos e acesso compartilhado entre membros da família.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Construído com Vite + React 18 + TypeScript, shadcn/ui sobre Tailwind, e Supabase como backend (PostgreSQL + Auth + Edge Functions).
 
-## How can I edit this code?
+## Stack
 
-There are several ways of editing your application.
+- **Build / runtime:** Vite 5, React 18, TypeScript strict
+- **UI:** Tailwind CSS, shadcn/ui (Radix primitives), Lucide icons
+- **Estado server:** TanStack React Query v5
+- **Roteamento:** React Router v6
+- **Forms:** React Hook Form + Zod
+- **Backend:** Supabase (PostgreSQL, Auth, Storage, Edge Functions)
+- **OCR / IA:** Google Gemini 2.5 Pro (via Edge Function `parse-invoice`)
+- **PWA:** `vite-plugin-pwa`
+- **Integração bancária:** Pluggy Connect
 
-**Use Lovable**
+## Setup local
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Pré-requisitos: [Bun](https://bun.sh) (recomendado) ou Node.js 20+.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# 1. Instala dependências
+bun install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# 2. Copia o template de variáveis de ambiente
+cp .env.example .env
 
-# Step 3: Install the necessary dependencies.
-npm i
+# 3. Preenche o .env com as chaves do projeto Supabase
+#    (ver seção "Env vars necessárias" abaixo)
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# 4. Sobe o dev server (porta 8080)
+bun dev
 ```
 
-**Edit a file directly in GitHub**
+> O arquivo `.env.example` será adicionado na próxima fase da migração. Por enquanto, peça as variáveis para um maintainer.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Env vars necessárias
 
-**Use GitHub Codespaces**
+Todas as variáveis prefixadas com `VITE_` são expostas ao bundle do frontend. Use somente chaves públicas (`anon` / `publishable`) — chaves de serviço (`service_role`) jamais entram no frontend.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- `VITE_SUPABASE_URL` — URL do projeto Supabase
+- `VITE_SUPABASE_PUBLISHABLE_KEY` — chave pública anônima (anon / publishable)
+- `VITE_SUPABASE_PROJECT_ID` — ID do projeto Supabase
 
-## What technologies are used for this project?
+## Deploy
 
-This project is built with:
+Deploy via PR para `main`. Vercel faz auto-deploy de preview em PRs e produção em merges para `main`.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Estrutura
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Para detalhes sobre schema do banco, hooks, fluxos de usuário, regras de negócio e padrões mobile, consulte [`AI_CONTEXT.md`](./AI_CONTEXT.md) — fonte de verdade técnica do projeto.

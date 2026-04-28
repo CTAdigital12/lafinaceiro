@@ -12,6 +12,20 @@ dist
 dist-ssr
 *.local
 
+# Environment & secrets (R3, R4)
+.env
+.env.local
+.env.*.local
+.env.migration
+.env.migration.*
+
+# Tooling caches that may contain credentials
+.supabase/
+supabase/.temp/
+supabase/.branches/
+.vercel/
+*.pem
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
