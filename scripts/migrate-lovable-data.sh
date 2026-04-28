@@ -81,6 +81,47 @@ expected_count() {
   esac
 }
 
+# Columns that are GENERATED / IDENTITY in the new schema and must be dropped
+# from the source CSV before \copy (PostgreSQL refuses COPY into generated
+# columns). Discovered incrementally; add more as the import surfaces them.
+skip_columns_for_table() {
+  case "$1" in
+    "auth.users") echo "confirmed_at" ;;
+    *) echo "" ;;
+  esac
+}
+
+# Use Python (CSV-aware, handles quoted fields with embedded ';' or newlines)
+# to drop columns from a CSV. Returns the path of the resulting file (either
+# the original or a sibling .filtered file). Caller should not assume the
+# file is mutable.
+preprocess_csv_drop_columns() {
+  local file="$1"
+  local table="$2"
+  local skip_cols
+  skip_cols=$(skip_columns_for_table "$table")
+  if [ -z "$skip_cols" ]; then
+    printf '%s' "$file"
+    return
+  fi
+
+  local filtered="${file}.filtered"
+  SKIP_COLS="$skip_cols" python3 - "$file" "$filtered" <<'PYEOF'
+import csv, os, sys
+src, dst = sys.argv[1], sys.argv[2]
+skip = set(os.environ["SKIP_COLS"].split(","))
+with open(src, newline="") as fin, open(dst, "w", newline="") as fout:
+    rdr = csv.reader(fin, delimiter=";")
+    wtr = csv.writer(fout, delimiter=";")
+    header = next(rdr)
+    keep = [i for i, c in enumerate(header) if c.strip() not in skip]
+    wtr.writerow([header[i] for i in keep])
+    for row in rdr:
+        wtr.writerow([row[i] if i < len(row) else "" for i in keep])
+PYEOF
+  printf '%s' "$filtered"
+}
+
 # -----------------------------------------------------------------------------
 # Logging (stderr only)
 # -----------------------------------------------------------------------------
@@ -263,8 +304,15 @@ cmd_import() {
       local csv="${pair%%:*}"
       local table="${pair##*:}"
       local file="$EXPORT_DIR/${csv}.csv"
+
+      # Drop generated/identity columns from the source CSV before \copy.
+      # The function returns the original path if nothing to filter, or a
+      # sibling .filtered file otherwise.
+      local effective_file
+      effective_file=$(preprocess_csv_drop_columns "$file" "$table")
+
       local rows
-      rows=$(($(wc -l < "$file") - 1))   # subtract header
+      rows=$(($(wc -l < "$effective_file") - 1))
       [ "$rows" -lt 0 ] && rows=0
 
       # Lovable SQL editor exports columns alphabetically, not in the order we
@@ -275,12 +323,12 @@ cmd_import() {
       # Read the header (first line) and convert ';' to ',' to use as the
       # column list.
       local header_line cols
-      header_line=$(head -1 "$file")
+      header_line=$(head -1 "$effective_file")
       cols=$(printf '%s' "$header_line" | tr ';' ',')
 
       echo "\\echo === Importing $table ($rows rows from ${csv}.csv) ==="
       # Lovable SQL editor exports use ';' as delimiter (pt-BR locale).
-      echo "\\copy $table ($cols) FROM '$file' WITH (FORMAT csv, HEADER true, DELIMITER ';');"
+      echo "\\copy $table ($cols) FROM '$effective_file' WITH (FORMAT csv, HEADER true, DELIMITER ';');"
       echo ""
     done
 
