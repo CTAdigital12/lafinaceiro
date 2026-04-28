@@ -87,6 +87,7 @@ expected_count() {
 skip_columns_for_table() {
   case "$1" in
     "auth.users") echo "confirmed_at" ;;
+    "auth.identities") echo "email" ;;
     *) echo "" ;;
   esac
 }
