@@ -140,21 +140,41 @@ cmd_check() {
   require_env
   require_tools
 
-  log "Validating NEW_SR JWT..."
-  local payload role ref
-  payload=$(decode_jwt_payload "$NEW_SR")
-  role=$(printf '%s' "$payload" | jq -r '.role // "missing"' 2>/dev/null || echo missing)
-  ref=$(printf '%s' "$payload" | jq -r '.ref // "missing"' 2>/dev/null || echo missing)
-  [ "$role" = "service_role" ] || die "NEW_SR is not a service_role JWT (role=$role)"
-  ok "NEW_SR -> role=service_role, ref=$ref"
+  # Supabase now ships TWO key formats. We accept both:
+  #   1) Legacy JWT: starts with "eyJ", payload has role + ref
+  #   2) New: starts with "sb_secret_" (~40 chars) or "sb_publishable_" (~25-44).
+  log "Validating NEW_SR..."
+  case "$NEW_SR" in
+    eyJ*)
+      local payload role ref
+      payload=$(decode_jwt_payload "$NEW_SR")
+      role=$(printf '%s' "$payload" | jq -r '.role // "missing"' 2>/dev/null || echo missing)
+      ref=$(printf '%s' "$payload" | jq -r '.ref // "missing"' 2>/dev/null || echo missing)
+      [ "$role" = "service_role" ] || die "NEW_SR is a JWT but role=$role (expected service_role)"
+      ok "NEW_SR -> JWT legacy, role=service_role, ref=$ref"
+      ;;
+    sb_secret_*)
+      [ "${#NEW_SR}" -ge 30 ] || die "NEW_SR sb_secret_ key looks truncated (len=${#NEW_SR})"
+      ok "NEW_SR -> sb_secret_ (new format, len=${#NEW_SR})"
+      ;;
+    sb_publishable_*)
+      die "NEW_SR is a publishable key — needs the SECRET key for service_role privileges"
+      ;;
+    *)
+      die "NEW_SR has unrecognized format (length=${#NEW_SR}). Expected eyJ... or sb_secret_..."
+      ;;
+  esac
 
-  log "Probing NEW project via PostgREST..."
+  log "Probing NEW project via PostgREST (with privilege)..."
+  # service_role / sb_secret should be able to read profiles even with RLS,
+  # because both bypass RLS. A publishable/anon key would return 200 too but
+  # only see public rows; we test privilege below via a privileged-only path.
   local probe
   probe=$(curl -sS -o /dev/null -w '%{http_code}' \
     -H "apikey: $NEW_SR" -H "Authorization: Bearer $NEW_SR" \
     "$NEW_URL/rest/v1/profiles?select=id&limit=1" || echo "000")
   [ "$probe" = "200" ] || die "PostgREST probe failed (HTTP $probe)"
-  ok "PostgREST responsive"
+  ok "PostgREST responsive (HTTP 200)"
 
   log "Probing NEW DB via psql..."
   if ! psql "$NEW_DB_URL" -c 'SELECT 1' >/dev/null 2>&1; then
