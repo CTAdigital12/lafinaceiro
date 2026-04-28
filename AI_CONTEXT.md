@@ -1,8 +1,8 @@
 # LA Financeiro - Documentação Técnica Completa
 
-> **Última Atualização:** Março 2026  
-> **Versão:** 3.1  
-> **URL de Produção:** https://lafinaceiro.vercel.app  
+> **Última Atualização:** Abril 2026
+> **Versão:** 3.2
+> **URL de Produção:** https://lafinanceiro.ia.br (custom domain) e https://lafinaceiro.vercel.app (Vercel default fallback)
 > **Propósito:** Fonte de verdade única para IAs assistentes. Leia ANTES de qualquer modificação.
 
 ---
