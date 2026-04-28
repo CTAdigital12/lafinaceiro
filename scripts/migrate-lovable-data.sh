@@ -336,6 +336,24 @@ cmd_import() {
     done
 
     echo "SET LOCAL session_replication_role = 'origin';"
+    echo ""
+    echo "\\echo === Post-import: GoTrue requires '' (not NULL) on token columns ==="
+    # GoTrue (Go) panics on NULL string scans for token-shaped columns even
+    # though Postgres allows NULL. Convert NULLs to '' so logins work right
+    # away. Without this, the very first login returns:
+    #   Database error querying schema
+    # and the auth-logs message is:
+    #   Scan error on column index 3, name "confirmation_token":
+    #   converting NULL to string is unsupported
+    echo "UPDATE auth.users SET"
+    echo "  confirmation_token       = COALESCE(confirmation_token,       ''),"
+    echo "  recovery_token           = COALESCE(recovery_token,           ''),"
+    echo "  email_change_token_new   = COALESCE(email_change_token_new,   ''),"
+    echo "  email_change             = COALESCE(email_change,             ''),"
+    echo "  phone_change             = COALESCE(phone_change,             ''),"
+    echo "  phone_change_token       = COALESCE(phone_change_token,       ''),"
+    echo "  reauthentication_token   = COALESCE(reauthentication_token,   '');"
+    echo ""
     echo "COMMIT;"
     echo "\\echo === Import committed ==="
   } > "$sql_script"
