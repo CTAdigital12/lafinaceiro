@@ -293,7 +293,9 @@ cmd_import() {
   # If anything fails, the transaction rolls back and the new DB stays clean.
   local sql_script
   sql_script=$(mktemp)
-  trap 'rm -f "$sql_script"' EXIT
+  # Use default-empty parameter expansion so the trap doesn't trip set -u after
+  # the local var goes out of scope.
+  trap 'rm -f "${sql_script:-}"' EXIT
 
   {
     echo "\\set ON_ERROR_STOP on"
