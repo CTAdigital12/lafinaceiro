@@ -30,6 +30,7 @@ import { PayInvoiceModal } from "@/components/modals/PayInvoiceModal";
 import { InstallmentsDashboard } from "@/components/credit-cards/InstallmentsDashboard";
 import { ReconciliationCard } from "@/components/credit-cards/ReconciliationCard";
 import { useDate } from "@/contexts/DateContext";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 const statusConfig = {
   open: { label: "Fatura Aberta", variant: "default" as const, className: "bg-balance text-balance-foreground" },
@@ -47,6 +48,7 @@ interface CreditCardComponentProps {
 }
 
 function CreditCardComponent({ card, pendingAmount, onEdit, onDelete, onImportInvoice, onPayInvoice }: CreditCardComponentProps) {
+  const fmt = useFormatCurrency();
   const totalUsed = Number(card.current_invoice) + pendingAmount;
   const availableLimit = Number(card.credit_limit) - totalUsed;
   const usagePercent = (totalUsed / Number(card.credit_limit)) * 100;
@@ -123,13 +125,13 @@ function CreditCardComponent({ card, pendingAmount, onEdit, onDelete, onImportIn
           <div>
             <p className="text-sm text-muted-foreground">Fatura Atual</p>
             <p className="text-xl font-bold text-foreground">
-              R$ {Number(card.current_invoice).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {fmt(Number(card.current_invoice))}
             </p>
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Limite Disponível</p>
             <p className="text-lg font-semibold text-income">
-              R$ {availableLimit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {fmt(availableLimit)}
             </p>
           </div>
         </div>
@@ -172,6 +174,7 @@ function CreditCardComponent({ card, pendingAmount, onEdit, onDelete, onImportIn
 }
 
 export default function CreditCards() {
+  const fmt = useFormatCurrency();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
   const [importingCard, setImportingCard] = useState<CreditCardType | null>(null);
@@ -255,7 +258,7 @@ export default function CreditCards() {
             <div>
               <p className="text-xs text-muted-foreground">Fatura Banco</p>
               <p className="text-lg font-bold text-foreground">
-                R$ {reconciliation.totalBankInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                {fmt(reconciliation.totalBankInvoice)}
               </p>
               <p className="text-xs text-muted-foreground">Valor informado</p>
             </div>
@@ -271,11 +274,11 @@ export default function CreditCards() {
             <div>
               <p className="text-xs text-muted-foreground">Fatura Lançada</p>
               <p className="text-lg font-bold text-chart-2">
-                R$ {reconciliation.totalTransactions.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                {fmt(reconciliation.totalTransactions)}
               </p>
               {Math.abs(reconciliation.totalDifference) > 0.01 ? (
                 <p className="text-xs text-chart-4">
-                  Diferença: R$ {Math.abs(reconciliation.totalDifference).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  Diferença: {fmt(Math.abs(reconciliation.totalDifference))}
                 </p>
               ) : (
                 <p className="text-xs text-income">Reconciliado ✓</p>
@@ -293,7 +296,7 @@ export default function CreditCards() {
             <div>
               <p className="text-xs text-muted-foreground">Meu Custo</p>
               <p className="text-lg font-bold text-expense">
-                R$ {reconciliation.totalPersonal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                {fmt(reconciliation.totalPersonal)}
               </p>
               <p className="text-xs text-muted-foreground">Valor a pagar</p>
             </div>
@@ -309,7 +312,7 @@ export default function CreditCards() {
             <div>
               <p className="text-xs text-muted-foreground">A Reembolsar</p>
               <p className="text-lg font-bold text-muted-foreground">
-                R$ {reconciliation.totalCorporate.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                {fmt(reconciliation.totalCorporate)}
               </p>
               <p className="text-xs text-muted-foreground">Empresa paga</p>
             </div>
@@ -325,11 +328,11 @@ export default function CreditCards() {
             <div>
               <p className="text-xs text-muted-foreground">Limite Disponível</p>
               <p className="text-lg font-bold text-income">
-                R$ {totalAvailable.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                {fmt(totalAvailable)}
               </p>
               {totalPendingInstallments > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  inclui R$ {totalPendingInstallments.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em parcelas futuras
+                  inclui {fmt(totalPendingInstallments)} em parcelas futuras
                 </p>
               )}
             </div>

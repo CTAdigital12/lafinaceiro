@@ -67,9 +67,7 @@ interface AccountReconciliationModalProps {
   computedBalance: number;
 }
 
-function formatCurrency(value: number) {
-  return `R$ ${Math.abs(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export function AccountReconciliationModal({
   open,
@@ -78,6 +76,8 @@ export function AccountReconciliationModal({
   accountName,
   computedBalance,
 }: AccountReconciliationModalProps) {
+  const fmt = useFormatCurrency();
+  const formatCurrency = (value: number) => fmt(Math.abs(value));
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -607,6 +607,8 @@ type RowData = {
 };
 
 function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, onReconcile, refundItems, onToggleRefund, ignoredKeys, onIgnore }: AccountResultTableProps) {
+  const fmt = useFormatCurrency();
+  const formatCurrency = (value: number) => fmt(Math.abs(value));
   const rows = useMemo(() => {
     const all: RowData[] = [];
 

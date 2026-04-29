@@ -65,9 +65,7 @@ interface SpreadsheetReconciliationModalProps {
   year: number;
 }
 
-function formatCurrency(value: number) {
-  return `R$ ${Math.abs(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export function SpreadsheetReconciliationModal({
   open,
@@ -77,6 +75,8 @@ export function SpreadsheetReconciliationModal({
   month,
   year,
 }: SpreadsheetReconciliationModalProps) {
+  const fmt = useFormatCurrency();
+  const formatCurrency = (value: number) => fmt(Math.abs(value));
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -411,6 +411,8 @@ type RowData = {
 };
 
 function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, refundItems, onToggleRefund, ignoredKeys, onIgnore }: ResultTableProps) {
+  const fmt = useFormatCurrency();
+  const formatCurrency = (value: number) => fmt(Math.abs(value));
   const rows = useMemo(() => {
     const all: RowData[] = [];
 

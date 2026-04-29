@@ -10,12 +10,13 @@ import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, TrendingDown, TrendingUp, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { filterPureExpenses, getCompetenceDate } from "@/lib/reportUtils";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { RefundReport } from "./RefundReport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ExpenseXRayTab() {
+  const formatCurrency = useFormatCurrency();
   const { currentDate: ctxDate } = useDate();
   const [currentDate, setCurrentDate] = useState(ctxDate);
 

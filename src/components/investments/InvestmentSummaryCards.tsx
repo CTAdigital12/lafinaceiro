@@ -1,6 +1,7 @@
 import { TrendingUp, Wallet, PiggyBank, BarChart3 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { Currency } from "@/components/ui/currency";
 
 interface InvestmentSummaryCardsProps {
   totalPatrimony: number;
@@ -15,9 +16,6 @@ export function InvestmentSummaryCards({
   totalResult,
   resultPercentage,
 }: InvestmentSummaryCardsProps) {
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-
   const isProfit = totalResult >= 0;
 
   return (
@@ -27,7 +25,7 @@ export function InvestmentSummaryCards({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Patrimônio Total</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(totalPatrimony)}</p>
+              <Currency value={totalPatrimony} className="text-2xl font-bold text-foreground block" />
               <p className="text-xs text-muted-foreground mt-1">Valor atual da carteira</p>
             </div>
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -42,7 +40,7 @@ export function InvestmentSummaryCards({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Valor Aplicado</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(totalApplied)}</p>
+              <Currency value={totalApplied} className="text-2xl font-bold text-foreground block" />
               <p className="text-xs text-muted-foreground mt-1">Custo de aquisição</p>
             </div>
             <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
@@ -57,9 +55,7 @@ export function InvestmentSummaryCards({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Resultado Aberto</p>
-              <p className={cn("text-2xl font-bold", isProfit ? "text-emerald-500" : "text-red-500")}>
-                {formatCurrency(totalResult)}
-              </p>
+              <Currency value={totalResult} className={cn("text-2xl font-bold block", isProfit ? "text-emerald-500" : "text-red-500")} />
               <p className={cn("text-xs mt-1", isProfit ? "text-emerald-500" : "text-red-500")}>
                 {isProfit ? "+" : ""}{resultPercentage.toFixed(2)}%
               </p>

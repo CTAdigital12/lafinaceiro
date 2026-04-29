@@ -9,10 +9,11 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Landmark, CreditCard, TrendingUp, Wallet } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { filterPureExpenses, filterPureIncome, getCompetenceDate } from "@/lib/reportUtils";
 
 export function NetWorthTab() {
+  const formatCurrency = useFormatCurrency();
   const { accounts, totalBalance } = useAccounts();
   const { assets, totalPatrimony: investmentTotal } = useInvestments();
   const { creditCards, totalInvoice } = useCreditCards();

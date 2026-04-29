@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { usePrivacyMode } from "@/contexts/PrivacyContext";
 
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -13,6 +15,8 @@ interface BudgetEvolutionChartProps {
 
 export function BudgetEvolutionChart({ currentYear }: BudgetEvolutionChartProps) {
   const { user } = useAuth();
+  const fmt = useFormatCurrency();
+  const { isHidden } = usePrivacyMode();
 
   const { data: budgetsData, isLoading: loadingBudgets } = useQuery({
     queryKey: ["budgets-evolution", currentYear, user?.id],
@@ -96,7 +100,7 @@ export function BudgetEvolutionChart({ currentYear }: BudgetEvolutionChartProps)
           <YAxis 
             className="text-xs" 
             tick={{ fill: "hsl(var(--muted-foreground))" }}
-            tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+            tickFormatter={(value) => isHidden ? "R$ ••" : `R$ ${(value / 1000).toFixed(0)}k`}
           />
           <Tooltip
             contentStyle={{
@@ -106,7 +110,7 @@ export function BudgetEvolutionChart({ currentYear }: BudgetEvolutionChartProps)
             }}
             labelStyle={{ color: "hsl(var(--foreground))" }}
             formatter={(value: number, name: string) => [
-              `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+              fmt(value),
               name === "planejado" ? "Planejado" : "Gasto"
             ]}
           />

@@ -37,15 +37,16 @@ interface InvoiceBreakdownCardProps {
   cardId: string;
 }
 
-function formatCurrency(value: number) {
-  return `R$ ${Math.abs(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { Currency } from "@/components/ui/currency";
 
 export function InvoiceBreakdownCard({
   transactions,
   bankInvoice,
   cardId,
 }: InvoiceBreakdownCardProps) {
+  const fmt = useFormatCurrency();
+  const formatCurrency = (value: number) => fmt(Math.abs(value));
   const breakdown = useMemo(() => {
     const cardTransactions = transactions.filter(
       (t) => t.credit_card_id === cardId && !t.is_card_payment
@@ -224,9 +225,7 @@ export function InvoiceBreakdownCard({
             <Calculator className="h-4 w-4" />
             <span className="font-medium">Total Calculado (Sistema)</span>
           </div>
-          <span className="font-mono font-bold text-lg">
-            {formatCurrency(breakdown.netTotal)}
-          </span>
+          <Currency value={Math.abs(breakdown.netTotal)} className="font-mono font-bold text-lg" />
         </div>
 
         {/* Bank Invoice Comparison */}

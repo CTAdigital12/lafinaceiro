@@ -1,10 +1,11 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { FolderKanban } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import type { Project } from "@/hooks/useProjects";
 
 export function ProjectsSection({ projects }: { projects: Project[] }) {
+  const formatCurrency = useFormatCurrency();
   const items = projects
     .map((p) => {
       const pct = p.target_amount > 0 ? Math.round((p.spent_amount / p.target_amount) * 100) : 0;

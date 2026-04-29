@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface CategoryData {
   name: string;
@@ -53,6 +54,7 @@ interface SubcategoryData {
 type ExpenseViewFilter = "personal" | "corporate" | "reimbursable";
 
 export default function Dashboard() {
+  const fmt = useFormatCurrency();
   const { totalBalance, isLoading: accountsLoading } = useAccounts();
   const { transactions, totalIncome, isLoading: transactionsLoading } = useTransactions(
     undefined,
@@ -393,28 +395,28 @@ export default function Dashboard() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               title="Saldo Atual"
-              value={`R$ ${totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+              value={fmt(totalBalance)}
               subtitle="Todas as contas"
               icon={Wallet}
               variant="balance"
             />
             <SummaryCard
               title="Receitas"
-              value={`R$ ${totalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+              value={fmt(totalIncome)}
               subtitle="Este mês"
               icon={TrendingUp}
               variant="income"
             />
             <SummaryCard
               title="Despesas"
-              value={`R$ ${filteredTotalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+              value={fmt(filteredTotalExpense)}
               subtitle="Este mês"
               icon={TrendingDown}
               variant="expense"
             />
             <SummaryCard
               title="Cartão de Crédito"
-              value={`R$ ${totalInvoice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+              value={fmt(totalInvoice)}
               subtitle="Fatura atual"
               icon={CreditCard}
               variant="card"

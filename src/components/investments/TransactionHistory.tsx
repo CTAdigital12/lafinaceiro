@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { InvestmentTransaction, InvestmentAsset } from "@/hooks/useInvestments";
 import { cn } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface TransactionHistoryProps {
   transactions: (InvestmentTransaction & { asset: InvestmentAsset })[];
@@ -30,8 +31,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export function TransactionHistory({ transactions }: TransactionHistoryProps) {
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  const formatCurrency = useFormatCurrency();
 
   const formatNumber = (value: number) =>
     new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(value);

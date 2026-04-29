@@ -31,6 +31,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { Transaction } from "@/hooks/useTransactions";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { Currency } from "@/components/ui/currency";
 
 interface TransactionDisplay {
   id: string;
@@ -80,6 +82,7 @@ export function ParentCategoryDetailSheet({
   categoryType,
 }: ParentCategoryDetailSheetProps) {
   const isMobile = useIsMobile();
+  const fmt = useFormatCurrency();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [expandedSubcategories, setExpandedSubcategories] = useState<Set<string>>(new Set());
@@ -178,7 +181,7 @@ export function ParentCategoryDetailSheet({
         <p className={`text-sm font-medium ${
           transaction.type === "income" ? "text-income" : "text-expense"
         }`}>
-          {transaction.type === "income" ? "+" : "-"} R$ {transaction.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          {transaction.type === "income" ? "+" : "-"} {fmt(transaction.amount)}
         </p>
         
         <Button 
@@ -233,7 +236,7 @@ export function ParentCategoryDetailSheet({
               {cat.icon} {cat.name}
             </span>
             <span className="text-xs text-muted-foreground shrink-0">
-              R$ {cat.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {fmt(cat.value)}
             </span>
             {cat.id === parentCategory.id && (
               <Check className="h-4 w-4 text-primary shrink-0" />
@@ -292,9 +295,7 @@ export function ParentCategoryDetailSheet({
     <>
       <div className="flex items-center gap-3 mb-6">
         <div>
-          <p className="text-2xl font-bold text-foreground">
-            R$ {parentCategory.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
+          <Currency value={parentCategory.value} className="text-2xl font-bold text-foreground block" />
           <p className="text-sm text-muted-foreground">
             {totalTransactions} {totalTransactions === 1 ? "transação" : "transações"}
           </p>
@@ -328,7 +329,7 @@ export function ParentCategoryDetailSheet({
                     <span className={`text-sm font-medium ${
                       categoryType === "income" ? "text-income" : "text-expense"
                     }`}>
-                      R$ {subcategory.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      {fmt(subcategory.value)}
                     </span>
                     {expandedSubcategories.has(subcategory.id) ? (
                       <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -370,7 +371,7 @@ export function ParentCategoryDetailSheet({
                     <span className={`text-sm font-medium ${
                       categoryType === "income" ? "text-income" : "text-expense"
                     }`}>
-                      R$ {directTransactions.reduce((sum, t) => sum + t.amount, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      {fmt(directTransactions.reduce((sum, t) => sum + t.amount, 0))}
                     </span>
                     {expandedSubcategories.has("direct") ? (
                       <ChevronUp className="h-4 w-4 text-muted-foreground" />

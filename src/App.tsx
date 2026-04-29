@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { DateProvider } from "@/contexts/DateContext";
+import { PrivacyProvider } from "@/contexts/PrivacyContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Accounts from "./pages/Accounts";
@@ -44,6 +45,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <DateProvider>
+            <PrivacyProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -75,6 +77,7 @@ const App = () => (
                 }
               />
             </Routes>
+            </PrivacyProvider>
           </DateProvider>
         </AuthProvider>
       </BrowserRouter>

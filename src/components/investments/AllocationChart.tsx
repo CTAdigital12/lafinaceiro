@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface AllocationChartProps {
   data: { name: string; value: number }[];
@@ -15,9 +16,7 @@ const COLORS = [
 
 export function AllocationChart({ data }: AllocationChartProps) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  const fmt = useFormatCurrency();
 
   const dataWithPercentage = data.map((item) => ({
     ...item,
@@ -65,7 +64,7 @@ export function AllocationChart({ data }: AllocationChartProps) {
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
+                formatter={(value: number) => fmt(value)}
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   border: "1px solid hsl(var(--border))",

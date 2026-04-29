@@ -19,9 +19,7 @@ interface CloseInvoiceModalProps {
   closingDate?: string;
 }
 
-function formatCurrency(value: number) {
-  return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export function CloseInvoiceModal({
   open,
@@ -35,6 +33,7 @@ export function CloseInvoiceModal({
   closingDate,
 }: CloseInvoiceModalProps) {
   const { closeInvoice } = useInvoiceCycles();
+  const formatCurrency = useFormatCurrency();
   const [isClosing, setIsClosing] = useState(false);
 
   const periodDate = new Date(year, month - 1);

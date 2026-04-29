@@ -3,6 +3,7 @@ import { Trash2, ChevronDown, ChevronRight, Pencil, AlertTriangle, Clock } from 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import {
   Table,
   TableBody,
@@ -68,8 +69,7 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
     saldo_corretora: true,
   });
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  const formatCurrency = useFormatCurrency();
 
   const formatNumber = (value: number, decimals = 2) =>
     new Intl.NumberFormat("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);

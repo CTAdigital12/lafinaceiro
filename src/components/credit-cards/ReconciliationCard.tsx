@@ -24,18 +24,17 @@ interface ReconciliationCardProps {
   onPeriodChange: (month: number, year: number) => void;
 }
 
-function formatCurrency(value: number) {
-  return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
-function CardReconciliationItem({ 
-  card, 
-  onViewDetails 
-}: { 
+function CardReconciliationItem({
+  card,
+  onViewDetails
+}: {
   card: CardReconciliation;
   onViewDetails: () => void;
 }) {
-  const matchPercent = card.isPaid 
+  const formatCurrency = useFormatCurrency();
+  const matchPercent = card.isPaid
     ? 100 
     : card.bankInvoice > 0 
       ? Math.min(100, (card.transactionsTotal / card.bankInvoice) * 100) 

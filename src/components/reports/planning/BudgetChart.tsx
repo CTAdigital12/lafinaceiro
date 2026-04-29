@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { usePrivacyMode } from "@/contexts/PrivacyContext";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
@@ -13,6 +14,7 @@ interface ChartDataItem {
 }
 
 function CustomTooltip({ active, payload, label }: any) {
+  const fmt = useFormatCurrency();
   if (!active || !payload?.length) return null;
   const planned = payload.find((p: any) => p.dataKey === "planned")?.value || 0;
   const actual = payload.find((p: any) => p.dataKey === "actual")?.value || 0;
@@ -23,11 +25,11 @@ function CustomTooltip({ active, payload, label }: any) {
       <p className="font-semibold text-foreground capitalize">{label}</p>
       <div className="flex justify-between gap-4">
         <span className="text-muted-foreground">Orçado:</span>
-        <span className="font-medium text-primary">{formatCurrency(planned)}</span>
+        <span className="font-medium text-primary">{fmt(planned)}</span>
       </div>
       <div className="flex justify-between gap-4">
         <span className="text-muted-foreground">Realizado:</span>
-        <span className="font-medium text-amber-500">{formatCurrency(actual)}</span>
+        <span className="font-medium text-amber-500">{fmt(actual)}</span>
       </div>
       <div className="border-t border-border pt-1 flex justify-between gap-4">
         <span className="text-muted-foreground">Variação:</span>
@@ -40,6 +42,7 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export function BudgetChart({ data }: { data: ChartDataItem[] }) {
+  const { isHidden } = usePrivacyMode();
   return (
     <Card>
       <CardContent className="pt-4">
@@ -54,7 +57,7 @@ export function BudgetChart({ data }: { data: ChartDataItem[] }) {
               <YAxis
                 yAxisId="currency"
                 tick={{ fontSize: 10 }}
-                tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                tickFormatter={(v) => isHidden ? "••" : `${(v / 1000).toFixed(0)}k`}
                 className="text-muted-foreground"
               />
               <YAxis

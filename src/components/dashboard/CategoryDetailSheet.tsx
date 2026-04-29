@@ -26,6 +26,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { Transaction } from "@/hooks/useTransactions";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { Currency } from "@/components/ui/currency";
 
 interface TransactionDisplay {
   id: string;
@@ -67,6 +69,7 @@ export function CategoryDetailSheet({
   categoryType = "expense",
 }: CategoryDetailSheetProps) {
   const isMobile = useIsMobile();
+  const fmt = useFormatCurrency();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [categoryListOpen, setCategoryListOpen] = useState(false);
@@ -163,7 +166,7 @@ export function CategoryDetailSheet({
               {cat.name}
             </span>
             <span className="text-xs text-muted-foreground shrink-0">
-              R$ {cat.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {fmt(cat.value)}
             </span>
             {cat.name === categoryName && (
               <Check className="h-4 w-4 text-primary shrink-0" />
@@ -222,9 +225,7 @@ export function CategoryDetailSheet({
     <>
       <div className="flex items-center gap-3 mb-6">
         <div>
-          <p className="text-2xl font-bold text-foreground">
-            R$ {totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
+          <Currency value={totalAmount} className="text-2xl font-bold text-foreground block" />
           <p className="text-sm text-muted-foreground">
             {transactions.length} {transactions.length === 1 ? "transação" : "transações"}
           </p>
@@ -252,7 +253,7 @@ export function CategoryDetailSheet({
                 <p className={`text-sm font-medium ${
                   transaction.type === "income" ? "text-income" : "text-expense"
                 }`}>
-                  {transaction.type === "income" ? "+" : "-"} R$ {transaction.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  {transaction.type === "income" ? "+" : "-"} {fmt(transaction.amount)}
                 </p>
                 
                 <Button 

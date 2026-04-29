@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import {
   Dialog,
   DialogContent,
@@ -224,12 +225,7 @@ export function AssetModal({
     onOpenChange(false);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
-  };
+  const formatCurrency = useFormatCurrency();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -46,7 +46,8 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditCards";
 import { useInvoiceTransactions } from "@/hooks/useInvoiceTransactions";
 import { useBankPaymentCandidates } from "@/hooks/useBankPaymentCandidates";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { InvoiceItemsModal } from "./InvoiceItemsModal";
 
 interface PayInvoiceModalProps {
@@ -64,6 +65,7 @@ export function PayInvoiceModal({
   month,
   year,
 }: PayInvoiceModalProps) {
+  const formatCurrency = useFormatCurrency();
   const { accounts } = useAccounts();
   const { paySplitInvoice } = useCreditCards();
 

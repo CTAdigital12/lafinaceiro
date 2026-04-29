@@ -10,7 +10,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { filterPureExpenses, getCompetenceDate } from "@/lib/reportUtils";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Target, FolderKanban, AlertCircle, CheckCircle2, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
@@ -32,6 +32,7 @@ interface BudgetRow {
 }
 
 export function ProjectsPlanningTab() {
+  const formatCurrency = useFormatCurrency();
   const { month, year } = useDate();
   const { user } = useAuth();
   const { categories } = useCategories();

@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import type { Project } from "@/hooks/useProjects";
 
 interface ProjectCardProps {
@@ -8,6 +8,7 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project, onClick }: ProjectCardProps) {
+  const formatCurrency = useFormatCurrency();
   const percentage = project.target_amount > 0
     ? (project.spent_amount / project.target_amount) * 100
     : 0;

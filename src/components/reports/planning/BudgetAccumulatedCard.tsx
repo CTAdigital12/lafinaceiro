@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/lib/utils";
+import { Currency } from "@/components/ui/currency";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface Props {
@@ -38,16 +38,16 @@ export function BudgetAccumulatedCard({ accumulated }: Props) {
         <div className="grid grid-cols-3 gap-2 text-center">
           <div>
             <p className="text-xs text-muted-foreground">Orçado</p>
-            <p className="text-sm font-semibold text-foreground">{formatCurrency(totalPlanned)}</p>
+            <Currency value={totalPlanned} className="text-sm font-semibold text-foreground block" />
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Realizado</p>
-            <p className="text-sm font-semibold text-foreground">{formatCurrency(totalActual)}</p>
+            <Currency value={totalActual} className="text-sm font-semibold text-foreground block" />
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Diferença</p>
             <p className={`text-sm font-semibold ${diff > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`}>
-              {diff > 0 ? "+" : ""}{formatCurrency(diff)}
+              {diff > 0 ? "+" : ""}<Currency value={diff} />
             </p>
           </div>
         </div>

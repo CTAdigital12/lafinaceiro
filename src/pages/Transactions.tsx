@@ -66,6 +66,8 @@ import { CategorySelector } from "@/components/CategorySelector";
 import { InstallmentDetailsSheet } from "@/components/InstallmentDetailsSheet";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { Currency } from "@/components/ui/currency";
 import {
   Popover,
   PopoverContent,
@@ -141,6 +143,7 @@ export default function Transactions() {
   
   const { month, year } = useDate();
   const { toast } = useToast();
+  const fmt = useFormatCurrency();
   const { categories } = useCategories();
   const queryClient = useQueryClient();
   
@@ -1029,9 +1032,9 @@ export default function Transactions() {
                                   : "text-expense"
                               )}
                             >
-                              {(transaction.type === "income" && !transaction.is_refund) || 
+                              {(transaction.type === "income" && !transaction.is_refund) ||
                                (transaction.type === "expense" && transaction.is_refund) ? "+" : "-"}{" "}
-                              R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              {fmt(Number(transaction.amount))}
                             </span>
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
@@ -1128,7 +1131,7 @@ export default function Transactions() {
                         </div>
                         <div className="text-right shrink-0">
                           <p className={cn("font-semibold text-sm", isIncome ? "text-income" : "text-expense")}>
-                            {isIncome ? "+" : "-"} R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            {isIncome ? "+" : "-"} {fmt(Number(transaction.amount))}
                           </p>
                           {transaction.is_provisional && (
                             <span className="text-[10px] text-amber-600 flex items-center gap-0.5 justify-end">
@@ -1172,7 +1175,7 @@ export default function Transactions() {
               <div>
                 <p className="text-xs text-muted-foreground">Saldo Atual</p>
                 <p className="text-lg font-bold text-foreground">
-                  R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  <Currency value={totalBalance} />
                 </p>
               </div>
             </div>
@@ -1195,7 +1198,7 @@ export default function Transactions() {
                         : "Receitas (Conta)"}
                 </p>
                 <p className="text-lg font-bold text-income">
-                  R$ {tabTotalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  <Currency value={tabTotalIncome} />
                 </p>
               </div>
             </div>
@@ -1218,7 +1221,7 @@ export default function Transactions() {
                         : "Despesas (Conta)"}
                 </p>
                 <p className="text-lg font-bold text-expense">
-                  R$ {tabTotalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  <Currency value={tabTotalExpense} />
                 </p>
               </div>
             </div>

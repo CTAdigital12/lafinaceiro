@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCategories } from "@/hooks/useCategories";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface RefundSummary {
   categoryId: string;
@@ -143,8 +144,7 @@ export function RefundReport() {
     link.click();
   };
 
-  const formatCurrency = (value: number) => 
-    value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const formatCurrency = useFormatCurrency();
 
   if (isLoading) {
     return (

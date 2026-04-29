@@ -21,9 +21,10 @@ import {
   filterPureIncome,
   getCompetenceDate,
 } from "@/lib/reportUtils";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export function CashFlowTab() {
+  const formatCurrency = useFormatCurrency();
   const { transactions, isLoading } = useTransactions(undefined, undefined, {
     showAll: true,
     loadedCount: 10000,

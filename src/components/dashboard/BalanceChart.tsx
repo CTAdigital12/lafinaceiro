@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDate } from "@/contexts/DateContext";
 import { Loader2 } from "lucide-react";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { usePrivacyMode } from "@/contexts/PrivacyContext";
 
 interface MonthData {
   month: string;
@@ -23,6 +25,8 @@ interface MonthData {
 export function BalanceChart() {
   const { user } = useAuth();
   const { month, year } = useDate();
+  const fmt = useFormatCurrency();
+  const { isHidden } = usePrivacyMode();
 
   const { data: chartData, isLoading } = useQuery({
     queryKey: ["balance-chart", user?.id, year, month],
@@ -88,12 +92,12 @@ export function BalanceChart() {
           <p className="font-medium text-foreground mb-2">{label}</p>
           {payload.map((item: any, index: number) => (
             <p key={index} className="text-sm" style={{ color: item.color }}>
-              {item.name}: R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {item.name}: {fmt(item.value)}
             </p>
           ))}
           <div className="border-t border-border mt-2 pt-2">
             <p className={`text-sm font-medium ${resultado >= 0 ? "text-[hsl(var(--income))]" : "text-[hsl(var(--expense))]"}`}>
-              Resultado: R$ {resultado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              Resultado: {fmt(resultado)}
             </p>
           </div>
         </div>
@@ -132,7 +136,7 @@ export function BalanceChart() {
               axisLine={false}
               tickLine={false}
               tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-              tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+              tickFormatter={(value) => isHidden ? "R$ ••" : `R$ ${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend

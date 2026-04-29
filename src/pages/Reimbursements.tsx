@@ -46,6 +46,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useToast } from "@/hooks/use-toast";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 type ReimbursementStatus = "pending" | "requested" | "reimbursed";
 
@@ -71,6 +72,7 @@ interface ReimbursementTransaction {
 }
 
 export default function Reimbursements() {
+  const fmt = useFormatCurrency();
   const { user } = useAuth();
   const { creditCards } = useCreditCards();
   const { toast } = useToast();
@@ -341,7 +343,7 @@ export default function Reimbursements() {
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <p className="text-xs text-muted-foreground">Total para Reembolso</p>
           <p className="text-2xl font-bold text-foreground">
-            R$ {totals.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            {fmt(totals.total)}
           </p>
           <p className="text-xs text-muted-foreground">{filteredTransactions.length} transações</p>
         </div>
@@ -352,7 +354,7 @@ export default function Reimbursements() {
             <p className="text-xs text-muted-foreground">Pendentes</p>
           </div>
           <p className="text-lg font-bold text-chart-4">
-            R$ {totals.pending.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            {fmt(totals.pending)}
           </p>
         </div>
 
@@ -362,7 +364,7 @@ export default function Reimbursements() {
             <p className="text-xs text-muted-foreground">Solicitados</p>
           </div>
           <p className="text-lg font-bold text-primary">
-            R$ {totals.requested.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            {fmt(totals.requested)}
           </p>
         </div>
 
@@ -372,7 +374,7 @@ export default function Reimbursements() {
             <p className="text-xs text-muted-foreground">Reembolsados</p>
           </div>
           <p className="text-lg font-bold text-income">
-            R$ {totals.reimbursed.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            {fmt(totals.reimbursed)}
           </p>
         </div>
       </div>
@@ -383,7 +385,7 @@ export default function Reimbursements() {
           <div className="flex items-center gap-3">
             <Badge variant="secondary">{selectedIds.size} selecionados</Badge>
             <span className="text-sm font-medium">
-              R$ {totals.selectedTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {fmt(totals.selectedTotal)}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -540,7 +542,7 @@ export default function Reimbursements() {
                         })()}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        {fmt(Number(transaction.amount))}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -587,7 +589,7 @@ export default function Reimbursements() {
                         </div>
                       </div>
                       <p className="font-semibold text-sm whitespace-nowrap">
-                        R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        {fmt(Number(transaction.amount))}
                       </p>
                     </div>
                     <div className="flex items-center justify-between">
