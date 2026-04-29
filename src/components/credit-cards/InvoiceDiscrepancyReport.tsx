@@ -71,15 +71,15 @@ interface InvoiceDiscrepancyReportProps {
   cardName: string;
 }
 
-function formatCurrency(value: number) {
-  return `R$ ${Math.abs(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export function InvoiceDiscrepancyReport({
   transactions,
   cardId,
   cardName,
 }: InvoiceDiscrepancyReportProps) {
+  const fmt = useFormatCurrency();
+  const formatCurrency = (value: number) => fmt(Math.abs(value));
   const [expensesOpen, setExpensesOpen] = useState(false);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
   const [search, setSearch] = useState("");

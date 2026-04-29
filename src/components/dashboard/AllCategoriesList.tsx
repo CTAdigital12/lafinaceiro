@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from "recha
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Currency } from "@/components/ui/currency";
 
 interface CategoryData {
   name: string;
@@ -38,7 +39,7 @@ export function AllCategoriesList({ data, total, onCategoryClick }: AllCategorie
                 {item.name}
               </span>
               <span className="text-muted-foreground text-xs shrink-0">
-                R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                <Currency value={item.value} />
               </span>
               <span className="text-muted-foreground font-medium text-xs shrink-0 w-12 text-right">
                 {percentage}%

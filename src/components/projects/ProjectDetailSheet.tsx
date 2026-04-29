@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Link2, Pencil, Trash2, X, CheckCircle, Ban, Loader2 } from "lucide-react";
@@ -43,6 +43,7 @@ export function ProjectDetailSheet({
   onUnlinkTransaction,
   isLinking,
 }: ProjectDetailSheetProps) {
+  const formatCurrency = useFormatCurrency();
   const [transactions, setTransactions] = useState<LinkedTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);

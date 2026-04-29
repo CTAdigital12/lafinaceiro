@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, Bell, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PrivacyToggle } from "@/components/layout/PrivacyToggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,6 +101,9 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
         >
           <RefreshCw className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`} />
         </Button>
+
+        {/* Privacy Toggle */}
+        <PrivacyToggle />
 
         {/* Notifications - hidden on mobile */}
         <Button variant="ghost" size="icon" className="relative hidden md:inline-flex">

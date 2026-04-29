@@ -25,8 +25,11 @@ import {
   ReferenceLine,
 } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { usePrivacyMode } from "@/contexts/PrivacyContext";
 
 function InstallmentAlert({ installment }: { installment: PendingInstallment }) {
+  const fmt = useFormatCurrency();
   return (
     <div className={cn(
       "flex items-center gap-3 p-3 rounded-lg border transition-all",
@@ -54,7 +57,7 @@ function InstallmentAlert({ installment }: { installment: PendingInstallment }) 
       </div>
       <div className="text-right flex-shrink-0">
         <p className="text-sm font-semibold text-expense">
-          R$ {installment.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          {fmt(installment.amount)}
         </p>
         {installment.is_near_closing && (
           <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-500/30">
@@ -69,6 +72,7 @@ function InstallmentAlert({ installment }: { installment: PendingInstallment }) 
 
 function MonthlyBreakdown({ byMonth }: { byMonth: { month: string; amount: number; count: number }[] }) {
   const [expanded, setExpanded] = useState(false);
+  const fmt = useFormatCurrency();
   
   const currentMonth = format(new Date(), "yyyy-MM");
   const futureMonths = byMonth.filter(m => m.month >= currentMonth);
@@ -97,7 +101,7 @@ function MonthlyBreakdown({ byMonth }: { byMonth: { month: string; amount: numbe
             <div className="flex items-center gap-2">
               <Progress value={percentage} className="flex-1 h-2" />
               <span className="text-sm font-semibold w-24 text-right">
-                R$ {monthData.amount.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
+                {fmt(monthData.amount)}
               </span>
             </div>
           </div>
@@ -114,6 +118,7 @@ function MonthlyBreakdown({ byMonth }: { byMonth: { month: string; amount: numbe
 
 function CardBreakdown({ byCreditCard }: { byCreditCard: { id: string; name: string; color: string; amount: number; count: number }[] }) {
   const maxAmount = Math.max(...byCreditCard.map((c) => c.amount), 1);
+  const fmt = useFormatCurrency();
   
   return (
     <div className="space-y-3">
@@ -134,7 +139,7 @@ function CardBreakdown({ byCreditCard }: { byCreditCard: { id: string; name: str
             <div className="flex items-center gap-2">
               <Progress value={percentage} className="flex-1 h-2" />
               <span className="text-sm font-semibold w-24 text-right">
-                R$ {card.amount.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
+                {fmt(card.amount)}
               </span>
             </div>
           </div>
@@ -153,6 +158,8 @@ interface EvolutionChartData {
 }
 
 function InstallmentsEvolutionChart({ byMonth }: { byMonth: { month: string; amount: number; count: number }[] }) {
+  const fmt = useFormatCurrency();
+  const { isHidden } = usePrivacyMode();
   // Generate chart data showing the evolution over time
   // Fill in missing months to show a complete timeline
   if (byMonth.length === 0) return null;
@@ -256,7 +263,7 @@ function InstallmentsEvolutionChart({ byMonth }: { byMonth: { month: string; amo
                 tick={{ fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
+                tickFormatter={(value) => isHidden ? "R$••" : `R$${(value / 1000).toFixed(0)}k`}
                 className="text-muted-foreground"
                 width={60}
               />
@@ -270,13 +277,13 @@ function InstallmentsEvolutionChart({ byMonth }: { byMonth: { month: string; amo
                           <div className="flex items-center justify-between gap-4">
                             <span className="text-muted-foreground">Parcelas do mês:</span>
                             <span className="font-medium text-expense">
-                              R$ {Number(payload[0]?.value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              {fmt(Number(payload[0]?.value || 0))}
                             </span>
                           </div>
                           <div className="flex items-center justify-between gap-4">
                             <span className="text-muted-foreground">Saldo restante:</span>
                             <span className="font-medium text-primary">
-                              R$ {Number(payload[1]?.value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              {fmt(Number(payload[1]?.value || 0))}
                             </span>
                           </div>
                           {payload[0]?.payload?.count > 0 && (
@@ -332,6 +339,7 @@ function InstallmentsEvolutionChart({ byMonth }: { byMonth: { month: string; amo
 
 export function InstallmentsDashboard() {
   const { pendingInstallments, isLoading, summary, nearClosingInstallments } = usePendingInstallments();
+  const fmt = useFormatCurrency();
 
   if (isLoading) {
     return (
@@ -386,7 +394,7 @@ export function InstallmentsDashboard() {
               <div>
                 <p className="text-xs text-muted-foreground">Valor Total</p>
                 <p className="text-xl font-bold text-expense">
-                  R$ {summary.totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
+                  {fmt(summary.totalAmount)}
                 </p>
               </div>
             </div>

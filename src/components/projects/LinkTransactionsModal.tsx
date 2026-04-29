@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { format, subDays } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -28,6 +28,7 @@ interface LinkTransactionsModalProps {
 
 export function LinkTransactionsModal({ open, onOpenChange, projectId, onLink, isPending }: LinkTransactionsModalProps) {
   const { user } = useAuth();
+  const formatCurrency = useFormatCurrency();
   const [transactions, setTransactions] = useState<LinkableTransaction[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");

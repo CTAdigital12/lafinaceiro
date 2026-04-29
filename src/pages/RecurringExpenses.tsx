@@ -15,12 +15,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useRecurringRules, RecurringRule } from "@/hooks/useRecurringRules";
 import { RecurringRuleModal } from "@/components/modals/RecurringRuleModal";
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export default function RecurringExpenses() {
+  const formatCurrency = useFormatCurrency();
   const { rules, isLoading, createRule, updateRule, deleteRule, toggleRule } = useRecurringRules();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RecurringRule | null>(null);

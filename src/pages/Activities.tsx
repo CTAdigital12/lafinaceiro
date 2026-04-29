@@ -25,9 +25,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActivities, Activity } from "@/hooks/useActivities";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export default function Activities() {
+  const formatCurrency = useFormatCurrency();
   const { activities, isLoading, undoActivity, isUndoing } = useActivities();
   const [activityToUndo, setActivityToUndo] = useState<Activity | null>(null);
 

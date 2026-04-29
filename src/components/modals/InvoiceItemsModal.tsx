@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { InvoiceTransaction } from "@/hooks/useInvoiceTransactions";
@@ -26,6 +26,7 @@ export function InvoiceItemsModal({
   selectedItems,
   onConfirm,
 }: InvoiceItemsModalProps) {
+  const formatCurrency = useFormatCurrency();
   const [selected, setSelected] = useState<Set<string>>(new Set(selectedItems));
 
   // Reset selection when modal opens
@@ -236,6 +237,7 @@ function TransactionItem({
   onToggle: () => void;
   typeIcon: "corporate" | "reimbursable" | "personal";
 }) {
+  const formatCurrency = useFormatCurrency();
   const icons = {
     corporate: <Building2 className="h-3 w-3 text-muted-foreground" />,
     reimbursable: <RefreshCw className="h-3 w-3 text-amber-500" />,

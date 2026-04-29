@@ -47,6 +47,7 @@ import { AddInstallmentsModal } from "@/components/modals/AddInstallmentsModal";
 import { useInstallmentGroup } from "@/hooks/useInstallmentGroup";
 import { cn } from "@/lib/utils";
 import { Transaction } from "@/hooks/useTransactions";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface InstallmentDetailsSheetProps {
   open: boolean;
@@ -80,6 +81,7 @@ export function InstallmentDetailsSheet({
     addInstallments,
   } = useInstallmentGroup(groupId);
 
+  const fmt = useFormatCurrency();
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [showEditAllModal, setShowEditAllModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -215,13 +217,13 @@ export function InstallmentDetailsSheet({
               <div className="bg-muted/50 rounded-lg p-3">
                 <p className="text-xs text-muted-foreground">Valor Total</p>
                 <p className="text-lg font-bold text-foreground">
-                  R$ {totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  {fmt(totalAmount)}
                 </p>
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <p className="text-xs text-muted-foreground">Parcela Mensal</p>
                 <p className="text-lg font-bold text-foreground">
-                  R$ {installmentValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  {fmt(installmentValue)}
                 </p>
               </div>
             </div>
@@ -241,7 +243,7 @@ export function InstallmentDetailsSheet({
                 <div>
                   <p className="text-muted-foreground">Pago</p>
                   <p className="font-medium text-income">
-                    R$ {paidAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    {fmt(paidAmount)}
                     <span className="text-xs text-muted-foreground ml-1">
                       ({Math.round(progressPercentage)}%)
                     </span>
@@ -250,7 +252,7 @@ export function InstallmentDetailsSheet({
                 <div>
                   <p className="text-muted-foreground">Restante</p>
                   <p className="font-medium text-expense">
-                    R$ {remainingAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    {fmt(remainingAmount)}
                     <span className="text-xs text-muted-foreground ml-1">
                       ({Math.round(100 - progressPercentage)}%)
                     </span>
@@ -368,7 +370,7 @@ export function InstallmentDetailsSheet({
                         isCurrent && "text-foreground",
                         isFuture && "text-muted-foreground"
                       )}>
-                        R$ {Number(installment.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        {fmt(Number(installment.amount))}
                       </div>
 
                       {/* Actions Menu */}

@@ -3,6 +3,7 @@ import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { InvestmentAsset, ASSET_TYPE_LABELS, usesTotalBalancePricing } from "@/hooks/useInvestments";
 import { HelpCircle } from "lucide-react";
 import {
@@ -67,8 +68,7 @@ export function UpdatePricesModal({
     }
   };
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  const formatCurrency = useFormatCurrency();
 
   // Separate assets by pricing method
   const variableIncomeAssets = assets.filter((a) => !usesTotalBalancePricing(a.asset_type));

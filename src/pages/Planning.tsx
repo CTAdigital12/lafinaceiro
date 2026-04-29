@@ -37,6 +37,8 @@ import { NewBudgetModal } from "@/components/modals/NewBudgetModal";
 import { EditBudgetModal } from "@/components/modals/EditBudgetModal";
 import { BudgetEvolutionChart } from "@/components/dashboard/BudgetEvolutionChart";
 import { AddSubcategoryModal } from "@/components/modals/AddSubcategoryModal";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { Currency } from "@/components/ui/currency";
 
 const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -51,6 +53,7 @@ interface HierarchicalBudget extends Budget {
 
 export default function Planning() {
   const { month, year, setCurrentDate } = useDate();
+  const fmt = useFormatCurrency();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
@@ -336,7 +339,7 @@ export default function Planning() {
                 <div className="flex items-center gap-1 text-xs text-chart-4">
                   <Info className="h-3 w-3" />
                   <span>
-                    R$ {budget.unbudgetedSubcategorySpent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em: {budget.subcategoriesWithoutBudget.join(", ")}
+                    {fmt(budget.unbudgetedSubcategorySpent)} em: {budget.subcategoriesWithoutBudget.join(", ")}
                   </span>
                 </div>
               )}
@@ -344,27 +347,27 @@ export default function Planning() {
           </div>
         </TableCell>
         <TableCell className="text-right font-medium">
-          R$ {planned.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          {fmt(planned)}
         </TableCell>
         <TableCell className="text-right text-muted-foreground">
-          R$ 0,00
+          {fmt(0)}
         </TableCell>
         <TableCell className="text-right text-muted-foreground">
-          R$ {spent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          {fmt(spent)}
         </TableCell>
         <TableCell className="text-right font-medium">
-          R$ {spent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          {fmt(spent)}
         </TableCell>
         <TableCell>
           <div className="space-y-1 min-w-[180px]">
             <div className="flex items-center justify-between">
               {isOverBudget ? (
                 <span className="text-expense text-sm font-medium">
-                  Excederam R$ {Math.abs(remaining).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  Excederam {fmt(Math.abs(remaining))}
                 </span>
               ) : (
                 <span className="text-income text-sm font-medium">
-                  Restam R$ {remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  Restam {fmt(remaining)}
                 </span>
               )}
             </div>
@@ -452,7 +455,7 @@ export default function Planning() {
         </TableCell>
         <TableCell colSpan={3} className="text-sm">{t.description}</TableCell>
         <TableCell className="text-right text-sm font-medium text-expense">
-          R$ {Number(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          {fmt(Number(t.amount))}
         </TableCell>
         <TableCell colSpan={2} />
       </TableRow>
@@ -524,19 +527,19 @@ export default function Planning() {
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg gradient-balance flex items-center justify-center"><Target className="h-5 w-5 text-balance-foreground" /></div>
-            <div><p className="text-xs text-muted-foreground">Orçamento Total</p><p className="text-lg font-bold text-foreground">R$ {totalPlanned.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
+            <div><p className="text-xs text-muted-foreground">Orçamento Total</p><Currency value={totalPlanned} className="text-lg font-bold text-foreground block" /></div>
           </div>
         </div>
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg gradient-expense flex items-center justify-center"><TrendingDown className="h-5 w-5 text-expense-foreground" /></div>
-            <div><p className="text-xs text-muted-foreground">Total Gasto</p><p className="text-lg font-bold text-foreground">R$ {totalSpent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
+            <div><p className="text-xs text-muted-foreground">Total Gasto</p><Currency value={totalSpent} className="text-lg font-bold text-foreground block" /></div>
           </div>
         </div>
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center", totalRemaining >= 0 ? "gradient-income" : "gradient-expense")}><Target className={cn("h-5 w-5", totalRemaining >= 0 ? "text-income-foreground" : "text-expense-foreground")} /></div>
-            <div><p className="text-xs text-muted-foreground">{totalRemaining >= 0 ? "Disponível" : "Excedido"}</p><p className={cn("text-lg font-bold", totalRemaining >= 0 ? "text-income" : "text-expense")}>R$ {Math.abs(totalRemaining).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></div>
+            <div><p className="text-xs text-muted-foreground">{totalRemaining >= 0 ? "Disponível" : "Excedido"}</p><Currency value={Math.abs(totalRemaining)} className={cn("text-lg font-bold block", totalRemaining >= 0 ? "text-income" : "text-expense")} /></div>
           </div>
         </div>
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
@@ -715,7 +718,7 @@ export default function Planning() {
                       <div className="flex items-center gap-1 text-xs text-chart-4 mb-3 ml-11">
                         <Info className="h-3 w-3 shrink-0" />
                         <span className="truncate">
-                          R$ {parentBudget.unbudgetedSubcategorySpent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em: {parentBudget.subcategoriesWithoutBudget.join(", ")}
+                          {fmt(parentBudget.unbudgetedSubcategorySpent)} em: {parentBudget.subcategoriesWithoutBudget.join(", ")}
                         </span>
                       </div>
                     )}
@@ -723,11 +726,11 @@ export default function Planning() {
                     <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
                       <div>
                         <p className="text-muted-foreground text-xs">Planejado</p>
-                        <p className="font-semibold">R$ {planned.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                        <p className="font-semibold">{fmt(planned)}</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground text-xs">Gasto</p>
-                        <p className="font-semibold text-expense">R$ {spent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                        <p className="font-semibold text-expense">{fmt(spent)}</p>
                       </div>
                     </div>
 
@@ -751,9 +754,9 @@ export default function Planning() {
                         "text-sm font-medium",
                         isOverBudget ? "text-expense" : "text-income"
                       )}>
-                        {isOverBudget 
-                          ? `Excederam R$ ${Math.abs(remaining).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                          : `Restam R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                        {isOverBudget
+                          ? `Excederam ${fmt(Math.abs(remaining))}`
+                          : `Restam ${fmt(remaining)}`
                         }
                       </p>
                     </div>
@@ -777,7 +780,7 @@ export default function Planning() {
                               <p className="text-xs text-muted-foreground">{new Date(t.date).toLocaleDateString("pt-BR")}</p>
                             </div>
                             <span className="text-sm font-medium text-expense shrink-0">
-                              R$ {Number(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              {fmt(Number(t.amount))}
                             </span>
                           </div>
                         ))}
@@ -833,7 +836,7 @@ export default function Planning() {
                             </div>
                             <div className="flex items-center justify-between text-xs mb-2">
                               <span className="text-muted-foreground">
-                                R$ {childSpent.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / R$ {childPlanned.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                {fmt(childSpent)} / {fmt(childPlanned)}
                               </span>
                               <span className={cn(
                                 "font-medium",
@@ -853,9 +856,9 @@ export default function Planning() {
                               "text-xs mt-1",
                               childIsOverBudget ? "text-expense" : "text-income"
                             )}>
-                              {childIsOverBudget 
-                                ? `Excedeu R$ ${Math.abs(childRemaining).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                                : `Resta R$ ${childRemaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                              {childIsOverBudget
+                                ? `Excedeu ${fmt(Math.abs(childRemaining))}`
+                                : `Resta ${fmt(childRemaining)}`
                               }
                             </p>
                             {/* Child Expanded Transactions */}
@@ -876,7 +879,7 @@ export default function Planning() {
                                         <p className="text-[10px] text-muted-foreground">{new Date(t.date).toLocaleDateString("pt-BR")}</p>
                                       </div>
                                       <span className="text-xs font-medium text-expense shrink-0">
-                                        R$ {Number(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                        {fmt(Number(t.amount))}
                                       </span>
                                     </div>
                                   ))}
@@ -906,7 +909,7 @@ export default function Planning() {
               <div>
                 <h3 className="font-semibold text-foreground">Despesas sem categoria</h3>
                 <p className="text-sm text-muted-foreground">
-                  {uncategorizedTransactions.length} transação(ões) totalizando R$ {uncategorizedTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  {uncategorizedTransactions.length} transação(ões) totalizando {fmt(uncategorizedTotal)}
                 </p>
               </div>
             </div>
@@ -931,7 +934,7 @@ export default function Planning() {
                     </TableCell>
                     <TableCell>{transaction.description}</TableCell>
                     <TableCell className="text-right font-medium text-expense">
-                      R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      {fmt(Number(transaction.amount))}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -963,7 +966,7 @@ export default function Planning() {
                       {new Date(transaction.date).toLocaleDateString("pt-BR")}
                     </span>
                     <span className="font-medium text-expense">
-                      R$ {Number(transaction.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      {fmt(Number(transaction.amount))}
                     </span>
                   </div>
                 </div>

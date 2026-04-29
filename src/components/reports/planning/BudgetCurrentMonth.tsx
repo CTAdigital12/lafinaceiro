@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Target, AlertCircle, CheckCircle2, ChevronRight } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface BudgetItem {
   id: string;
@@ -35,6 +35,7 @@ function pctColor(pct: number, overBudget?: boolean) {
 }
 
 function BudgetRow({ item, indent = false }: { item: BudgetItem; indent?: boolean }) {
+  const formatCurrency = useFormatCurrency();
   return (
     <div className={`space-y-1.5 ${indent ? "ml-6" : ""}`}>
       <div className="flex items-center justify-between text-sm">
@@ -62,6 +63,7 @@ function BudgetRow({ item, indent = false }: { item: BudgetItem; indent?: boolea
 }
 
 function CollapsibleBudgetRow({ item }: { item: BudgetItem }) {
+  const formatCurrency = useFormatCurrency();
   const [open, setOpen] = useState(false);
 
   return (

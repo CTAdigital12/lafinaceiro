@@ -71,9 +71,7 @@ interface ReconciliationDetailModalProps {
   transactions: Transaction[];
 }
 
-function formatCurrency(value: number) {
-  return `R$ ${Math.abs(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export function ReconciliationDetailModal({
   open,
@@ -85,6 +83,8 @@ export function ReconciliationDetailModal({
   difference,
   transactions,
 }: ReconciliationDetailModalProps) {
+  const fmt = useFormatCurrency();
+  const formatCurrency = (value: number) => fmt(Math.abs(value));
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");

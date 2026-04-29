@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from "recharts";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface CategoryData {
   name: string;
@@ -37,6 +38,7 @@ const renderActiveShape = (props: any) => {
 };
 
 export function CategoryChart({ title, data, onCategoryClick, onViewAllClick }: CategoryChartProps) {
+  const fmt = useFormatCurrency();
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
   const total = data.reduce((sum, item) => sum + item.value, 0);
   const hasData = data.length > 0 && !(data.length === 1 && data[0].name === "Sem dados");
@@ -57,18 +59,18 @@ export function CategoryChart({ title, data, onCategoryClick, onViewAllClick }: 
           {hasRefund ? (
             <>
               <p className="text-sm text-muted-foreground">
-                R$ {item.grossValue?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                {fmt(item.grossValue ?? 0)}
                 <span className="text-emerald-600 ml-1">
-                  - R$ {item.refundValue?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} reembolso
+                  - {fmt(item.refundValue ?? 0)} reembolso
                 </span>
               </p>
               <p className="text-sm font-medium text-foreground">
-                = R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                = {fmt(item.value)}
               </p>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {fmt(item.value)}
             </p>
           )}
           <p className="text-xs text-muted-foreground">{percentage}%</p>
