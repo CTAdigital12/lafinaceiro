@@ -23,10 +23,16 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: "autoUpdate",
-        includeAssets: ["favicon.ico", "robots.txt"],
+        includeAssets: [
+          "favicon.ico",
+          "favicon.svg",
+          "apple-touch-icon.png",
+          "robots.txt",
+          "brand/logo.svg",
+        ],
         manifest: {
-          name: "LaFinaceiro",
-          short_name: "LaFinaceiro",
+          name: "LaFinanceiro",
+          short_name: "LaFinanceiro",
           description: "Gestão financeira pessoal",
           theme_color: "#0f172a",
           background_color: "#0f172a",
@@ -45,7 +51,7 @@ export default defineConfig(({ mode }) => {
               type: "image/png",
             },
             {
-              src: "/pwa-512x512.png",
+              src: "/maskable-512x512.png",
               sizes: "512x512",
               type: "image/png",
               purpose: "maskable",
