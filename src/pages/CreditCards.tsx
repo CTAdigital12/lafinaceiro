@@ -49,9 +49,10 @@ interface CreditCardComponentProps {
 
 function CreditCardComponent({ card, pendingAmount, onEdit, onDelete, onImportInvoice, onPayInvoice }: CreditCardComponentProps) {
   const fmt = useFormatCurrency();
+  const limit = Number(card.credit_limit);
   const totalUsed = Number(card.current_invoice) + pendingAmount;
-  const availableLimit = Number(card.credit_limit) - totalUsed;
-  const usagePercent = (totalUsed / Number(card.credit_limit)) * 100;
+  const availableLimit = limit - totalUsed;
+  const usagePercent = limit > 0 ? (totalUsed / limit) * 100 : 0;
   const status = statusConfig[card.status as keyof typeof statusConfig] || statusConfig.open;
 
   return (

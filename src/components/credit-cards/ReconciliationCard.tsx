@@ -147,14 +147,15 @@ function CardReconciliationItem({
   );
 }
 
-export function ReconciliationCard({ 
-  reconciliation, 
-  isLoading, 
+export function ReconciliationCard({
+  reconciliation,
+  isLoading,
   transactions = [],
   month,
   year,
   onPeriodChange,
 }: ReconciliationCardProps) {
+  const formatCurrency = useFormatCurrency();
   const [selectedCard, setSelectedCard] = useState<CardReconciliation | null>(null);
   const [spreadsheetCard, setSpreadsheetCard] = useState<CardReconciliation | null>(null);
   const [closeModalData, setCloseModalData] = useState<{
