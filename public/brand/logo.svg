@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LaFinanceiro">
+  <rect width="512" height="512" rx="96" ry="96" fill="#0f172a"/>
+
+  <!-- L -->
+  <path fill="#ffffff" d="M 124 128 L 188 128 L 188 320 L 244 320 L 244 384 L 124 384 Z"/>
+
+  <!-- A: left leg -->
+  <path fill="#ffffff" d="M 312 128 L 344 128 L 300 384 L 268 384 Z"/>
+
+  <!-- A: right leg -->
+  <path fill="#ffffff" d="M 312 128 L 344 128 L 388 384 L 356 384 Z"/>
+
+  <!-- A: crossbar -->
+  <rect x="292" y="280" width="72" height="28" fill="#ffffff"/>
+
+  <!-- accent bar (financial uplift) -->
+  <rect x="124" y="412" width="264" height="20" rx="10" ry="10" fill="#3b82f6"/>
+</svg>

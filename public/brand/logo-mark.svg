@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LaFinanceiro">
+  <!-- transparent background; consumer styles via fill currentColor + accent override -->
+  <g fill="currentColor">
+    <path d="M 124 128 L 188 128 L 188 320 L 244 320 L 244 384 L 124 384 Z"/>
+    <path d="M 312 128 L 344 128 L 300 384 L 268 384 Z"/>
+    <path d="M 312 128 L 344 128 L 388 384 L 356 384 Z"/>
+    <rect x="292" y="280" width="72" height="28"/>
+  </g>
+  <rect x="124" y="412" width="264" height="20" rx="10" ry="10" fill="#3b82f6"/>
+</svg>
