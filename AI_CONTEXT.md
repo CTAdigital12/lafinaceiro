@@ -781,9 +781,52 @@ catch (error) {
 
 | Aspecto | Implementação |
 |---------|---------------|
-| Autenticação | `verify_jwt = false` (validação manual quando necessário) |
-| CORS | Headers configurados |
-| Secrets | `GOOGLE_AI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Autenticação | `verify_jwt = true` em endpoints user-bound; validação manual de AAL/role onde aplicável |
+| CORS | Headers configurados via `_shared/cors.ts` com allowlist `ALLOWED_ORIGINS` |
+| Secrets | `GOOGLE_AI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `PLUGGY_*`, `ALLOWED_ORIGINS` |
+
+### 6.5 Autenticação de dois fatores (2FA / TOTP)
+
+Implementado em 2026-04-29. Opt-in por usuário, TOTP only (sem SMS), recovery codes hasheados (bcrypt).
+
+**Stack:**
+- Supabase Auth MFA nativo (`supabase.auth.mfa.*`) — TOTP via `factorType: 'totp'`
+- AAL (Authenticator Assurance Level): `aal1` = só senha, `aal2` = senha + TOTP
+- Recovery: 8 códigos hex `XXXX-XXXX-XXXX-XXXX` em `mfa_recovery_codes`, bcrypt cost 10
+
+**Tabelas:**
+- `audit_logs` (imutável, admin-only SELECT) — eventos `mfa_enrolled`, `mfa_unenrolled`, `recovery_code_used`, `recovery_codes_regenerated`, `mfa_recovery_rate_limited`, `recovery_code_failed`, `mfa_reset_via_recovery`
+- `mfa_recovery_codes` — hash + `used_at` + `generated_batch_id` + trigger automático que loga em `audit_logs`
+- `mfa_attempts` — ledger pra rate-limit (5/15min por user OR IP em recovery)
+
+**Edge functions:**
+- `mfa-recovery-generate` — POST sem body, exige `aal2`, retorna `{ codes: string[8], batch_id, count }` plaintext **uma única vez**
+- `mfa-recovery-verify` — POST `{ code }`, exige `aal1`, valida em constant-time loop, deleta TODOS os factors verified do user e força signOut global
+
+**Frontend:**
+- `AuthContext.tsx`: estendido com `enrollMfa`, `confirmMfaEnroll`, `verifyMfaChallenge`, `unenrollMfa`, `listMfaFactors`, estado `mfaState: 'unknown' | 'aal1' | 'aal2' | 'aal2-required'`
+- `useMfaGuard()`: hook que redireciona pra `/mfa-challenge` quando `mfaState === 'aal2-required'`
+- `/mfa-challenge` (pública auth-aware): InputOTP de 6 dígitos com auto-submit + modo recovery
+- `/settings/security` (protegida): wizard de enroll, regenerar codes, unenroll, alterar senha
+- Guard de AAL no `MainLayout` + listener `onAuthStateChange` do AuthProvider
+
+**Função canônica de autorização:** `public.has_role(user_id, role)` — atualmente email-allowlist (`aesdomingues@gmail.com` = admin); follow-up pra migrar pra tabela `user_roles`.
+
+**Pré-requisitos manuais:** habilitar TOTP em `Authentication → Providers → MFA` no painel Supabase + setar `MFA_ISSUER` em Edge Functions Secrets.
+
+**Trade-offs documentados:**
+- Recovery code consumido faz user perder o factor TOTP (Supabase MFA não tem API nativa pra "consumir recovery"). Próximo login é AAL1 → pede re-enroll.
+- Trocar senha em `/settings/security` derruba AAL2 temporariamente (re-signIn emite SIGNED_IN). Banner UX avisa antes do submit. Follow-up: edge function `auth-verify-password` dedicada.
+
+**Follow-ups pendentes:**
+1. Sanitizar IP antes de interpolar em `.or()` PostgREST (`mfa-recovery-verify`)
+2. Padding fixo no bcrypt loop pra eliminar timing-leak
+3. Migrar `has_role` pra tabela `user_roles`
+4. Remover ou consertar view `mfa_recovery_codes_metadata` (atualmente dead code com RLS atual)
+5. Refatorar `SecuritySettings.tsx` (597 linhas) e `MfaEnrollWizard.tsx` (497 linhas) em sub-componentes (Q2)
+6. Edge function `auth-verify-password` pra preservar AAL2 no change password
+7. Flag `profiles.require_mfa_for_shared_access` (proposta do architect, fora do escopo MVP) — força membros convidados a também ativarem MFA antes de acessar dados do owner
+8. Job de cleanup de `mfa_attempts` (DELETE older than 7 days)
 
 ---
 
