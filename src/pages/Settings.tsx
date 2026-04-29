@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Save, Bell, Palette, Globe, Shield, User, Users, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function Settings() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState({
     email: true,
     push: false,
@@ -279,7 +281,14 @@ export default function Settings() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome</Label>
-                  <Input id="name" defaultValue={user?.user_metadata?.full_name || "Usuário"} />
+                  <Input
+                    id="name"
+                    defaultValue={
+                      typeof user?.user_metadata?.full_name === "string"
+                        ? (user.user_metadata.full_name as string)
+                        : "Usuário"
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">E-mail</Label>
@@ -299,7 +308,9 @@ export default function Settings() {
                     Altere sua senha e configure autenticação de dois fatores
                   </p>
                 </div>
-                <Button variant="outline">Configurar</Button>
+                <Button variant="outline" onClick={() => navigate("/settings/security")}>
+                  Configurar
+                </Button>
               </div>
             </div>
           </div>

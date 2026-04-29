@@ -17,6 +17,18 @@ verify_jwt = true
 [functions.add-member]
 verify_jwt = true
 
+# 2FA / MFA recovery flow (feature/mfa-totp).
+# Both functions re-validate the JWT internally and additionally enforce
+# AAL claims:
+#   - mfa-recovery-generate: requires aal2 (post-TOTP)
+#   - mfa-recovery-verify:   requires aal1 (post-password, pre-TOTP)
+
+[functions.mfa-recovery-generate]
+verify_jwt = true
+
+[functions.mfa-recovery-verify]
+verify_jwt = true
+
 # Pluggy integration disabled during the Vercel migration (Phase 5).
 # Both functions stay in the repo but are NOT deployed. Re-enable by
 # uncommenting and running `supabase functions deploy pluggy-{connect,webhook}`.

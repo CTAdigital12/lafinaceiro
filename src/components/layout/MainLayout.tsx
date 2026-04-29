@@ -13,7 +13,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const { currentDate, setCurrentDate } = useDate();
-  const { user, loading } = useAuth();
+  const { user, loading, mfaState } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -25,9 +25,23 @@ export function MainLayout({ children }: MainLayoutProps) {
     }
   }, [user, loading, navigate]);
 
+  useEffect(() => {
+    // SECURITY: enforce AAL2 elevation when the user has MFA enrolled.
+    // We only redirect when AAL has been computed (mfaState !== 'unknown')
+    // to avoid a race where the user is briefly seen as 'aal1' on cold load.
+    if (
+      !loading &&
+      user &&
+      mfaState === "aal2-required" &&
+      location.pathname !== "/mfa-challenge"
+    ) {
+      navigate("/mfa-challenge", { replace: true });
+    }
+  }, [user, loading, mfaState, navigate, location.pathname]);
+
   // SECURITY: Show nothing during loading or if not authenticated
   // This prevents any flash of protected content
-  if (loading) {
+  if (loading || mfaState === "unknown") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -38,6 +52,12 @@ export function MainLayout({ children }: MainLayoutProps) {
   // SECURITY: Return null immediately if no user
   // This ensures no protected content renders before redirect
   if (!user) {
+    return null;
+  }
+
+  // SECURITY: also return null while MFA challenge is required, to make sure
+  // protected content never paints before the redirect effect fires.
+  if (mfaState === "aal2-required") {
     return null;
   }
 

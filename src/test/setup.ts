@@ -53,6 +53,49 @@ const installStorage = () => {
 // Instala antes de qualquer teste rodar
 installStorage();
 
+/**
+ * Polyfills necessários para componentes de UI em jsdom.
+ *
+ * ResizeObserver é usado pelo `input-otp` (e por vários componentes shadcn).
+ * matchMedia é usado por `useIsMobile` (`src/hooks/use-mobile.tsx`) e por
+ * temas/Sonner. Stubs no-op são suficientes para testes — o comportamento
+ * real é coberto por testes E2E (manuais via `docs/2fa-test-plan.md`).
+ */
+class NoopResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+if (typeof globalThis.ResizeObserver === "undefined") {
+  (globalThis as unknown as { ResizeObserver: typeof NoopResizeObserver })
+    .ResizeObserver = NoopResizeObserver;
+}
+
+if (typeof window.matchMedia !== "function") {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+// input-otp uses elementFromPoint inside an internal setInterval. jsdom does
+// not implement it; polyfill no-op to avoid "uncaught exception" warnings
+// once the test has finished.
+if (typeof document.elementFromPoint !== "function") {
+  document.elementFromPoint = () => null;
+}
+
 afterEach(() => {
   cleanup();
 });

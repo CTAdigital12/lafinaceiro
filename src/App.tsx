@@ -28,6 +28,8 @@ import RecurringExpenses from "./pages/RecurringExpenses";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import MfaChallenge from "./pages/MfaChallenge";
+import SecuritySettings from "./pages/SecuritySettings";
 import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +52,9 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              {/* MFA challenge is auth-aware but renders OUTSIDE MainLayout — the
+                  page itself decides whether to redirect based on session+AAL. */}
+              <Route path="/mfa-challenge" element={<MfaChallenge />} />
               <Route
                 path="/*"
                 element={
@@ -68,6 +73,7 @@ const App = () => (
                       <Route path="/investments" element={<Investments />} />
                       <Route path="/categorization-rules" element={<CategorizationRules />} />
                       <Route path="/settings" element={<Settings />} />
+                      <Route path="/settings/security" element={<SecuritySettings />} />
                       <Route path="/activities" element={<Activities />} />
                       <Route path="/recurring" element={<RecurringExpenses />} />
                       {/* <Route path="/connections" element={<Connections />} /> */}
