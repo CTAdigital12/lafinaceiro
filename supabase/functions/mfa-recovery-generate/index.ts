@@ -18,8 +18,11 @@
 //   ALLOWED_ORIGINS
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// bcrypt async API uses a Web Worker -> non-blocking on Deno Edge.
-import { genSalt, hash as bcryptHash } from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+// bcryptjs (pure JS) — Supabase Edge Runtime does NOT support Web Workers,
+// so the deno.land/x/bcrypt async API throws `Worker is not defined`.
+// bcryptjs has no Worker dependency and is ~30% slower than native bcrypt,
+// which is acceptable for this rare-call endpoint (8 hashes per regen).
+import bcrypt from "https://esm.sh/bcryptjs@2.4.3";
 import { buildCorsHeaders } from "../_shared/cors.ts";
 
 const RECOVERY_CODE_COUNT = 8;
@@ -132,9 +135,8 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < RECOVERY_CODE_COUNT; i++) {
       const code = generateRecoveryCode();
-      // bcryptHash is async (uses worker) — does NOT block the event loop.
-      const salt = await genSalt(BCRYPT_COST);
-      const codeHash = await bcryptHash(code, salt);
+      // bcryptjs.hash returns a Promise; cost is passed directly (no separate genSalt).
+      const codeHash = await bcrypt.hash(code, BCRYPT_COST);
       plaintextCodes.push(code);
       rows.push({ user_id: userId, code_hash: codeHash, generated_batch_id: batchId });
     }

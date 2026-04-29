@@ -22,7 +22,10 @@
 //   ALLOWED_ORIGINS
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { compare as bcryptCompare } from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+// bcryptjs (pure JS) — Supabase Edge Runtime does NOT support Web Workers,
+// so the deno.land/x/bcrypt async API throws `Worker is not defined`.
+// bcryptjs has no Worker dependency.
+import bcrypt from "https://esm.sh/bcryptjs@2.4.3";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { buildCorsHeaders } from "../_shared/cors.ts";
 
@@ -258,8 +261,8 @@ Deno.serve(async (req) => {
     // Iterate ALL rows even after match → constant-time at row count granularity.
     // (Per-bcrypt timing is already constant via internal padding.)
     for (const row of codeRows ?? []) {
-      // bcryptCompare is async (worker). Await sequentially for predictable timing.
-      const ok = await bcryptCompare(submittedCode, row.code_hash as string);
+      // bcryptjs.compare is async; await sequentially for predictable timing.
+      const ok = await bcrypt.compare(submittedCode, row.code_hash as string);
       if (ok && matchedId === null) {
         matchedId = row.id as string;
       }
