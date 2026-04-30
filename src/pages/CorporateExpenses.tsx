@@ -42,12 +42,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useReimbursementPayment } from "@/hooks/useReimbursementPayment";
 
 type ReimbursementStatus = "pending" | "requested" | "reimbursed";
 
@@ -77,6 +78,7 @@ export default function CorporateExpenses() {
   const { creditCards } = useCreditCards();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { markAsReimbursed, unmarkAsReimbursed } = useReimbursementPayment();
 
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
@@ -189,29 +191,37 @@ export default function CorporateExpenses() {
     setSelectedIds(newSet);
   };
 
-  // Mutation to update reimbursement status
-  const updateReimbursementStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: ReimbursementStatus }) => {
+  const handleStatusChange = async (transaction: CorporateTransaction, newStatus: ReimbursementStatus) => {
+    const currentStatus = transaction.reimbursement_status;
+    if (newStatus === currentStatus) return;
+
+    if (newStatus === "reimbursed") {
+      await markAsReimbursed.mutateAsync({ transactionId: transaction.id });
+    } else if (currentStatus === "reimbursed") {
+      await unmarkAsReimbursed.mutateAsync({
+        transactionId: transaction.id,
+        newStatus: newStatus as "pending" | "requested",
+      });
+    } else {
       const { error } = await supabase
         .from("transactions")
-        .update({ reimbursement_status: status })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
+        .update({ reimbursement_status: newStatus })
+        .eq("id", transaction.id);
+      if (error) {
+        toast({ title: "Erro ao atualizar status", description: error.message, variant: "destructive" });
+        throw error;
+      }
       queryClient.invalidateQueries({ queryKey: ["corporate_expenses"] });
       toast({ title: "Status atualizado!" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Erro ao atualizar status", description: error.message, variant: "destructive" });
-    },
-  });
+    }
+  };
 
-  // Bulk update reimbursement status
+  const isStatusUpdating = markAsReimbursed.isPending || unmarkAsReimbursed.isPending;
+
   const updateSelectedStatus = async (status: ReimbursementStatus) => {
     const selectedItems = filteredTransactions.filter((t) => selectedIds.has(t.id));
     for (const item of selectedItems) {
-      await updateReimbursementStatus.mutateAsync({ id: item.id, status });
+      await handleStatusChange(item, status);
     }
     setSelectedIds(new Set());
   };
@@ -454,20 +464,20 @@ export default function CorporateExpenses() {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => updateSelectedStatus("requested")}
-              disabled={updateReimbursementStatus.isPending}
+              disabled={isStatusUpdating}
             >
               <Send className="h-4 w-4 mr-1" />
               Marcar como Solicitado
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => updateSelectedStatus("reimbursed")}
-              disabled={updateReimbursementStatus.isPending}
+              disabled={isStatusUpdating}
               className="text-income hover:text-income"
             >
               <CheckCircle2 className="h-4 w-4 mr-1" />
@@ -580,23 +590,23 @@ export default function CorporateExpenses() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "pending" })}
-                                  disabled={transaction.reimbursement_status === "pending"}
+                                <DropdownMenuItem
+                                  onClick={() => handleStatusChange(transaction, "pending")}
+                                  disabled={transaction.reimbursement_status === "pending" || isStatusUpdating}
                                 >
                                   <Clock className="h-4 w-4 mr-2 text-chart-4" />
                                   Pendente
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "requested" })}
-                                  disabled={transaction.reimbursement_status === "requested"}
+                                <DropdownMenuItem
+                                  onClick={() => handleStatusChange(transaction, "requested")}
+                                  disabled={transaction.reimbursement_status === "requested" || isStatusUpdating}
                                 >
                                   <Send className="h-4 w-4 mr-2 text-primary" />
                                   Solicitado
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "reimbursed" })}
-                                  disabled={transaction.reimbursement_status === "reimbursed"}
+                                <DropdownMenuItem
+                                  onClick={() => handleStatusChange(transaction, "reimbursed")}
+                                  disabled={transaction.reimbursement_status === "reimbursed" || isStatusUpdating}
                                 >
                                   <CheckCircle2 className="h-4 w-4 mr-2 text-income" />
                                   Reembolsado
@@ -678,13 +688,22 @@ export default function CorporateExpenses() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "pending" })}>
+                          <DropdownMenuItem
+                            onClick={() => handleStatusChange(transaction, "pending")}
+                            disabled={transaction.reimbursement_status === "pending" || isStatusUpdating}
+                          >
                             <Clock className="h-4 w-4 mr-2 text-chart-4" /> Pendente
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "requested" })}>
+                          <DropdownMenuItem
+                            onClick={() => handleStatusChange(transaction, "requested")}
+                            disabled={transaction.reimbursement_status === "requested" || isStatusUpdating}
+                          >
                             <Send className="h-4 w-4 mr-2 text-primary" /> Solicitado
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => updateReimbursementStatus.mutate({ id: transaction.id, status: "reimbursed" })}>
+                          <DropdownMenuItem
+                            onClick={() => handleStatusChange(transaction, "reimbursed")}
+                            disabled={transaction.reimbursement_status === "reimbursed" || isStatusUpdating}
+                          >
                             <CheckCircle2 className="h-4 w-4 mr-2 text-income" /> Reembolsado
                           </DropdownMenuItem>
                         </DropdownMenuContent>

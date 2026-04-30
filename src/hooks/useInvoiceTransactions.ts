@@ -13,6 +13,7 @@ export interface InvoiceTransaction {
   is_reimbursable: boolean;
   is_refund: boolean;
   status: string;
+  reimbursement_status: string | null;
   category_name: string | null;
   category_icon: string | null;
 }
@@ -51,6 +52,7 @@ export function useInvoiceTransactions({
           is_reimbursable,
           is_refund,
           status,
+          reimbursement_status,
           categories(name, icon)
         `
         )
@@ -74,6 +76,7 @@ export function useInvoiceTransactions({
         is_reimbursable: t.is_reimbursable,
         is_refund: t.is_refund,
         status: t.status,
+        reimbursement_status: t.reimbursement_status ?? null,
         category_name: (t.categories as { name: string } | null)?.name || null,
         category_icon: (t.categories as { icon: string } | null)?.icon || null,
       })) as InvoiceTransaction[];
@@ -85,21 +88,33 @@ export function useInvoiceTransactions({
   const normalTransactions = transactions.filter((t) => !t.is_refund);
   const refundTransactions = transactions.filter((t) => t.is_refund);
 
-  // Corporate: is_corporate_expense = true
+  // Already-reimbursed expenses no longer represent a debt to settle on the
+  // invoice modal: a mirror payment was created by mark_reimbursed and is
+  // reducing current_invoice on the card row. We exclude them from corporate
+  // and reimbursable totals so PayInvoiceModal does not double-count.
+  const isPendingReimbursement = (t: InvoiceTransaction) =>
+    t.reimbursement_status !== "reimbursed";
+
+  // Corporate: is_corporate_expense = true (excluding already-reimbursed)
   const corporateNormal = normalTransactions
-    .filter((t) => t.is_corporate_expense)
+    .filter((t) => t.is_corporate_expense && isPendingReimbursement(t))
     .reduce((sum, t) => sum + t.amount, 0);
   const corporateRefunds = refundTransactions
-    .filter((t) => t.is_corporate_expense)
+    .filter((t) => t.is_corporate_expense && isPendingReimbursement(t))
     .reduce((sum, t) => sum + t.amount, 0);
   const corporateTotal = corporateNormal - corporateRefunds;
 
   // Reimbursable: is_reimbursable = true AND is_corporate_expense = false
+  // (also excluding already-reimbursed)
   const reimbursableNormal = normalTransactions
-    .filter((t) => t.is_reimbursable && !t.is_corporate_expense)
+    .filter(
+      (t) => t.is_reimbursable && !t.is_corporate_expense && isPendingReimbursement(t)
+    )
     .reduce((sum, t) => sum + t.amount, 0);
   const reimbursableRefunds = refundTransactions
-    .filter((t) => t.is_reimbursable && !t.is_corporate_expense)
+    .filter(
+      (t) => t.is_reimbursable && !t.is_corporate_expense && isPendingReimbursement(t)
+    )
     .reduce((sum, t) => sum + t.amount, 0);
   const reimbursableTotal = reimbursableNormal - reimbursableRefunds;
 
