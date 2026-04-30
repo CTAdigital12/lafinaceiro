@@ -15,6 +15,7 @@ import { useDate } from "@/contexts/DateContext";
 import { Loader2 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { usePrivacyMode } from "@/contexts/PrivacyContext";
+import { isMonthlyIncome, isMonthlyExpense, isMonthlyExpenseRefund } from "@/lib/transactionFilters";
 
 interface MonthData {
   month: string;
@@ -49,7 +50,7 @@ export function BalanceChart() {
 
       const { data, error } = await supabase
         .from("transactions")
-        .select("amount, type, date, is_corporate_expense")
+        .select("amount, type, date, status, is_corporate_expense, is_refund, is_reimbursable, is_card_payment, is_provisional")
         .gte("date", startDate)
         .lte("date", endDate);
 
@@ -63,12 +64,18 @@ export function BalanceChart() {
         }) || [];
 
         const receitas = monthTransactions
-          .filter((t) => t.type === "income" && !t.is_corporate_expense)
+          .filter(isMonthlyIncome)
           .reduce((sum, t) => sum + Number(t.amount), 0);
 
-        const despesas = monthTransactions
-          .filter((t) => t.type === "expense" && !t.is_corporate_expense)
+        const despesasGross = monthTransactions
+          .filter(isMonthlyExpense)
           .reduce((sum, t) => sum + Number(t.amount), 0);
+
+        const refunds = monthTransactions
+          .filter(isMonthlyExpenseRefund)
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+
+        const despesas = despesasGross - refunds;
 
         return {
           month: m.label.charAt(0).toUpperCase() + m.label.slice(1),

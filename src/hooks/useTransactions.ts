@@ -5,6 +5,7 @@ import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback } from "react";
 import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
+import { isMonthlyExpense, isMonthlyExpenseRefund, isMonthlyIncome } from "@/lib/transactionFilters";
 
 // Utility to check if invoice is closed for a given card/month/year
 async function checkInvoiceClosed(creditCardId: string | null | undefined, dueDate: string | null | undefined): Promise<{ isClosed: boolean; message?: string }> {
@@ -330,39 +331,18 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     },
   });
 
-  // Calculate total income (only actual income, not expense refunds)
-  // Expense refunds are now subtracted from expense categories, not added to income
   const totalIncome = transactions
-    .filter((t) => t.type === "income" && !t.is_refund && !t.is_corporate_expense && !t.is_provisional && t.status !== "pending")
+    .filter(isMonthlyIncome)
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  // Calculate total expenses (excluding corporate, reimbursable, card payments, and refunds)
-  // Expense refunds are subtracted separately in category calculations
   const expenseTotal = transactions
-    .filter((t) => 
-      t.type === "expense" && 
-      !t.is_corporate_expense && 
-      !t.is_refund && 
-      !t.is_reimbursable && 
-      !t.is_card_payment &&
-      !t.is_provisional &&
-      t.status !== "pending"
-    )
+    .filter(isMonthlyExpense)
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  // Calculate refunds of expenses (to subtract from total)
   const expenseRefunds = transactions
-    .filter((t) => 
-      t.type === "expense" && 
-      t.is_refund && 
-      !t.is_corporate_expense && 
-      !t.is_reimbursable &&
-      !t.is_provisional &&
-      t.status !== "pending"
-    )
+    .filter(isMonthlyExpenseRefund)
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  // Net expense = expenses - refunds
   const totalExpense = expenseTotal - expenseRefunds;
 
   return {

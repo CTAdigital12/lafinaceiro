@@ -699,6 +699,7 @@ export type Database = {
           project_id: string | null
           recurring_rule_id: string | null
           refunded_transaction_id: string | null
+          reimbursement_payment_id: string | null
           reimbursement_status: string | null
           status: string
           total_installments: number | null
@@ -728,6 +729,7 @@ export type Database = {
           project_id?: string | null
           recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
+          reimbursement_payment_id?: string | null
           reimbursement_status?: string | null
           status?: string
           total_installments?: number | null
@@ -757,6 +759,7 @@ export type Database = {
           project_id?: string | null
           recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
+          reimbursement_payment_id?: string | null
           reimbursement_status?: string | null
           status?: string
           total_installments?: number | null
@@ -807,6 +810,13 @@ export type Database = {
             referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "transactions_reimbursement_payment_id_fkey"
+            columns: ["reimbursement_payment_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -817,6 +827,14 @@ export type Database = {
       add_shared_access_by_email: {
         Args: { target_email: string }
         Returns: string
+      }
+      mark_reimbursed: {
+        Args: { p_transaction_id: string }
+        Returns: string
+      }
+      unmark_reimbursed: {
+        Args: { p_transaction_id: string; p_new_status: string }
+        Returns: undefined
       }
     }
     Enums: {
