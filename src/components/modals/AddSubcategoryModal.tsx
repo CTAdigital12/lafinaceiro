@@ -56,7 +56,7 @@ export function AddSubcategoryModal({
     setIsSubmitting(true);
     try {
       for (const categoryId of selectedIds) {
-        const amount = parseFloat(amounts[categoryId] || "0");
+        const amount = parseFloat((amounts[categoryId] || "0").replace(",", "."));
         await createBudget.mutateAsync({
           category_id: categoryId,
           month,
@@ -125,8 +125,9 @@ export function AddSubcategoryModal({
                     {subcategory.name}
                   </label>
                   <Input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9.,]*"
                     placeholder="R$ 0,00"
                     className="w-28 text-right"
                     value={amounts[subcategory.id] || ""}

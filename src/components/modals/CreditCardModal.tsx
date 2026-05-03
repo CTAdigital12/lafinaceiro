@@ -198,6 +198,7 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
               <Input
                 id="dueDate"
                 type="number"
+                inputMode="numeric"
                 min="1"
                 max="31"
                 placeholder="10"
@@ -211,6 +212,7 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
               <Input
                 id="closingDate"
                 type="number"
+                inputMode="numeric"
                 min="1"
                 max="31"
                 placeholder="3"
