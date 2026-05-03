@@ -824,6 +824,19 @@ export default function Planning() {
               );
             })}
           </div>
+
+          {/* Contextual CTA — discoverable way to extend the plan after creation.
+              Shown only when there are already budgets, since the empty state
+              above already exposes "Nova Meta". */}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full mt-3 border-dashed h-12 text-muted-foreground hover:text-foreground hover:border-solid"
+            onClick={() => setIsModalOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar nova categoria ao plano
+          </Button>
         </>
       )}
 
@@ -916,8 +929,21 @@ export default function Planning() {
         </div>
       )}
 
-      <NewBudgetModal open={isModalOpen} onOpenChange={setIsModalOpen} month={month} year={year} />
-      <EditBudgetModal open={editModalOpen} onOpenChange={setEditModalOpen} budget={editingBudget} month={month} year={year} />
+      <NewBudgetModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        month={month}
+        year={year}
+        existingBudgetCategoryIds={existingBudgetCategoryIds}
+      />
+      <EditBudgetModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        budget={editingBudget}
+        month={month}
+        year={year}
+        existingBudgetCategoryIds={existingBudgetCategoryIds}
+      />
       <AddSubcategoryModal 
         open={addSubcategoryModalOpen} 
         onOpenChange={setAddSubcategoryModalOpen} 
