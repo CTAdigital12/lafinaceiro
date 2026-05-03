@@ -292,8 +292,8 @@ export function ParentCategoryDetailSheet({
   );
 
   const content = (
-    <>
-      <div className="flex items-center gap-3 mb-6">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="shrink-0 flex items-center gap-3 mb-6">
         <div>
           <Currency value={parentCategory.value} className="text-2xl font-bold text-foreground block" />
           <p className="text-sm text-muted-foreground">
@@ -302,7 +302,7 @@ export function ParentCategoryDetailSheet({
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100dvh-200px)] md:h-[calc(100dvh-180px)]">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-2 pr-4">
           {/* Subcategories */}
           {subcategories.map((subcategory) => (
@@ -402,19 +402,19 @@ export function ParentCategoryDetailSheet({
         onOpenChange={handleModalClose}
         transaction={editingTransaction}
       />
-    </>
+    </div>
   );
 
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="text-left pb-2">
+        <DrawerContent className="max-h-[85dvh] flex flex-col">
+          <DrawerHeader className="text-left pb-2 shrink-0">
             <DrawerTitle className="sr-only">{parentCategory.name}</DrawerTitle>
             <DrawerDescription className="sr-only">Detalhes das subcategorias e transações</DrawerDescription>
             {headerContent}
           </DrawerHeader>
-          <div className="px-4 pb-6" data-vaul-no-drag>
+          <div className="flex-1 min-h-0 px-4 pb-6 flex flex-col" data-vaul-no-drag>
             {content}
           </div>
         </DrawerContent>
@@ -424,13 +424,13 @@ export function ParentCategoryDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[400px] sm:w-[480px]">
-        <SheetHeader className="pb-2">
+      <SheetContent className="w-[400px] sm:w-[480px] flex flex-col">
+        <SheetHeader className="pb-2 shrink-0">
           <SheetTitle className="sr-only">{parentCategory.name}</SheetTitle>
           <SheetDescription className="sr-only">Detalhes das subcategorias e transações</SheetDescription>
           {headerContent}
         </SheetHeader>
-        <div className="mt-4">
+        <div className="flex-1 min-h-0 mt-4 flex flex-col">
           {content}
         </div>
       </SheetContent>
