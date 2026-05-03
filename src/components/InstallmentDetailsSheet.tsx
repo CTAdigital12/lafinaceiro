@@ -169,20 +169,20 @@ export function InstallmentDetailsSheet({
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-full sm:max-w-lg p-0 flex flex-col">
-          <SheetHeader className="p-6 pb-4 border-b border-border">
-            <div className="flex items-start justify-between">
+          <SheetHeader className="p-6 pb-4 pr-14 border-b border-border">
+            <div className="flex items-start justify-between gap-2">
               <div className="space-y-1 flex-1 min-w-0">
                 <SheetTitle className="text-xl truncate">{baseDescription}</SheetTitle>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
                   {creditCard && (
-                    <span className="flex items-center gap-1">
-                      <CreditCard className="h-4 w-4" />
-                      {creditCard.name} •{creditCard.last_digits}
+                    <span className="flex items-center gap-1 truncate">
+                      <CreditCard className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{creditCard.name} •{creditCard.last_digits}</span>
                     </span>
                   )}
                 </div>
               </div>
-              
+
               {/* Header Actions Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -190,7 +190,7 @@ export function InstallmentDetailsSheet({
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16} className="w-56">
                   <DropdownMenuItem onClick={() => setShowEditAllModal(true)}>
                     <Edit className="h-4 w-4 mr-2" />
                     Editar Todas as Parcelas

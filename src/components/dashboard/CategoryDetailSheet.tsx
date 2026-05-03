@@ -232,7 +232,7 @@ export function CategoryDetailSheet({
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-200px)] md:h-[calc(100vh-180px)]">
+      <ScrollArea className="h-[calc(100dvh-200px)] md:h-[calc(100dvh-180px)]">
         <div className="space-y-1 pr-4">
           {transactions.map((transaction) => (
             <div 
@@ -250,7 +250,7 @@ export function CategoryDetailSheet({
               </div>
               
               <div className="flex items-center gap-2 shrink-0">
-                <p className={`text-sm font-medium ${
+                <p className={`text-sm font-medium whitespace-nowrap tabular-nums ${
                   transaction.type === "income" ? "text-income" : "text-expense"
                 }`}>
                   {transaction.type === "income" ? "+" : "-"} {fmt(transaction.amount)}

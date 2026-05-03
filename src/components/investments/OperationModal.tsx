@@ -296,6 +296,7 @@ export function OperationModal({
                     <FormControl>
                       <Input
                         type="number"
+                        inputMode="decimal"
                         step="any"
                         {...field}
                         onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
@@ -314,6 +315,7 @@ export function OperationModal({
                     <FormControl>
                       <Input
                         type="number"
+                        inputMode="decimal"
                         step="0.01"
                         {...field}
                         onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
@@ -335,6 +337,7 @@ export function OperationModal({
                     <FormControl>
                       <Input
                         type="number"
+                        inputMode="decimal"
                         step="0.01"
                         {...field}
                         onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}

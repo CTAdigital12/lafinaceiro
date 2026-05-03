@@ -178,7 +178,7 @@ export function ParentCategoryDetailSheet({
       </div>
       
       <div className="flex items-center gap-2 shrink-0">
-        <p className={`text-sm font-medium ${
+        <p className={`text-sm font-medium whitespace-nowrap tabular-nums ${
           transaction.type === "income" ? "text-income" : "text-expense"
         }`}>
           {transaction.type === "income" ? "+" : "-"} {fmt(transaction.amount)}
@@ -302,7 +302,7 @@ export function ParentCategoryDetailSheet({
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-200px)] md:h-[calc(100vh-180px)]">
+      <ScrollArea className="h-[calc(100dvh-200px)] md:h-[calc(100dvh-180px)]">
         <div className="space-y-2 pr-4">
           {/* Subcategories */}
           {subcategories.map((subcategory) => (
@@ -312,21 +312,21 @@ export function ParentCategoryDetailSheet({
               onOpenChange={() => toggleSubcategory(subcategory.id)}
             >
               <CollapsibleTrigger asChild>
-                <button className="flex items-center justify-between w-full py-3 px-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="flex items-center gap-2">
-                    <span 
-                      className="w-2.5 h-2.5 rounded-full shrink-0" 
+                <button className="flex items-center justify-between w-full py-3 px-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: subcategory.color }}
                     />
-                    <span className="text-sm font-medium text-foreground">
+                    <span className="text-sm font-medium text-foreground truncate">
                       {subcategory.icon} {subcategory.name}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground shrink-0">
                       ({subcategory.transactions.length})
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-sm font-medium whitespace-nowrap tabular-nums ${
                       categoryType === "income" ? "text-income" : "text-expense"
                     }`}>
                       {fmt(subcategory.value)}
@@ -354,21 +354,21 @@ export function ParentCategoryDetailSheet({
               onOpenChange={() => toggleSubcategory("direct")}
             >
               <CollapsibleTrigger asChild>
-                <button className="flex items-center justify-between w-full py-3 px-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="flex items-center gap-2">
-                    <span 
-                      className="w-2.5 h-2.5 rounded-full shrink-0" 
+                <button className="flex items-center justify-between w-full py-3 px-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: parentCategory.color }}
                     />
-                    <span className="text-sm font-medium text-foreground">
+                    <span className="text-sm font-medium text-foreground truncate">
                       Outros ({parentCategory.name})
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground shrink-0">
                       ({directTransactions.length})
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-sm font-medium whitespace-nowrap tabular-nums ${
                       categoryType === "income" ? "text-income" : "text-expense"
                     }`}>
                       {fmt(directTransactions.reduce((sum, t) => sum + t.amount, 0))}

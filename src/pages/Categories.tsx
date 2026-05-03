@@ -559,7 +559,7 @@ export default function Categories() {
         onDragEnd={handleDragEnd}
       >
         <div className="bg-card rounded-xl border border-border shadow-card">
-          <ScrollArea className="h-[calc(100vh-220px)]">
+          <ScrollArea className="h-[calc(100dvh-220px)]">
             <div className="divide-y divide-border">
               {parentCategories.map((category) => {
                 const subcategories = getSubcategories(category.id);

@@ -44,7 +44,7 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
       category_id: categoryId || null,
       month,
       year,
-      planned_amount: parseFloat(plannedAmount) || 0,
+      planned_amount: parseFloat(plannedAmount.replace(",", ".")) || 0,
     }, {
       onSuccess: () => {
         setCategoryId("");
@@ -123,8 +123,9 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
             <Label htmlFor="amount">Valor Planejado (R$)</Label>
             <Input
               id="amount"
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9.,]*"
               placeholder="0,00"
               value={plannedAmount}
               onChange={(e) => setPlannedAmount(e.target.value)}

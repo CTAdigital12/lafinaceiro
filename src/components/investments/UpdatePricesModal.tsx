@@ -129,6 +129,7 @@ export function UpdatePricesModal({
                           <Label className="sr-only">Cotação</Label>
                           <Input
                             type="number"
+                            inputMode="decimal"
                             step="0.01"
                             value={prices[asset.id] || 0}
                             onChange={(e) =>
@@ -197,6 +198,7 @@ export function UpdatePricesModal({
                             </Label>
                             <Input
                               type="number"
+                              inputMode="decimal"
                               step="0.01"
                               value={balances[asset.id] || 0}
                               onChange={(e) =>
