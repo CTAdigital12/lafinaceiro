@@ -39,17 +39,12 @@ import { BudgetEvolutionChart } from "@/components/dashboard/BudgetEvolutionChar
 import { AddSubcategoryModal } from "@/components/modals/AddSubcategoryModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Currency } from "@/components/ui/currency";
+import {
+  buildHierarchicalBudgets,
+  type HierarchicalBudget,
+} from "@/lib/buildHierarchicalBudgets";
 
 const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
-interface HierarchicalBudget extends Budget {
-  children: HierarchicalBudget[];
-  totalPlanned: number;
-  totalSpent: number;
-  isParent: boolean;
-  unbudgetedSubcategorySpent: number; // Amount spent in subcategories without their own budget
-  subcategoriesWithoutBudget: string[]; // Names of subcategories with spending but no budget
-}
 
 export default function Planning() {
   const { month, year, setCurrentDate } = useDate();
@@ -96,79 +91,13 @@ export default function Planning() {
     return result;
   }, [transactions, categories]);
 
-  // Build hierarchical structure
-  const hierarchicalBudgets = useMemo(() => {
-    const parentBudgets: HierarchicalBudget[] = [];
-    const childBudgetsMap: Record<string, HierarchicalBudget[]> = {};
-    const budgetedCategoryIds = new Set(budgets.map(b => b.category_id).filter(Boolean));
-
-    budgets.forEach((budget) => {
-      const parentId = budget.categories?.parent_id;
-      const spent = spentByCategory[budget.category_id || ""] || 0;
-      
-      const hierarchicalBudget: HierarchicalBudget = {
-        ...budget,
-        children: [],
-        totalPlanned: Number(budget.planned_amount),
-        totalSpent: spent,
-        isParent: false,
-        unbudgetedSubcategorySpent: 0,
-        subcategoriesWithoutBudget: [],
-      };
-
-      if (parentId) {
-        if (!childBudgetsMap[parentId]) {
-          childBudgetsMap[parentId] = [];
-        }
-        childBudgetsMap[parentId].push(hierarchicalBudget);
-      } else {
-        hierarchicalBudget.isParent = true;
-        parentBudgets.push(hierarchicalBudget);
-      }
-    });
-
-    parentBudgets.forEach((parent) => {
-      const categoryId = parent.categories?.id;
-      if (categoryId) {
-        // Find all subcategories of this parent
-        const allSubcategories = categories.filter(c => c.parent_id === categoryId);
-        
-        // Find subcategories WITHOUT their own budget but WITH spending
-        const subcatsWithoutBudget = allSubcategories.filter(sub => 
-          !budgetedCategoryIds.has(sub.id) && (spentByCategory[sub.id] || 0) > 0
-        );
-        
-        // Calculate spending in unbudgeted subcategories
-        const unbudgetedSpent = subcatsWithoutBudget.reduce(
-          (sum, sub) => sum + (spentByCategory[sub.id] || 0), 
-          0
-        );
-        
-        parent.unbudgetedSubcategorySpent = unbudgetedSpent;
-        parent.subcategoriesWithoutBudget = subcatsWithoutBudget.map(s => s.name);
-        
-        if (childBudgetsMap[categoryId]) {
-          parent.children = childBudgetsMap[categoryId].sort((a, b) => 
-            (a.categories?.name || "").localeCompare(b.categories?.name || "")
-          );
-          
-          // Sum of children's planned amounts
-          const childrenPlanned = parent.children.reduce((sum, child) => sum + child.totalPlanned, 0);
-          
-          // If parent has children with budgets, use sum of children's planned amounts
-          // Otherwise, use the parent's own planned amount
-          parent.totalPlanned = parent.children && parent.children.length > 0 ? childrenPlanned : Number(parent.planned_amount);
-        }
-        
-        // Spent comes from spentByCategory which already includes subcategories
-        parent.totalSpent = spentByCategory[categoryId] || 0;
-      }
-    });
-
-    return parentBudgets.sort((a, b) => 
-      (a.categories?.name || "").localeCompare(b.categories?.name || "")
-    );
-  }, [budgets, spentByCategory, categories]);
+  // Build hierarchical structure (extracted to a pure helper for unit testing
+  // and to fix Bug 4: orphan child budgets now get a synthesized virtual parent
+  // so they remain visible when the parent category has no budget of its own).
+  const hierarchicalBudgets = useMemo(
+    () => buildHierarchicalBudgets(budgets, spentByCategory, categories),
+    [budgets, spentByCategory, categories],
+  );
 
   // Calculate total spent from transactions directly (not from spentByCategory which has duplicates)
   const totalSpent = useMemo(() => {
