@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { useBudgets, Budget } from "@/hooks/useBudgets";
 import { Loader2 } from "lucide-react";
@@ -16,21 +16,21 @@ interface EditBudgetModalProps {
 
 export function EditBudgetModal({ open, onOpenChange, budget, month, year }: EditBudgetModalProps) {
   const { updateBudget } = useBudgets(month, year);
-  const [plannedAmount, setPlannedAmount] = useState("");
+  const [plannedAmount, setPlannedAmount] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (budget) {
-      setPlannedAmount(String(budget.planned_amount));
+      setPlannedAmount(Number(budget.planned_amount));
     }
   }, [budget]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!budget) return;
-    
+
     updateBudget.mutate({
       id: budget.id,
-      planned_amount: parseFloat(plannedAmount.replace(",", ".")) || 0,
+      planned_amount: plannedAmount ?? 0,
     }, {
       onSuccess: () => {
         onOpenChange(false);
@@ -49,14 +49,10 @@ export function EditBudgetModal({ open, onOpenChange, budget, month, year }: Edi
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="amount">Valor Planejado (R$)</Label>
-            <Input
+            <CurrencyInput
               id="amount"
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9.,]*"
-              placeholder="0,00"
               value={plannedAmount}
-              onChange={(e) => setPlannedAmount(e.target.value)}
+              onValueChange={setPlannedAmount}
               required
             />
           </div>

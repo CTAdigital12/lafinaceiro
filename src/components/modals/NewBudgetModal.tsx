@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { useBudgets } from "@/hooks/useBudgets";
 import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
@@ -32,23 +32,23 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
   const { createBudget } = useBudgets(month, year);
   const { categories } = useCategories();
   const [categoryId, setCategoryId] = useState("");
-  const [plannedAmount, setPlannedAmount] = useState("");
+  const [plannedAmount, setPlannedAmount] = useState<number | undefined>(undefined);
   const [openCategoryPopover, setOpenCategoryPopover] = useState(false);
 
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     createBudget.mutate({
       category_id: categoryId || null,
       month,
       year,
-      planned_amount: parseFloat(plannedAmount.replace(",", ".")) || 0,
+      planned_amount: plannedAmount ?? 0,
     }, {
       onSuccess: () => {
         setCategoryId("");
-        setPlannedAmount("");
+        setPlannedAmount(undefined);
         onOpenChange(false);
       }
     });
@@ -121,14 +121,10 @@ export function NewBudgetModal({ open, onOpenChange, month, year }: NewBudgetMod
 
           <div className="space-y-2">
             <Label htmlFor="amount">Valor Planejado (R$)</Label>
-            <Input
+            <CurrencyInput
               id="amount"
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9.,]*"
-              placeholder="0,00"
               value={plannedAmount}
-              onChange={(e) => setPlannedAmount(e.target.value)}
+              onValueChange={setPlannedAmount}
               required
             />
           </div>

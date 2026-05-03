@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCategories } from "@/hooks/useCategories";
 import { useBudgets } from "@/hooks/useBudgets";
@@ -28,7 +28,7 @@ export function AddSubcategoryModal({
   const { categories } = useCategories();
   const { createBudget } = useBudgets(month, year);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [amounts, setAmounts] = useState<Record<string, number | undefined>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter subcategories that belong to this parent and don't have a budget yet
@@ -46,7 +46,7 @@ export function AddSubcategoryModal({
     );
   };
 
-  const setAmount = (id: string, value: string) => {
+  const setAmount = (id: string, value: number | undefined) => {
     setAmounts((prev) => ({ ...prev, [id]: value }));
   };
 
@@ -56,7 +56,7 @@ export function AddSubcategoryModal({
     setIsSubmitting(true);
     try {
       for (const categoryId of selectedIds) {
-        const amount = parseFloat((amounts[categoryId] || "0").replace(",", "."));
+        const amount = amounts[categoryId] ?? 0;
         await createBudget.mutateAsync({
           category_id: categoryId,
           month,
@@ -124,14 +124,11 @@ export function AddSubcategoryModal({
                   >
                     {subcategory.name}
                   </label>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    pattern="[0-9.,]*"
+                  <CurrencyInput
                     placeholder="R$ 0,00"
                     className="w-28 text-right"
-                    value={amounts[subcategory.id] || ""}
-                    onChange={(e) => setAmount(subcategory.id, e.target.value)}
+                    value={amounts[subcategory.id]}
+                    onValueChange={(v) => setAmount(subcategory.id, v)}
                   />
                 </div>
               ))
