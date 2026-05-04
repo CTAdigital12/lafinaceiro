@@ -133,6 +133,18 @@
     top: env(safe-area-inset-top, 0px);
   }
 
+  /* Reserve space for the mobile BottomNav at the bottom of every page.
+     Layout breakdown on iPhone 16 Pro (home indicator ~34px):
+       - nav h-16 = 64px
+       - pb-safe inside nav = env(safe-area-inset-bottom) ~34px
+       - FAB pokes up via `-mt-6` = +24px
+       - small visual gap = ~10px
+     Total ~132px → use 7rem (112px) + env() so it scales correctly on
+     every device (iPhone SE → 112px; iPhone 16 Pro → ~146px). */
+  .pb-bottom-nav {
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg;
   }
