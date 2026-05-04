@@ -86,7 +86,11 @@ export function CategoryCombobox({
         className="w-[var(--radix-popover-trigger-width)] p-0"
         align="start"
       >
-        <Command>
+        {/* `max-h: --radix-popover-content-available-height` makes Command
+            shrink to whatever vertical space Radix actually gave us (after
+            collision detection), so the inner CommandList scroll engages even
+            when the popover is squeezed against the viewport edge. */}
+        <Command className="max-h-[var(--radix-popover-content-available-height)]">
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>

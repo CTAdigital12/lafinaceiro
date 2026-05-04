@@ -115,6 +115,24 @@
 }
 
 @layer utilities {
+  /* iOS PWA safe-area helpers — consumed by Sheet/Drawer/Dialog content
+     so notch / Dynamic Island / home-indicator never overlap our UI. */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .top-safe {
+    top: env(safe-area-inset-top, 0px);
+  }
+
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg;
   }
