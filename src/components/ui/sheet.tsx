@@ -52,17 +52,22 @@ interface SheetContentProps
     VariantProps<typeof sheetVariants> {}
 
 const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-  ({ side = "right", className, children, ...props }, ref) => (
+  ({ side = "right", className, children, style, ...props }, ref) => (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
         ref={ref}
-        className={cn(
-          sheetVariants({ side }),
-          // iOS PWA safe-area: notch/Dynamic Island on top, home indicator on bottom.
-          "pt-safe pb-safe pl-safe pr-safe",
-          className,
-        )}
+        className={cn(sheetVariants({ side }), className)}
+        // iOS PWA safe-area applied as inline style so it cannot be wiped out
+        // by `cn()/twMerge` when a callsite passes `p-0` (or any padding-*)
+        // in className. In desktop env() returns 0 — no visual effect.
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
+          ...style,
+        }}
         {...props}
       >
         {children}
