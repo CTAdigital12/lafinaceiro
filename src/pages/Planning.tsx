@@ -507,8 +507,17 @@ export default function Planning() {
         <>
           {/* Desktop Table View */}
           <div className="hidden md:block bg-card rounded-xl border border-border shadow-card overflow-hidden">
-            {parentCategoriesWithChildren.length > 0 && (
-              <div className="flex justify-end p-2 border-b border-border">
+            <div className="flex items-center justify-between gap-2 p-2 border-b border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setIsModalOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar categoria
+              </Button>
+              {parentCategoriesWithChildren.length > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -518,8 +527,8 @@ export default function Planning() {
                   <ChevronsUpDown className="h-4 w-4" />
                   {allCollapsed ? "Expandir Todas" : "Colapsar Todas"}
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -825,13 +834,13 @@ export default function Planning() {
             })}
           </div>
 
-          {/* Contextual CTA — discoverable way to extend the plan after creation.
-              Shown only when there are already budgets, since the empty state
-              above already exposes "Nova Meta". */}
+          {/* Mobile-only contextual CTA — full-width dashed button matching
+              the card stack rhythm. Desktop has a compact "Adicionar categoria"
+              in the table header instead. Both open the same NewBudgetModal. */}
           <Button
             type="button"
             variant="outline"
-            className="w-full mt-3 border-dashed h-12 text-muted-foreground hover:text-foreground hover:border-solid"
+            className="md:hidden w-full mt-3 border-dashed h-12 text-muted-foreground hover:text-foreground hover:border-solid"
             onClick={() => setIsModalOpen(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
