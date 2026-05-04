@@ -98,7 +98,11 @@ export function BottomNav() {
     <>
       {/* Bottom Navigation Bar */}
       <nav className="fixed bottom-0 inset-x-0 z-50 md:hidden bg-background/95 backdrop-blur-lg border-t border-border">
-        <div className="flex items-center justify-around h-16 px-2 pb-safe">
+        {/* `min-h-16` (not `h-16`) so the nav grows when `pb-safe` adds the
+            iOS home-indicator inset — otherwise the 64px fixed height minus
+            ~34px of padding-bottom would squeeze the icons+labels into a
+            ~30px content area, clipping them visually. */}
+        <div className="flex items-center justify-around min-h-16 px-2 pb-safe">
           {mainNavItems.map((item, index) => {
             // Central FAB button
             if (isActionItem(item)) {
