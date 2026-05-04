@@ -25,17 +25,21 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, style, ...props }, ref) => (
   <DrawerPortal>
     <DrawerOverlay />
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
         "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
-        // iOS home indicator: keep content above the swipe bar.
-        "pb-safe",
         className,
       )}
+      // iOS home indicator: inline style so it survives `cn()/twMerge` even
+      // if a callsite later passes `p-0` or `pb-0`. In desktop env() = 0.
+      style={{
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        ...style,
+      }}
       {...props}
     >
       <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
