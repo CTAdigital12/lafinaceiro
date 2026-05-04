@@ -71,7 +71,17 @@ export function MainLayout({ children }: MainLayoutProps) {
       {/* Main content */}
       <div className="md:pl-16 lg:pl-64 transition-all duration-300">
         <Header currentDate={currentDate} onDateChange={setCurrentDate} />
-        <main className="p-4 md:p-6 pb-24 md:pb-6">{children}</main>
+        {/*
+          BottomNav (mobile-only) is `fixed bottom-0` with `h-16` + `pb-safe`,
+          so its real height is `64px + env(safe-area-inset-bottom)`. Pad the
+          main area accordingly so content never sits under the nav. Desktop
+          has no BottomNav, so md:pb-6 stays.
+        */}
+        <main
+          className="p-4 md:p-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-6"
+        >
+          {children}
+        </main>
       </div>
       
       {/* Bottom Navigation - only on mobile */}
