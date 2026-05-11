@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Link as LinkIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -10,6 +11,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { InvestmentTransaction, InvestmentAsset } from "@/hooks/useInvestments";
 import { cn } from "@/lib/utils";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -20,7 +27,7 @@ interface TransactionHistoryProps {
 
 const TYPE_LABELS: Record<string, string> = {
   buy: "Compra",
-  sell: "Venda",
+  sell: "Venda / Resgate",
   dividend: "Dividendo",
 };
 
@@ -29,6 +36,33 @@ const TYPE_COLORS: Record<string, string> = {
   sell: "bg-red-500/10 text-red-500",
   dividend: "bg-emerald-500/10 text-emerald-500",
 };
+
+/**
+ * Badge mostrado quando a operação está vinculada a uma `transactions` na
+ * conta corrente (via `linked_transaction_id`). Aplica-se a compras com
+ * despesa e a vendas/resgates com receita.
+ */
+function LinkedBadge() {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            className="font-medium text-xs gap-1 bg-blue-500/5 text-blue-500/90 border-blue-500/30"
+            aria-label="Vinculada a uma transação na conta corrente"
+          >
+            <LinkIcon className="h-3 w-3" aria-hidden />
+            vinculado
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          Esta operação está vinculada a uma transação na conta corrente.
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 export function TransactionHistory({ transactions }: TransactionHistoryProps) {
   const formatCurrency = useFormatCurrency();
@@ -69,9 +103,12 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
                         {format(new Date(tx.date), "dd/MM/yyyy", { locale: ptBR })}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn("font-medium", TYPE_COLORS[tx.type])}>
-                          {TYPE_LABELS[tx.type]}
-                        </Badge>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className={cn("font-medium", TYPE_COLORS[tx.type])}>
+                            {TYPE_LABELS[tx.type]}
+                          </Badge>
+                          {tx.linked_transaction_id && <LinkedBadge />}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <span className="font-medium">{tx.asset?.ticker || "—"}</span>
@@ -96,14 +133,15 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
             <div className="md:hidden space-y-2">
               {transactions.slice(0, 50).map((tx) => (
                 <div key={tx.id} className="border border-border/50 rounded-lg p-3 bg-background/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                       <Badge variant="outline" className={cn("font-medium text-xs", TYPE_COLORS[tx.type])}>
                         {TYPE_LABELS[tx.type]}
                       </Badge>
-                      <span className="font-medium">{tx.asset?.ticker || "—"}</span>
+                      {tx.linked_transaction_id && <LinkedBadge />}
+                      <span className="font-medium truncate">{tx.asset?.ticker || "—"}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {format(new Date(tx.date), "dd/MM/yyyy", { locale: ptBR })}
                     </span>
                   </div>

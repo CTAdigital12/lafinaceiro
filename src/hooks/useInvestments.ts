@@ -2,6 +2,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import {
+  computeAssetUpdateOnBuy,
+  computeAssetUpdateOnSell,
+  type AssetUpdatePayload,
+} from "@/lib/investments/assetMutation";
+import { validateLinkCandidate } from "@/lib/investments/linkCandidate";
 
 export type PricingMethod = "unit_price" | "total_balance";
 
@@ -210,33 +216,36 @@ export function useInvestments() {
       };
 
       try {
-        // Update asset based on transaction type
+        // Update asset based on transaction type.
+        //
+        // Os helpers em `lib/investments/assetMutation` encapsulam o desvio
+        // entre `pricing_method` = "unit_price" (ações/ETFs: mutam quantity +
+        // average_price) e "total_balance" (renda fixa / saldo em corretora:
+        // muta current_balance). O bug histórico de "venda não reduz saldo
+        // do CDB" é resolvido lá. Dividendos seguem não afetando o ativo.
         const asset = assets.find((a) => a.id === txData.asset_id);
         if (asset) {
+          let updatePayload: AssetUpdatePayload | null = null;
           if (txData.type === "buy") {
-            // Calculate new average price
-            const currentTotal = asset.quantity * asset.average_price;
-            const newTotal = txData.quantity * txData.unit_price + txData.fees;
-            const newQuantity = asset.quantity + txData.quantity;
-            const newAveragePrice = newQuantity > 0 ? (currentTotal + newTotal) / newQuantity : 0;
-
-            const { error: updErr } = await supabase
-              .from("investment_assets")
-              .update({
-                quantity: newQuantity,
-                average_price: newAveragePrice,
-              })
-              .eq("id", asset.id);
-            if (updErr) throw updErr;
+            updatePayload = computeAssetUpdateOnBuy(asset, {
+              quantity: txData.quantity,
+              unit_price: txData.unit_price,
+              fees: txData.fees,
+            });
           } else if (txData.type === "sell") {
-            const newQuantity = asset.quantity - txData.quantity;
+            updatePayload = computeAssetUpdateOnSell(asset, {
+              quantity: txData.quantity,
+              total_value: txData.total_value,
+            });
+          }
+
+          if (updatePayload) {
             const { error: updErr } = await supabase
               .from("investment_assets")
-              .update({ quantity: Math.max(0, newQuantity) })
+              .update(updatePayload)
               .eq("id", asset.id);
             if (updErr) throw updErr;
           }
-          // Dividends don't affect quantity or average price
         }
 
         // ===== Link com transactions na conta corrente =====
@@ -284,15 +293,9 @@ export function useInvestments() {
                 .eq("id", existingTransactionId)
                 .maybeSingle();
               if (candErr) throw candErr;
-              if (!candidate) throw new Error("Receita não encontrada");
-              if (candidate.user_id !== user.id) {
-                throw new Error("Esta receita não pertence ao seu usuário");
-              }
-              if (candidate.type !== "income") {
-                throw new Error("A transação selecionada não é uma receita");
-              }
-              if (candidate.account_id !== accountId) {
-                throw new Error("A receita não pertence à conta selecionada");
+              const validation = validateLinkCandidate(candidate, user.id, accountId);
+              if (!validation.ok) {
+                throw new Error(validation.message);
               }
 
               // Checa se já está linkada (UX melhor que erro 23505 cru).
