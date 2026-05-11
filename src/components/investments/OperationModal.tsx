@@ -29,24 +29,64 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InvestmentAsset, ASSET_TYPE_LABELS } from "@/hooks/useInvestments";
-import { useAccounts } from "@/hooks/useAccounts";
-import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
+import { LinkToAccountSection } from "./LinkToAccountSection";
 
-const formSchema = z.object({
-  operationType: z.enum(["buy", "sell", "dividend"]),
-  assetId: z.string().optional(),
-  newAsset: z.boolean().default(false),
-  assetName: z.string().optional(),
-  assetTicker: z.string().optional(),
-  assetType: z.string().optional(),
-  date: z.string().min(1, "Data é obrigatória"),
-  quantity: z.number().min(0.00000001, "Quantidade deve ser maior que 0"),
-  unitPrice: z.number().min(0, "Preço deve ser maior ou igual a 0"),
-  fees: z.number().min(0).default(0),
-  createExpense: z.boolean().default(false),
-  accountId: z.string().optional(),
-  categoryId: z.string().optional(),
-});
+const formSchema = z
+  .object({
+    operationType: z.enum(["buy", "sell", "dividend"]),
+    assetId: z.string().optional(),
+    newAsset: z.boolean().default(false),
+    assetName: z.string().optional(),
+    assetTicker: z.string().optional(),
+    assetType: z.string().optional(),
+    date: z.string().min(1, "Data é obrigatória"),
+    quantity: z.number().min(0.00000001, "Quantidade deve ser maior que 0"),
+    unitPrice: z.number().min(0, "Preço deve ser maior ou igual a 0"),
+    fees: z.number().min(0).default(0),
+    createExpense: z.boolean().default(false),
+    accountId: z.string().optional(),
+    categoryId: z.string().optional(),
+    // Usado apenas em operationType = "sell".
+    linkMode: z.enum(["existing", "new"]).optional(),
+    existingTransactionId: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.createExpense) return;
+
+    if (!data.accountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["accountId"],
+        message: "Selecione a conta",
+      });
+    }
+
+    if (data.operationType === "buy" && !data.categoryId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["categoryId"],
+        message: "Selecione a categoria",
+      });
+    }
+
+    if (data.operationType === "sell") {
+      const linkMode = data.linkMode ?? "existing";
+      if (linkMode === "existing" && !data.existingTransactionId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["existingTransactionId"],
+          message: "Selecione a receita a vincular",
+        });
+      }
+      if (linkMode === "new" && !data.categoryId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["categoryId"],
+          message: "Selecione a categoria",
+        });
+      }
+    }
+  });
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -66,8 +106,6 @@ export function OperationModal({
   onCreateAsset,
 }: OperationModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { accounts } = useAccounts();
-  const { categories } = useCategories();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -79,15 +117,16 @@ export function OperationModal({
       unitPrice: 0,
       fees: 0,
       createExpense: false,
+      linkMode: "existing",
     },
   });
 
   const operationType = form.watch("operationType");
   const isNewAsset = form.watch("newAsset");
-  const createExpense = form.watch("createExpense");
   const quantity = form.watch("quantity");
   const unitPrice = form.watch("unitPrice");
   const fees = form.watch("fees");
+  const date = form.watch("date");
 
   const totalValue = quantity * unitPrice + (operationType === "buy" ? fees : 0);
 
@@ -142,6 +181,11 @@ export function OperationModal({
         createExpenseTransaction: values.createExpense,
         accountId: values.accountId,
         categoryId: values.categoryId,
+        linkMode: values.operationType === "sell" ? (values.linkMode ?? "existing") : undefined,
+        existingTransactionId:
+          values.operationType === "sell" && values.linkMode === "existing"
+            ? values.existingTransactionId
+            : undefined,
       });
 
       onOpenChange(false);
@@ -151,8 +195,6 @@ export function OperationModal({
       setIsSubmitting(false);
     }
   };
-
-  const expenseCategories = categories.filter((c) => c.type === "expense");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -169,7 +211,7 @@ export function OperationModal({
             >
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="buy">Compra</TabsTrigger>
-                <TabsTrigger value="sell">Venda</TabsTrigger>
+                <TabsTrigger value="sell">Venda / Resgate</TabsTrigger>
                 <TabsTrigger value="dividend">Dividendo</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -356,84 +398,12 @@ export function OperationModal({
               </p>
             </div>
 
-            {operationType === "buy" && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="createExpense"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 p-3 border rounded-lg">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="font-normal">
-                          Lançar como despesa na conta corrente
-                        </FormLabel>
-                        <p className="text-xs text-muted-foreground">
-                          Cria uma transação de saída para manter o saldo atualizado
-                        </p>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                {createExpense && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="accountId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Conta</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {accounts.map((account) => (
-                                <SelectItem key={account.id} value={account.id}>
-                                  {account.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="categoryId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Categoria</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {expenseCategories.map((cat) => (
-                                <SelectItem key={cat.id} value={cat.id}>
-                                  {cat.icon} {cat.fullName || cat.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                )}
-              </>
+            {(operationType === "buy" || operationType === "sell") && (
+              <LinkToAccountSection
+                mode={operationType}
+                form={form}
+                refDate={date}
+              />
             )}
 
             <div className="flex justify-end gap-2 pt-4">

@@ -173,13 +173,22 @@ export function useInvestments() {
         createExpenseTransaction?: boolean;
         accountId?: string;
         categoryId?: string;
+        linkMode?: "existing" | "new";
+        existingTransactionId?: string;
       }
     ) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
-      
-      const { createExpenseTransaction, accountId, categoryId, ...txData } = transaction;
+
+      const {
+        createExpenseTransaction,
+        accountId,
+        categoryId,
+        linkMode,
+        existingTransactionId,
+        ...txData
+      } = transaction;
 
       // Insert investment transaction
       const { data: investmentTx, error: txError } = await supabase
@@ -190,69 +199,168 @@ export function useInvestments() {
 
       if (txError) throw txError;
 
-      // Update asset based on transaction type
-      const asset = assets.find((a) => a.id === txData.asset_id);
-      if (asset) {
-        if (txData.type === "buy") {
-          // Calculate new average price
-          const currentTotal = asset.quantity * asset.average_price;
-          const newTotal = txData.quantity * txData.unit_price + txData.fees;
-          const newQuantity = asset.quantity + txData.quantity;
-          const newAveragePrice = newQuantity > 0 ? (currentTotal + newTotal) / newQuantity : 0;
+      // Helper: deleta a investment_transaction recém-criada se as etapas
+      // subsequentes falharem. Evita "fantasmas" (venda registrada sem
+      // movimentação no asset/conta). Compensação simples sem RPC.
+      const rollbackInvestmentTx = async () => {
+        await supabase
+          .from("investment_transactions")
+          .delete()
+          .eq("id", investmentTx.id);
+      };
 
-          await supabase
-            .from("investment_assets")
-            .update({
-              quantity: newQuantity,
-              average_price: newAveragePrice,
-            })
-            .eq("id", asset.id);
-        } else if (txData.type === "sell") {
-          const newQuantity = asset.quantity - txData.quantity;
-          await supabase
-            .from("investment_assets")
-            .update({ quantity: Math.max(0, newQuantity) })
-            .eq("id", asset.id);
+      try {
+        // Update asset based on transaction type
+        const asset = assets.find((a) => a.id === txData.asset_id);
+        if (asset) {
+          if (txData.type === "buy") {
+            // Calculate new average price
+            const currentTotal = asset.quantity * asset.average_price;
+            const newTotal = txData.quantity * txData.unit_price + txData.fees;
+            const newQuantity = asset.quantity + txData.quantity;
+            const newAveragePrice = newQuantity > 0 ? (currentTotal + newTotal) / newQuantity : 0;
+
+            const { error: updErr } = await supabase
+              .from("investment_assets")
+              .update({
+                quantity: newQuantity,
+                average_price: newAveragePrice,
+              })
+              .eq("id", asset.id);
+            if (updErr) throw updErr;
+          } else if (txData.type === "sell") {
+            const newQuantity = asset.quantity - txData.quantity;
+            const { error: updErr } = await supabase
+              .from("investment_assets")
+              .update({ quantity: Math.max(0, newQuantity) })
+              .eq("id", asset.id);
+            if (updErr) throw updErr;
+          }
+          // Dividends don't affect quantity or average price
         }
-        // Dividends don't affect quantity or average price
-      }
 
-      // Create linked expense transaction if requested
-      if (createExpenseTransaction && accountId && txData.type === "buy") {
-        const { data: linkedTx, error: linkedError } = await supabase
-          .from("transactions")
-          .insert([
-            {
-              user_id: user.id,
-              account_id: accountId,
-              category_id: categoryId || null,
-              description: `Investimento: ${asset?.ticker || "Ativo"}`,
-              amount: txData.total_value,
-              type: "expense",
-              date: txData.date,
-              status: "completed",
-              is_corporate_expense: false,
-            },
-          ])
-          .select()
-          .single();
+        // ===== Link com transactions na conta corrente =====
+        // BUY → cria expense (comportamento original).
+        // SELL → vincula a uma income existente ou cria nova income.
+        if (createExpenseTransaction && accountId) {
+          let linkedTxId: string | null = null;
 
-        if (!linkedError && linkedTx) {
-          // Update investment transaction with linked transaction id
-          await supabase
-            .from("investment_transactions")
-            .update({ linked_transaction_id: linkedTx.id })
-            .eq("id", investmentTx.id);
+          if (txData.type === "buy") {
+            const { data: linkedTx, error: linkedError } = await supabase
+              .from("transactions")
+              .insert([
+                {
+                  user_id: user.id,
+                  account_id: accountId,
+                  category_id: categoryId || null,
+                  description: `Investimento: ${asset?.ticker || "Ativo"}`,
+                  amount: txData.total_value,
+                  type: "expense",
+                  date: txData.date,
+                  status: "completed",
+                  is_corporate_expense: false,
+                },
+              ])
+              .select()
+              .single();
+            if (linkedError) throw linkedError;
+            linkedTxId = linkedTx.id;
+          } else if (txData.type === "sell") {
+            const effectiveLinkMode = linkMode ?? "existing";
+
+            if (effectiveLinkMode === "existing") {
+              if (!existingTransactionId) {
+                throw new Error("Selecione a receita a vincular");
+              }
+              // Validar elegibilidade. NOTA: a RLS de SELECT em `transactions`
+              // permite leitura cross-tenant via `shared_access`, então validar
+              // `user_id` é DEFESA EM PROFUNDIDADE obrigatória — não confiar
+              // apenas em RLS. Sem essa checagem, um usuário com acesso
+              // compartilhado poderia "sequestrar" uma receita do dono ao
+              // linkar pelo UNIQUE índice em linked_transaction_id.
+              const { data: candidate, error: candErr } = await supabase
+                .from("transactions")
+                .select("id, type, account_id, user_id")
+                .eq("id", existingTransactionId)
+                .maybeSingle();
+              if (candErr) throw candErr;
+              if (!candidate) throw new Error("Receita não encontrada");
+              if (candidate.user_id !== user.id) {
+                throw new Error("Esta receita não pertence ao seu usuário");
+              }
+              if (candidate.type !== "income") {
+                throw new Error("A transação selecionada não é uma receita");
+              }
+              if (candidate.account_id !== accountId) {
+                throw new Error("A receita não pertence à conta selecionada");
+              }
+
+              // Checa se já está linkada (UX melhor que erro 23505 cru).
+              const { count: linkedCount, error: countErr } = await supabase
+                .from("investment_transactions")
+                .select("id", { count: "exact", head: true })
+                .eq("linked_transaction_id", existingTransactionId);
+              if (countErr) throw countErr;
+              if ((linkedCount ?? 0) > 0) {
+                throw new Error("Esta receita já está vinculada a outra operação");
+              }
+
+              linkedTxId = existingTransactionId;
+            } else if (effectiveLinkMode === "new") {
+              if (!categoryId) {
+                throw new Error("Selecione a categoria da receita");
+              }
+              const { data: newTx, error: newErr } = await supabase
+                .from("transactions")
+                .insert([
+                  {
+                    user_id: user.id,
+                    account_id: accountId,
+                    category_id: categoryId,
+                    description: `Resgate: ${asset?.ticker || "Ativo"}`,
+                    amount: txData.total_value,
+                    type: "income",
+                    date: txData.date,
+                    status: "completed",
+                    is_corporate_expense: false,
+                  },
+                ])
+                .select()
+                .single();
+              if (newErr) throw newErr;
+              linkedTxId = newTx.id;
+            }
+          }
+
+          if (linkedTxId) {
+            const { error: linkErr } = await supabase
+              .from("investment_transactions")
+              .update({ linked_transaction_id: linkedTxId })
+              .eq("id", investmentTx.id);
+            if (linkErr) {
+              // 23505 = unique_violation no novo índice parcial.
+              if ((linkErr as { code?: string }).code === "23505") {
+                throw new Error(
+                  "Esta receita já está vinculada a outra operação (conflito)."
+                );
+              }
+              throw linkErr;
+            }
+          }
         }
-      }
 
-      return investmentTx;
+        return investmentTx;
+      } catch (err) {
+        await rollbackInvestmentTx();
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["investment_assets"] });
       queryClient.invalidateQueries({ queryKey: ["investment_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["unlinked_incomes"] });
       toast({ title: "Operação registrada com sucesso!" });
     },
     onError: (error: Error) => {
@@ -268,6 +376,7 @@ export function useInvestments() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["investment_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["unlinked_incomes"] });
       toast({ title: "Operação excluída!" });
     },
     onError: (error: Error) => {
