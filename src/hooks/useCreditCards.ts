@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { startOfMonth, endOfMonth, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +31,9 @@ interface PayInvoiceParams {
 export interface SplitPaymentParams {
   creditCardId: string;
   creditCardName: string;
+  // Invoice cycle (used to scope auto-reimbursement to the right period)
+  month: number;
+  year: number;
   // Corporate section
   corporateAmount: number;
   includeCorporate: boolean;
@@ -194,6 +198,8 @@ export function useCreditCards() {
       const {
         creditCardId,
         creditCardName,
+        month,
+        year,
         corporateAmount,
         includeCorporate,
         personalAmount,
@@ -211,30 +217,66 @@ export function useCreditCards() {
 
       let totalPaid = 0;
 
-      // 1. Handle corporate portion
-      if (includeCorporate && corporateAmount > 0) {
-        const { error: corpError } = await supabase.from("transactions").insert({
-          user_id: user.id,
-          description: `Baixa Corporativa - ${creditCardName}`,
-          amount: corporateAmount,
-          type: "income",
-          date,
-          account_id: null,
-          credit_card_id: creditCardId,
-          category_id: null,
-          status: "completed",
-          is_corporate_expense: true,
-          is_reimbursable: false,
-          is_refund: false,
-          is_card_payment: true,
-        });
+      const periodStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const periodEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const periodFilter = `and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`;
 
-        if (corpError) throw corpError;
-        totalPaid += corporateAmount;
+      // 1. Handle corporate portion — mark each corporate expense as reimbursed.
+      // Each mark_reimbursed call creates a mirror income (is_card_payment=true)
+      // that reduces current_invoice via the global recompute inside the RPC.
+      // We do NOT create the aggregate "Baixa Corporativa" income anymore, and
+      // we do NOT add corporateAmount to totalPaid (the RPC already handled it).
+      if (includeCorporate && corporateAmount > 0) {
+        const { data: corpTxs, error: corpFetchError } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("credit_card_id", creditCardId)
+          .eq("type", "expense")
+          .eq("status", "completed")
+          .eq("is_corporate_expense", true)
+          .eq("is_refund", false)
+          .in("reimbursement_status", ["pending", "requested"])
+          .or(periodFilter);
+
+        if (corpFetchError) throw corpFetchError;
+
+        for (const tx of corpTxs ?? []) {
+          const { error: rpcError } = await supabase.rpc("mark_reimbursed", {
+            p_transaction_id: tx.id,
+          });
+          if (rpcError) throw rpcError;
+        }
       }
 
       // 2. Handle personal portion
       if (includePersonal && personalAmount > 0) {
+        // Auto-mark reimbursable (non-corp) as reimbursed — status only, no mirror.
+        // Mirror would double-count: user já está pagando do bolso via expense bank.
+        const { data: reimbTxs, error: reimbFetchError } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("credit_card_id", creditCardId)
+          .eq("type", "expense")
+          .eq("status", "completed")
+          .eq("is_reimbursable", true)
+          .eq("is_corporate_expense", false)
+          .eq("is_refund", false)
+          .in("reimbursement_status", ["pending", "requested"])
+          .or(periodFilter);
+
+        if (reimbFetchError) throw reimbFetchError;
+
+        if (reimbTxs && reimbTxs.length > 0) {
+          const reimbIds = reimbTxs.map((t) => t.id);
+          const { error: updErr } = await supabase
+            .from("transactions")
+            .update({ reimbursement_status: "reimbursed" })
+            .in("id", reimbIds);
+          if (updErr) throw updErr;
+        }
+
         if (linkToTransactionId) {
           // Link to existing transaction - also set credit_card_id for reconciliation
           const { error: linkError } = await supabase
@@ -369,6 +411,10 @@ export function useCreditCards() {
       queryClient.invalidateQueries({ queryKey: ["credit_cards"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["corporate-expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["reimbursements"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["credit-card-transactions-reconciliation"] });
       toast({ title: "Fatura paga com sucesso!" });
     },
     onError: (error: Error) => {

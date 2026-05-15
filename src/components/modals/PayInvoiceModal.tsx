@@ -209,6 +209,8 @@ export function PayInvoiceModal({
       await paySplitInvoice.mutateAsync({
         creditCardId: creditCard.id,
         creditCardName: creditCard.name,
+        month: invoiceMonth,
+        year: invoiceYear,
         corporateAmount: parseFloat(corporateAmount) || 0,
         includeCorporate,
         personalAmount: parseFloat(personalAmount) || 0,
