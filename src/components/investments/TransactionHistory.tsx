@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Link as LinkIcon } from "lucide-react";
+import { Link as LinkIcon, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -11,6 +11,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -21,8 +29,55 @@ import { InvestmentTransaction, InvestmentAsset } from "@/hooks/useInvestments";
 import { cn } from "@/lib/utils";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
+type InvestmentTx = InvestmentTransaction & { asset: InvestmentAsset };
+
 interface TransactionHistoryProps {
-  transactions: (InvestmentTransaction & { asset: InvestmentAsset })[];
+  transactions: InvestmentTx[];
+  onEdit: (tx: InvestmentTx) => void;
+  onDelete: (tx: InvestmentTx) => void;
+}
+
+function RowActionsMenu({
+  tx,
+  onEdit,
+  onDelete,
+  size = "default",
+}: {
+  tx: InvestmentTx;
+  onEdit: (tx: InvestmentTx) => void;
+  onDelete: (tx: InvestmentTx) => void;
+  size?: "default" | "sm";
+}) {
+  const triggerClass = size === "sm" ? "h-7 w-7" : "h-8 w-8";
+  const iconClass = size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(triggerClass, "flex-shrink-0")}
+          aria-label="Ações"
+        >
+          <MoreVertical className={iconClass} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16} className="w-40">
+        <DropdownMenuItem onClick={() => onEdit(tx)}>
+          <Pencil className="h-4 w-4 mr-2" />
+          Editar
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={() => onDelete(tx)}
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          Excluir
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -64,7 +119,7 @@ function LinkedBadge() {
   );
 }
 
-export function TransactionHistory({ transactions }: TransactionHistoryProps) {
+export function TransactionHistory({ transactions, onEdit, onDelete }: TransactionHistoryProps) {
   const formatCurrency = useFormatCurrency();
 
   const formatNumber = (value: number) =>
@@ -94,6 +149,7 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
                     <TableHead className="text-right">Preço</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Lucro</TableHead>
+                    <TableHead className="w-[48px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -118,10 +174,13 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
                       <TableCell className="text-right font-medium">{formatCurrency(tx.total_value)}</TableCell>
                       <TableCell className={cn(
                         "text-right font-medium",
-                        tx.realized_profit && tx.realized_profit > 0 ? "text-emerald-500" : 
+                        tx.realized_profit && tx.realized_profit > 0 ? "text-emerald-500" :
                         tx.realized_profit && tx.realized_profit < 0 ? "text-red-500" : ""
                       )}>
                         {tx.realized_profit ? formatCurrency(tx.realized_profit) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <RowActionsMenu tx={tx} onEdit={onEdit} onDelete={onDelete} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -141,9 +200,12 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
                       {tx.linked_transaction_id && <LinkedBadge />}
                       <span className="font-medium truncate">{tx.asset?.ticker || "—"}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {format(new Date(tx.date), "dd/MM/yyyy", { locale: ptBR })}
-                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {format(new Date(tx.date), "dd/MM/yyyy", { locale: ptBR })}
+                      </span>
+                      <RowActionsMenu tx={tx} onEdit={onEdit} onDelete={onDelete} size="sm" />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>

@@ -105,3 +105,61 @@ export function computeAssetUpdateOnSell(
     `Unsupported pricing_method: ${String((asset as AssetMutationInput).pricing_method)}`,
   );
 }
+
+/**
+ * Inverso de `computeAssetUpdateOnBuy`. Desfaz o efeito de uma compra
+ * previamente aplicada, usado ao editar/excluir uma operação.
+ *
+ * IMPORTANTE: para `unit_price`, o cálculo do novo `average_price` parte
+ * do estado ATUAL do ativo. Se houve compras/vendas posteriores à compra
+ * sendo revertida, o resultado não é o `average_price` histórico exato —
+ * é o melhor possível sem event sourcing. Aceitável para correção de
+ * lançamentos recentes; documentado como caveat conhecido na UI.
+ */
+export function computeAssetUpdateOnBuyReverse(
+  asset: AssetMutationInput,
+  original: { quantity: number; unit_price: number; fees: number },
+): AssetUpdatePayload {
+  if (asset.pricing_method === "total_balance") {
+    const aporte = original.quantity * original.unit_price + original.fees;
+    const newBalance = (asset.current_balance || 0) - aporte;
+    return { current_balance: Math.max(0, newBalance) };
+  }
+
+  if (asset.pricing_method === "unit_price") {
+    const currentTotal = asset.quantity * asset.average_price;
+    const originalTotal = original.quantity * original.unit_price + original.fees;
+    const newQuantity = asset.quantity - original.quantity;
+    if (newQuantity <= 0) {
+      return { quantity: 0, average_price: 0 };
+    }
+    const newAveragePrice = Math.max(0, (currentTotal - originalTotal) / newQuantity);
+    return { quantity: newQuantity, average_price: newAveragePrice };
+  }
+
+  throw new Error(
+    `Unsupported pricing_method: ${String((asset as AssetMutationInput).pricing_method)}`,
+  );
+}
+
+/**
+ * Inverso de `computeAssetUpdateOnSell`. Restaura a posição vendida ao
+ * ativo. Para `unit_price`, `average_price` não é tocado (vendas não
+ * alteram preço médio na operação direta, então o reverso também não).
+ */
+export function computeAssetUpdateOnSellReverse(
+  asset: AssetMutationInput,
+  sold: { quantity: number; total_value: number },
+): AssetUpdatePayload {
+  if (asset.pricing_method === "total_balance") {
+    return { current_balance: (asset.current_balance || 0) + sold.total_value };
+  }
+
+  if (asset.pricing_method === "unit_price") {
+    return { quantity: asset.quantity + sold.quantity };
+  }
+
+  throw new Error(
+    `Unsupported pricing_method: ${String((asset as AssetMutationInput).pricing_method)}`,
+  );
+}
