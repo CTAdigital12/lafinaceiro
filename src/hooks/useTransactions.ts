@@ -66,6 +66,7 @@ export interface Transaction {
   is_provisional: boolean;
   recurring_rule_id: string | null;
   project_id: string | null;
+  card_last_digits: string | null;
   created_at: string;
   updated_at: string;
   categories?: { id: string; name: string; icon: string; color: string } | null;

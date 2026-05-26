@@ -458,6 +458,7 @@ export function InvoiceReviewModal({
         installment_group_id: string | null;
         installment_number: number | null;
         total_installments: number | null;
+        card_last_digits: string | null;
       }> = [];
 
       let futureInstallmentsCount = 0;
@@ -489,6 +490,7 @@ export function InvoiceReviewModal({
           installment_group_id: installmentGroupId,
           installment_number: item.installment_current || null,
           total_installments: item.installment_total || null,
+          card_last_digits: item.card_last_digits || null,
         });
 
         // Add future installments if requested
@@ -521,6 +523,7 @@ export function InvoiceReviewModal({
               installment_group_id: installmentGroupId,
               installment_number: futureInstallmentNumber,
               total_installments: item.installment_total,
+              card_last_digits: item.card_last_digits || null,
             });
           }
         }
