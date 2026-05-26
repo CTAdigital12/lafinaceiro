@@ -7,6 +7,7 @@ export interface CSVInvoiceTransaction {
   amount: number;
   installment_current?: number;
   installment_total?: number;
+  card_last_digits?: string; // 4 dígitos, capturados da fatura quando disponível
 }
 
 interface CSVInvoiceParseOptions {
@@ -164,6 +165,7 @@ interface ColumnMap {
   dateColumn: number;
   descriptionColumn: number;
   amountColumn: number;
+  cardColumn: number; // -1 quando ausente; opcional
   hasHeader: boolean;
 }
 
@@ -171,15 +173,18 @@ function detectColumns(header: string[]): ColumnMap {
   const datePatterns = ["data", "date", "dt", "data compra", "data transação", "data transacao", "data da compra"];
   const descPatterns = ["descrição", "descricao", "description", "desc", "estabelecimento", "lançamento", "lancamento", "merchant", "local", "nome"];
   const amountPatterns = ["valor", "amount", "value", "quantia", "vlr", "total"];
-  
+  // "cartao"/"cartão"/"final"/"número"/"numero"/"card" — cobre Itaú e outros bancos.
+  const cardPatterns = ["cartão", "cartao", "card", "final", "número", "numero"];
+
   let dateColumn = -1;
   let descriptionColumn = -1;
   let amountColumn = -1;
+  let cardColumn = -1;
   let hasHeader = false;
-  
+
   header.forEach((col, index) => {
     const normalized = col.toLowerCase().replace(/["']/g, "").trim();
-    
+
     if (datePatterns.some(p => normalized.includes(p))) {
       dateColumn = index;
       hasHeader = true;
@@ -192,14 +197,35 @@ function detectColumns(header: string[]): ColumnMap {
       amountColumn = index;
       hasHeader = true;
     }
+    if (cardPatterns.some(p => normalized.includes(p))) {
+      cardColumn = index;
+      hasHeader = true;
+    }
   });
-  
-  // Defaults if not detected: assume date, description, amount order
+
+  // Defaults if not detected: assume date, description, amount order.
+  // Card column fica opcional (-1) — se não tiver cabeçalho explícito, pula.
   if (dateColumn === -1) dateColumn = 0;
   if (descriptionColumn === -1) descriptionColumn = 1;
   if (amountColumn === -1) amountColumn = 2;
-  
-  return { dateColumn, descriptionColumn, amountColumn, hasHeader };
+
+  return { dateColumn, descriptionColumn, amountColumn, cardColumn, hasHeader };
+}
+
+// Extrai os 4 dígitos do cartão da célula. Aceita formatos comuns:
+// "1234", "•••• 1234", "XXXX 1234", "Final 1234", "**** 1234".
+// Retorna undefined se nada plausível for encontrado.
+function parseCardLastDigits(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const cleaned = value.replace(/["']/g, "").trim();
+  if (!cleaned) return undefined;
+
+  // Match: 4 dígitos consecutivos no fim da string (cobre "•••• 1234",
+  // "XXXX XXXX XXXX 1234", "Final 1234", "1234" direto).
+  const match = cleaned.match(/(\d{4})\s*$/);
+  if (!match) return undefined;
+
+  return match[1];
 }
 
 export function parseCSVInvoice(content: string, options: CSVInvoiceParseOptions): CSVInvoiceTransaction[] {
@@ -225,16 +251,18 @@ export function parseCSVInvoice(content: string, options: CSVInvoiceParseOptions
     const dateVal = values[columnMap.dateColumn] || "";
     const descVal = values[columnMap.descriptionColumn]?.replace(/["']/g, "").trim() || "";
     const amountVal = values[columnMap.amountColumn] || "";
-    
+    const cardVal = columnMap.cardColumn >= 0 ? values[columnMap.cardColumn] : undefined;
+
     const parsedDate = parseDate(dateVal, options);
     const amount = parseAmount(amountVal);
-    
+
     // Skip rows without valid date or amount
     if (!parsedDate || amount === 0 || !descVal) continue;
-    
+
     // Detect installments
     const installments = detectInstallments(descVal);
-    
+    const cardLastDigits = parseCardLastDigits(cardVal);
+
     transactions.push({
       date: parsedDate,
       description: descVal,
@@ -243,9 +271,10 @@ export function parseCSVInvoice(content: string, options: CSVInvoiceParseOptions
         installment_current: installments.current,
         installment_total: installments.total,
       }),
+      ...(cardLastDigits && { card_last_digits: cardLastDigits }),
     });
   }
-  
+
   return transactions;
 }
 
@@ -265,6 +294,7 @@ export function convertToImportedItems(
     installment_current?: number;
     installment_total?: number;
     is_post_closing?: boolean;
+    card_last_digits?: string;
   }>;
   post_closing_count: number;
 } {
@@ -292,6 +322,7 @@ export function convertToImportedItems(
       description: tx.description,
       ...(tx.installment_current && { installment_current: tx.installment_current }),
       ...(tx.installment_total && { installment_total: tx.installment_total }),
+      ...(tx.card_last_digits && { card_last_digits: tx.card_last_digits }),
       is_post_closing: isPostClosing,
     };
   });

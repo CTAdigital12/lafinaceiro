@@ -38,6 +38,7 @@ export interface ImportedItem {
   installment_current?: number;
   installment_total?: number;
   is_post_closing?: boolean;
+  card_last_digits?: string;   // 4 últimos dígitos do cartão virtual (quando a fatura informa)
 }
 
 export interface ImportCompleteData {

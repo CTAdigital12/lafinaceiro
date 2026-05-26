@@ -905,6 +905,9 @@ export default function Transactions() {
                         </TableHead>
                         <TableHead>Categoria</TableHead>
                         <TableHead>{activeTab === "credit" ? "Cartão" : "Conta"}</TableHead>
+                        {activeTab === "credit" && (
+                          <TableHead className="text-muted-foreground">Final</TableHead>
+                        )}
                         <TableHead className="text-right">
                           <button
                             className={cn(
@@ -1022,6 +1025,13 @@ export default function Transactions() {
                               </span>
                             )}
                           </TableCell>
+                          {activeTab === "credit" && (
+                            <TableCell className="text-sm text-muted-foreground tabular-nums">
+                              {transaction.card_last_digits
+                                ? `•••• ${transaction.card_last_digits}`
+                                : "—"}
+                            </TableCell>
+                          )}
                           <TableCell className="text-right">
                             <span
                               className={cn(
