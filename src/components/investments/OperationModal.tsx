@@ -232,11 +232,15 @@ export function OperationModal({
         return;
       }
 
-      // Calculate realized profit for sell operations
+      // Lucro realizado só faz sentido em ativos `unit_price` (ações/ETFs),
+      // onde `average_price` é o preço médio POR COTA. Em `total_balance`
+      // (renda_fixa, fundos com 1 "cota" = posição inteira), `average_price`
+      // guarda o valor inicial aportado e `unit_price` da venda é o valor
+      // parcial resgatado — subtrair os dois daria um número sem sentido.
       let realizedProfit = null;
       if (values.operationType === "sell") {
         const asset = assets.find((a) => a.id === assetId);
-        if (asset) {
+        if (asset && asset.pricing_method === "unit_price") {
           realizedProfit = (values.unitPrice - asset.average_price) * values.quantity;
         }
       }
