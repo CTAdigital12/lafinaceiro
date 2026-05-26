@@ -37,6 +37,18 @@ interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<any>;
   refDate: string | undefined;
+  /**
+   * Receita extra a injetar na lista do dropdown "Receita a vincular".
+   * Usado em edit mode: a receita atualmente vinculada não aparece em
+   * `useUnlinkedIncomes` (porque está linkada), mas precisa estar
+   * selecionável para o usuário re-salvar sem mexer na vinculação.
+   */
+  additionalIncome?: {
+    id: string;
+    date: string;
+    amount: number;
+    description: string | null;
+  } | null;
 }
 
 const COPY = {
@@ -64,7 +76,7 @@ function formatBRL(amount: number): string {
   }).format(amount);
 }
 
-export function LinkToAccountSection({ mode, form, refDate }: Props) {
+export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: Props) {
   const { accounts } = useAccounts();
   const { categories } = useCategories();
 
@@ -82,6 +94,11 @@ export function LinkToAccountSection({ mode, form, refDate }: Props) {
     refDate,
     mode === "sell" && !!createExpense && linkMode === "existing",
   );
+
+  const incomeOptions =
+    additionalIncome && !incomes.some((i) => i.id === additionalIncome.id)
+      ? [additionalIncome, ...incomes]
+      : incomes;
 
   // Default `linkMode` para "existing" quando o checkbox é ativado em sell.
   useEffect(() => {
@@ -235,7 +252,7 @@ export function LinkToAccountSection({ mode, form, refDate }: Props) {
                               placeholder={
                                 isFetching
                                   ? "Carregando..."
-                                  : incomes.length === 0
+                                  : incomeOptions.length === 0
                                     ? "Nenhuma receita elegível nos últimos ±30 dias"
                                     : "Selecione a receita"
                               }
@@ -243,7 +260,7 @@ export function LinkToAccountSection({ mode, form, refDate }: Props) {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {incomes.map((tx) => (
+                          {incomeOptions.map((tx) => (
                             <SelectItem key={tx.id} value={tx.id}>
                               {formatIsoToBr(tx.date)} • {formatBRL(tx.amount)} •{" "}
                               {tx.description || "sem descrição"}

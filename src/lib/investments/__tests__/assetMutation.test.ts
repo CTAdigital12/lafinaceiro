@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   computeAssetUpdateOnBuy,
   computeAssetUpdateOnSell,
+  computeAssetUpdateOnBuyReverse,
+  computeAssetUpdateOnSellReverse,
   type AssetMutationInput,
 } from "../assetMutation";
 
@@ -132,6 +134,205 @@ describe("computeAssetUpdateOnSell", () => {
       { quantity: 1, total_value: 100 },
     );
     expect(out).toEqual({ current_balance: 0 });
+  });
+});
+
+describe("computeAssetUpdateOnBuyReverse", () => {
+  it("reverte buy em unit_price restaurando quantity e preço médio", () => {
+    // Estado original: 100 @ 10. Buy de 50 @ 16 (sem fees) levou a 150 @ 12.
+    // Reverter a partir do estado pós-buy deve retornar 100 @ 10.
+    const postBuy: AssetMutationInput = {
+      quantity: 150,
+      average_price: 12,
+      pricing_method: "unit_price",
+      current_balance: 0,
+    };
+    const out = computeAssetUpdateOnBuyReverse(postBuy, {
+      quantity: 50,
+      unit_price: 16,
+      fees: 0,
+    });
+    expect(out).toEqual({
+      quantity: 100,
+      average_price: expect.closeTo(10, 4),
+    });
+  });
+
+  it("reverte buy em unit_price respeitando fees", () => {
+    // 100 @ 10 + buy de 10 @ 20 com fee 5 → ((100*10) + (10*20 + 5)) / 110 = 1205/110 ≈ 10.9545
+    const postBuy: AssetMutationInput = {
+      quantity: 110,
+      average_price: 1205 / 110,
+      pricing_method: "unit_price",
+      current_balance: 0,
+    };
+    const out = computeAssetUpdateOnBuyReverse(postBuy, {
+      quantity: 10,
+      unit_price: 20,
+      fees: 5,
+    });
+    expect(out).toEqual({
+      quantity: 100,
+      average_price: expect.closeTo(10, 4),
+    });
+  });
+
+  it("reverte buy em unit_price que zera quantity retorna average_price: 0", () => {
+    // Era o único buy: pós-buy 50 @ 10. Reverter exatamente esses 50 leva a 0.
+    const postBuy: AssetMutationInput = {
+      quantity: 50,
+      average_price: 10,
+      pricing_method: "unit_price",
+      current_balance: 0,
+    };
+    const out = computeAssetUpdateOnBuyReverse(postBuy, {
+      quantity: 50,
+      unit_price: 10,
+      fees: 0,
+    });
+    expect(out).toEqual({ quantity: 0, average_price: 0 });
+  });
+
+  it("reverte buy em total_balance subtraindo aporte do current_balance", () => {
+    const postBuy: AssetMutationInput = {
+      quantity: 1,
+      average_price: 0,
+      pricing_method: "total_balance",
+      current_balance: 55_000,
+    };
+    const out = computeAssetUpdateOnBuyReverse(postBuy, {
+      quantity: 1,
+      unit_price: 5_000,
+      fees: 0,
+    });
+    expect(out).toEqual({ current_balance: 50_000 });
+  });
+
+  it("reverte buy em total_balance incluindo fees no aporte", () => {
+    const postBuy: AssetMutationInput = {
+      quantity: 1,
+      average_price: 0,
+      pricing_method: "total_balance",
+      current_balance: 55_025,
+    };
+    const out = computeAssetUpdateOnBuyReverse(postBuy, {
+      quantity: 1,
+      unit_price: 5_000,
+      fees: 25,
+    });
+    expect(out).toEqual({ current_balance: 50_000 });
+  });
+
+  it("reverte buy em total_balance não permite current_balance negativo", () => {
+    const postBuy: AssetMutationInput = {
+      quantity: 1,
+      average_price: 0,
+      pricing_method: "total_balance",
+      current_balance: 100,
+    };
+    const out = computeAssetUpdateOnBuyReverse(postBuy, {
+      quantity: 1,
+      unit_price: 5_000,
+      fees: 0,
+    });
+    expect(out).toEqual({ current_balance: 0 });
+  });
+});
+
+describe("computeAssetUpdateOnSellReverse", () => {
+  it("reverte sell em unit_price restaurando quantity", () => {
+    // Estado pós-sell: 70 (era 100, vendeu 30). Reverter deve voltar a 100.
+    const postSell: AssetMutationInput = {
+      quantity: 70,
+      average_price: 10,
+      pricing_method: "unit_price",
+      current_balance: 0,
+    };
+    const out = computeAssetUpdateOnSellReverse(postSell, {
+      quantity: 30,
+      total_value: 30 * 15,
+    });
+    expect(out).toEqual({ quantity: 100 });
+  });
+
+  it("reverte sell em total_balance somando total_value de volta", () => {
+    const postSell: AssetMutationInput = {
+      quantity: 1,
+      average_price: 0,
+      pricing_method: "total_balance",
+      current_balance: 45_000,
+    };
+    const out = computeAssetUpdateOnSellReverse(postSell, {
+      quantity: 1,
+      total_value: 5_000,
+    });
+    expect(out).toEqual({ current_balance: 50_000 });
+  });
+
+  it("payload de reverse total_balance não inclui quantity", () => {
+    const postSell: AssetMutationInput = {
+      quantity: 1,
+      average_price: 0,
+      pricing_method: "total_balance",
+      current_balance: 0,
+    };
+    const out = computeAssetUpdateOnSellReverse(postSell, {
+      quantity: 1,
+      total_value: 1_000,
+    });
+    expect(Object.keys(out)).toEqual(["current_balance"]);
+  });
+});
+
+describe("reverse(apply(state)) === state", () => {
+  it("buy + reverseBuy em unit_price é identidade", () => {
+    const start = acaoBase; // 100 @ 10
+    const buyOp = { quantity: 50, unit_price: 16, fees: 0 };
+    const after = computeAssetUpdateOnBuy(start, buyOp);
+    const reverted = computeAssetUpdateOnBuyReverse(
+      {
+        ...start,
+        ...(after as { quantity: number; average_price: number }),
+      },
+      buyOp,
+    );
+    expect(reverted).toEqual({
+      quantity: start.quantity,
+      average_price: expect.closeTo(start.average_price, 8),
+    });
+  });
+
+  it("sell + reverseSell em unit_price é identidade", () => {
+    const start = acaoBase;
+    const sellOp = { quantity: 30, total_value: 30 * 15 };
+    const after = computeAssetUpdateOnSell(start, sellOp);
+    const reverted = computeAssetUpdateOnSellReverse(
+      { ...start, ...(after as { quantity: number }) },
+      sellOp,
+    );
+    expect(reverted).toEqual({ quantity: start.quantity });
+  });
+
+  it("buy + reverseBuy em total_balance é identidade", () => {
+    const start = cdbBase;
+    const buyOp = { quantity: 1, unit_price: 5_000, fees: 25 };
+    const after = computeAssetUpdateOnBuy(start, buyOp);
+    const reverted = computeAssetUpdateOnBuyReverse(
+      { ...start, ...(after as { current_balance: number }) },
+      buyOp,
+    );
+    expect(reverted).toEqual({ current_balance: start.current_balance });
+  });
+
+  it("sell + reverseSell em total_balance é identidade", () => {
+    const start = cdbBase;
+    const sellOp = { quantity: 1, total_value: 5_000 };
+    const after = computeAssetUpdateOnSell(start, sellOp);
+    const reverted = computeAssetUpdateOnSellReverse(
+      { ...start, ...(after as { current_balance: number }) },
+      sellOp,
+    );
+    expect(reverted).toEqual({ current_balance: start.current_balance });
   });
 });
 

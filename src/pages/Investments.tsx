@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { Plus, RefreshCw, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { InvestmentSummaryCards } from "@/components/investments/InvestmentSummaryCards";
 import { AllocationChart } from "@/components/investments/AllocationChart";
 import { AssetTable } from "@/components/investments/AssetTable";
@@ -9,7 +19,7 @@ import { OperationModal } from "@/components/investments/OperationModal";
 import { UpdatePricesModal } from "@/components/investments/UpdatePricesModal";
 import { AssetModal } from "@/components/investments/AssetModal";
 import { InstitutionsList } from "@/components/investments/InstitutionsList";
-import { useInvestments } from "@/hooks/useInvestments";
+import { useInvestments, InvestmentTransaction } from "@/hooks/useInvestments";
 import { useInstitutions } from "@/hooks/useInstitutions";
 
 export default function Investments() {
@@ -17,6 +27,8 @@ export default function Investments() {
   const [pricesModalOpen, setPricesModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<any>(null);
+  const [editingOperation, setEditingOperation] = useState<InvestmentTransaction | null>(null);
+  const [deletingOperation, setDeletingOperation] = useState<InvestmentTransaction | null>(null);
 
   const {
     assets,
@@ -32,6 +44,8 @@ export default function Investments() {
     updateAsset,
     deleteAsset,
     createTransaction,
+    updateTransaction,
+    deleteTransaction,
     updatePrices,
   } = useInvestments();
 
@@ -50,6 +64,30 @@ export default function Investments() {
   const handleAssetModalClose = (open: boolean) => {
     setAssetModalOpen(open);
     if (!open) setEditingAsset(null);
+  };
+
+  const handleOperationModalClose = (open: boolean) => {
+    setOperationModalOpen(open);
+    if (!open) setEditingOperation(null);
+  };
+
+  const handleEditOperation = (tx: InvestmentTransaction) => {
+    setEditingOperation(tx);
+    setOperationModalOpen(true);
+  };
+
+  const handleOperationSubmit = (data: any) => {
+    if (editingOperation) {
+      updateTransaction.mutate({ id: editingOperation.id, ...data });
+    } else {
+      createTransaction.mutate(data);
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingOperation) return;
+    deleteTransaction.mutate(deletingOperation.id);
+    setDeletingOperation(null);
   };
 
   const handleAssetSubmit = (data: any) => {
@@ -181,19 +219,49 @@ export default function Investments() {
       </div>
 
       {/* Transaction History */}
-      <TransactionHistory transactions={transactions} />
+      <TransactionHistory
+        transactions={transactions}
+        onEdit={handleEditOperation}
+        onDelete={setDeletingOperation}
+      />
 
       {/* Modals */}
       <OperationModal
         open={operationModalOpen}
-        onOpenChange={setOperationModalOpen}
+        onOpenChange={handleOperationModalClose}
         assets={assets}
-        onSubmit={(data) => createTransaction.mutate(data)}
+        operation={editingOperation}
+        onSubmit={handleOperationSubmit}
         onCreateAsset={async (data) => {
           const result = await createAsset.mutateAsync(data);
           return result;
         }}
       />
+
+      <AlertDialog
+        open={!!deletingOperation}
+        onOpenChange={(open) => !open && setDeletingOperation(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Operação</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta operação? O ativo será revertido ao
+              estado anterior e, se houver, a transação vinculada na conta corrente
+              também será removida. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <UpdatePricesModal
         open={pricesModalOpen}
