@@ -54,10 +54,21 @@ export function useCreditCardInvoiceSync() {
       // Ensure invoice is not negative
       invoiceTotal = Math.max(0, invoiceTotal);
 
-      // Update the credit card
+      // Update the credit card.
+      // `status` é um flag GLOBAL do cartão. Quando entram novas despesas (ex.:
+      // import do mês seguinte) e a fatura volta a ter saldo, o cartão não pode
+      // continuar marcado como "Paga" — reabrimos para "open". Não rebaixamos
+      // "closed" aqui (fechamento é controlado manualmente).
+      const update: { current_invoice: number; status?: string } = {
+        current_invoice: invoiceTotal,
+      };
+      if (invoiceTotal > 0) {
+        update.status = "open";
+      }
+
       const { error: updateError } = await supabase
         .from("credit_cards")
-        .update({ current_invoice: invoiceTotal })
+        .update(update)
         .eq("id", creditCardId);
 
       if (updateError) throw updateError;
