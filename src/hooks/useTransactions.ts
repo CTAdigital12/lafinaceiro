@@ -183,6 +183,21 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         credit_card_id: transactionData.credit_card_id && transactionData.credit_card_id.trim() !== "" ? transactionData.credit_card_id : null,
         due_date: transactionData.due_date || null,
         imported_at: transactionData.imported_at || null,
+        // card_last_digits tem constraint no banco (^[0-9]{4}$ ou null). Só
+        // incluímos a chave quando ela foi informada (imports de fatura),
+        // normalizando para os 4 últimos dígitos — valores fora do padrão (ou
+        // ausentes) viram null em vez de quebrar o insert.
+        ...("card_last_digits" in transactionData
+          ? {
+              card_last_digits: (() => {
+                const raw = (transactionData as { card_last_digits?: string | null })
+                  .card_last_digits;
+                if (raw == null) return null;
+                const digits = String(raw).replace(/\D/g, "").slice(-4);
+                return /^\d{4}$/.test(digits) ? digits : null;
+              })(),
+            }
+          : {}),
         reimbursement_status:
           transactionData.reimbursement_status ||
           (transactionData.is_reimbursable || transactionData.is_corporate_expense
