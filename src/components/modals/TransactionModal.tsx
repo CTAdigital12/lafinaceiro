@@ -455,6 +455,9 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                             value={cat.fullName || cat.name}
                             onSelect={() => {
                               setCategoryId(cat.id);
+                              if (cat.is_reimbursable) {
+                                setIsReimbursable(true);
+                              }
                               setOpenCategoryPopover(false);
                             }}
                             className={cn(group.parent && "pl-4")}

@@ -26,6 +26,7 @@ export function filterPureIncome(transactions: Transaction[]): Transaction[] {
       t.type === "income" &&
       !t.is_refund &&
       !t.is_card_payment &&
+      !t.is_reimbursement &&
       !t.is_provisional &&
       t.status !== "pending" &&
       !t.is_corporate_expense

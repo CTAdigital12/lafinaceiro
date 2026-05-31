@@ -56,9 +56,12 @@ export interface Transaction {
   is_corporate_expense: boolean;
   is_refund: boolean;
   is_reimbursable: boolean;
+  is_reimbursement: boolean;
   is_card_payment: boolean | null;
   refunded_transaction_id: string | null;
   reimbursement_status: string | null;
+  reimbursement_payment_id: string | null;
+  reimbursement_income_id: string | null;
   // Installment fields
   installment_group_id: string | null;
   installment_number: number | null;
@@ -180,7 +183,11 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         credit_card_id: transactionData.credit_card_id && transactionData.credit_card_id.trim() !== "" ? transactionData.credit_card_id : null,
         due_date: transactionData.due_date || null,
         imported_at: transactionData.imported_at || null,
-        reimbursement_status: transactionData.reimbursement_status || null,
+        reimbursement_status:
+          transactionData.reimbursement_status ||
+          (transactionData.is_reimbursable || transactionData.is_corporate_expense
+            ? "pending"
+            : null),
       };
 
       // Check if invoice is closed (skip for imports that already handled this)

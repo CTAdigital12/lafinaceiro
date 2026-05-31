@@ -48,6 +48,7 @@ import { useCreditCards } from "@/hooks/useCreditCards";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useReimbursementPayment } from "@/hooks/useReimbursementPayment";
+import { SettleReimbursementModal } from "@/components/modals/SettleReimbursementModal";
 
 type ReimbursementStatus = "pending" | "requested" | "reimbursed";
 
@@ -87,6 +88,7 @@ export default function Reimbursements() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [reimbursementFilter, setReimbursementFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [settleTarget, setSettleTarget] = useState<ReimbursementTransaction | null>(null);
 
   const startDate = format(startOfMonth(new Date(selectedYear, selectedMonth - 1)), "yyyy-MM-dd");
   const endDate = format(endOfMonth(new Date(selectedYear, selectedMonth - 1)), "yyyy-MM-dd");
@@ -195,7 +197,14 @@ export default function Reimbursements() {
     if (newStatus === currentStatus) return;
 
     if (newStatus === "reimbursed") {
-      await markAsReimbursed.mutateAsync({ transactionId: transaction.id });
+      if (transaction.credit_card_id) {
+        // Despesa no cartão: baixa direto na fatura (espelho is_card_payment).
+        await markAsReimbursed.mutateAsync({ transactionId: transaction.id });
+      } else {
+        // Despesa fora do cartão (paga do bolso): o reembolso chega por PIX /
+        // transferência numa conta. Abrimos o modal para vincular/criar a receita.
+        setSettleTarget(transaction);
+      }
     } else if (currentStatus === "reimbursed") {
       await unmarkAsReimbursed.mutateAsync({
         transactionId: transaction.id,
@@ -651,6 +660,12 @@ export default function Reimbursements() {
           </>
         )}
       </div>
+
+      <SettleReimbursementModal
+        open={!!settleTarget}
+        onOpenChange={(open) => !open && setSettleTarget(null)}
+        transaction={settleTarget}
+      />
     </div>
   );
 }

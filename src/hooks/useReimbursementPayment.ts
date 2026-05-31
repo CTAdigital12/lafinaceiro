@@ -77,5 +77,48 @@ export function useReimbursementPayment() {
       }),
   });
 
-  return { markAsReimbursed, unmarkAsReimbursed };
+  /**
+   * Quita uma despesa reembolsável com recebimento EXTERNO (PIX / transferência
+   * numa conta), em vez de baixa na fatura do cartão. Dois caminhos:
+   *  - incomeId  : vincula uma receita já existente (o PIX lançado pelo usuário)
+   *  - accountId : cria a receita do reembolso nessa conta (usa `date`)
+   * A receita resultante é marcada como is_reimbursement (neutra nos KPIs).
+   */
+  const settleExternal = useMutation({
+    mutationFn: async ({
+      transactionId,
+      incomeId,
+      accountId,
+      date,
+    }: {
+      transactionId: string;
+      incomeId?: string;
+      accountId?: string;
+      date?: string;
+    }) => {
+      const { error } = await supabase.rpc("settle_reimbursement", {
+        p_transaction_id: transactionId,
+        p_income_id: incomeId ?? undefined,
+        p_account_id: accountId ?? undefined,
+        p_date: date ?? undefined,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["reimbursements"] });
+      qc.invalidateQueries({ queryKey: ["reimbursement-income-candidates"] });
+      qc.invalidateQueries({ queryKey: ["corporate-expenses"] });
+      toast({ title: "Reembolso recebido registrado" });
+    },
+    onError: (e: Error) =>
+      toast({
+        title: "Erro ao registrar reembolso recebido",
+        description: e.message,
+        variant: "destructive",
+      }),
+  });
+
+  return { markAsReimbursed, unmarkAsReimbursed, settleExternal };
 }

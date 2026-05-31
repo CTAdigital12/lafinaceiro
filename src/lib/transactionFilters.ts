@@ -3,6 +3,7 @@ type T = {
   is_corporate_expense?: boolean | null;
   is_refund?: boolean | null;
   is_reimbursable?: boolean | null;
+  is_reimbursement?: boolean | null;
   is_card_payment?: boolean | null;
   is_provisional?: boolean | null;
   status?: string | null;
@@ -37,6 +38,7 @@ export function isMonthlyIncome(t: T): boolean {
     !t.is_corporate_expense &&
     !t.is_refund &&
     !t.is_card_payment &&
+    !t.is_reimbursement &&
     !t.is_provisional &&
     t.status !== 'pending'
   );

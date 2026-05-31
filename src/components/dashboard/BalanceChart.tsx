@@ -50,7 +50,7 @@ export function BalanceChart() {
 
       const { data, error } = await supabase
         .from("transactions")
-        .select("amount, type, date, status, is_corporate_expense, is_refund, is_reimbursable, is_card_payment, is_provisional")
+        .select("amount, type, date, status, is_corporate_expense, is_refund, is_reimbursable, is_reimbursement, is_card_payment, is_provisional")
         .gte("date", startDate)
         .lte("date", endDate);
 
