@@ -100,6 +100,7 @@ export type Database = {
           created_at: string
           icon: string | null
           id: string
+          is_reimbursable: boolean
           name: string
           parent_id: string | null
           type: string
@@ -110,6 +111,7 @@ export type Database = {
           created_at?: string
           icon?: string | null
           id?: string
+          is_reimbursable?: boolean
           name: string
           parent_id?: string | null
           type: string
@@ -120,6 +122,7 @@ export type Database = {
           created_at?: string
           icon?: string | null
           id?: string
+          is_reimbursable?: boolean
           name?: string
           parent_id?: string | null
           type?: string
@@ -696,10 +699,12 @@ export type Database = {
           is_provisional: boolean
           is_refund: boolean
           is_reimbursable: boolean
+          is_reimbursement: boolean
           original_description: string | null
           project_id: string | null
           recurring_rule_id: string | null
           refunded_transaction_id: string | null
+          reimbursement_income_id: string | null
           reimbursement_payment_id: string | null
           reimbursement_status: string | null
           status: string
@@ -727,10 +732,12 @@ export type Database = {
           is_provisional?: boolean
           is_refund?: boolean
           is_reimbursable?: boolean
+          is_reimbursement?: boolean
           original_description?: string | null
           project_id?: string | null
           recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
+          reimbursement_income_id?: string | null
           reimbursement_payment_id?: string | null
           reimbursement_status?: string | null
           status?: string
@@ -758,10 +765,12 @@ export type Database = {
           is_provisional?: boolean
           is_refund?: boolean
           is_reimbursable?: boolean
+          is_reimbursement?: boolean
           original_description?: string | null
           project_id?: string | null
           recurring_rule_id?: string | null
           refunded_transaction_id?: string | null
+          reimbursement_income_id?: string | null
           reimbursement_payment_id?: string | null
           reimbursement_status?: string | null
           status?: string
@@ -833,6 +842,15 @@ export type Database = {
       }
       mark_reimbursed: {
         Args: { p_transaction_id: string }
+        Returns: string
+      }
+      settle_reimbursement: {
+        Args: {
+          p_account_id?: string
+          p_date?: string
+          p_income_id?: string
+          p_transaction_id: string
+        }
         Returns: string
       }
       unmark_reimbursed: {

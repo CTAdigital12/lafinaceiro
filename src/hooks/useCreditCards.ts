@@ -236,7 +236,7 @@ export function useCreditCards() {
           .eq("status", "completed")
           .eq("is_corporate_expense", true)
           .eq("is_refund", false)
-          .in("reimbursement_status", ["pending", "requested"])
+          .or("reimbursement_status.in.(pending,requested),reimbursement_status.is.null")
           .or(periodFilter);
 
         if (corpFetchError) throw corpFetchError;
@@ -263,7 +263,7 @@ export function useCreditCards() {
           .eq("is_reimbursable", true)
           .eq("is_corporate_expense", false)
           .eq("is_refund", false)
-          .in("reimbursement_status", ["pending", "requested"])
+          .or("reimbursement_status.in.(pending,requested),reimbursement_status.is.null")
           .or(periodFilter);
 
         if (reimbFetchError) throw reimbFetchError;

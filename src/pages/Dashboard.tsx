@@ -265,7 +265,7 @@ export default function Dashboard() {
   // Calculate income by category (exclude expense refunds - they are now deducted from expense categories)
   const incomeByCategory = incomeCategories.map((cat) => {
     const total = transactions
-      .filter((t) => t.type === "income" && t.category_id === cat.id && !t.is_refund)
+      .filter((t) => t.type === "income" && t.category_id === cat.id && !t.is_refund && !t.is_reimbursement)
       .reduce((sum, t) => sum + Number(t.amount), 0);
     return {
       name: cat.fullName || cat.name,

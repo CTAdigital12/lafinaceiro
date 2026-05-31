@@ -3,6 +3,8 @@ import { useCategories, Category } from "@/hooks/useCategories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Collapsible,
   CollapsibleContent,
@@ -22,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DeleteCategoryModal } from "@/components/modals/DeleteCategoryModal";
-import { Plus, ChevronRight, Pencil, Trash2, CornerDownRight, GripVertical, MoreVertical } from "lucide-react";
+import { Plus, ChevronRight, Pencil, Trash2, CornerDownRight, GripVertical, MoreVertical, ReceiptText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DndContext,
@@ -281,6 +283,7 @@ export default function Categories() {
   const [newIcon, setNewIcon] = useState("📦");
   const [newColor, setNewColor] = useState("#3B82F6");
   const [parentId, setParentId] = useState<string | null>(null);
+  const [isReimbursable, setIsReimbursable] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -358,6 +361,7 @@ export default function Categories() {
       color: newColor,
       type: "expense",
       parent_id: parentId,
+      is_reimbursable: isReimbursable,
     });
     
     resetForm();
@@ -372,6 +376,7 @@ export default function Categories() {
       name: newName.trim(),
       icon: newIcon,
       color: newColor,
+      is_reimbursable: isReimbursable,
     });
     
     resetForm();
@@ -387,6 +392,7 @@ export default function Categories() {
     setNewIcon("📦");
     setNewColor("#3B82F6");
     setParentId(null);
+    setIsReimbursable(false);
   };
 
   const openEditDialog = (category: Category) => {
@@ -394,6 +400,7 @@ export default function Categories() {
     setNewName(category.name);
     setNewIcon(category.icon || "📦");
     setNewColor(category.color || "#3B82F6");
+    setIsReimbursable(category.is_reimbursable || false);
   };
 
   const openAddSubcategory = (parentCategory: Category) => {
@@ -476,8 +483,26 @@ export default function Categories() {
                   ))}
                 </div>
               </div>
-              <Button 
-                onClick={handleAddCategory} 
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <ReceiptText className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <Label htmlFor="category-reimbursable" className="text-sm font-medium cursor-pointer">
+                      Categoria Reembolsável
+                    </Label>
+                    <p className="text-xs text-muted-foreground">Despesas nesta categoria entram como reembolsáveis</p>
+                  </div>
+                </div>
+                <Switch
+                  id="category-reimbursable"
+                  checked={isReimbursable}
+                  onCheckedChange={setIsReimbursable}
+                />
+              </div>
+              <Button
+                onClick={handleAddCategory}
                 className="w-full"
                 disabled={!newName.trim() || createCategory.isPending}
               >
@@ -540,8 +565,26 @@ export default function Categories() {
                 ))}
               </div>
             </div>
-            <Button 
-              onClick={handleUpdateCategory} 
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <ReceiptText className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <Label htmlFor="category-reimbursable-edit" className="text-sm font-medium cursor-pointer">
+                    Categoria Reembolsável
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Despesas nesta categoria entram como reembolsáveis</p>
+                </div>
+              </div>
+              <Switch
+                id="category-reimbursable-edit"
+                checked={isReimbursable}
+                onCheckedChange={setIsReimbursable}
+              />
+            </div>
+            <Button
+              onClick={handleUpdateCategory}
               className="w-full"
               disabled={!newName.trim() || updateCategory.isPending}
             >

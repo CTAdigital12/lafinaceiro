@@ -11,6 +11,7 @@ export interface Category {
   color: string | null;
   type: "income" | "expense";
   parent_id: string | null;
+  is_reimbursable: boolean;
   created_at: string;
   // Computed fields for hierarchy display
   parentName?: string | null;
@@ -105,7 +106,7 @@ export function useCategories() {
   });
 
   const createCategory = useMutation({
-    mutationFn: async (category: { name: string; icon: string; color: string; type: "income" | "expense"; parent_id?: string | null }) => {
+    mutationFn: async (category: { name: string; icon: string; color: string; type: "income" | "expense"; parent_id?: string | null; is_reimbursable?: boolean }) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
