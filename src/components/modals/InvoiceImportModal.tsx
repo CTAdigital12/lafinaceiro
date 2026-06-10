@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { useDate } from "@/contexts/DateContext";
-import { parseCSVInvoice, convertToImportedItems } from "@/lib/csvInvoiceParser";
+import { parseInvoiceRows, convertToImportedItems } from "@/lib/csvInvoiceParser";
+import { fileToRows } from "@/lib/fileToRows";
 
 interface InvoiceImportModalProps {
   open: boolean;
@@ -149,19 +150,19 @@ export function InvoiceImportModal({
     setFile(file);
   };
 
-  const processCSVFile = async (file: File): Promise<void> => {
-    const text = await file.text();
+  const processSpreadsheetFile = async (file: File): Promise<void> => {
     const month = parseInt(invoiceMonth);
     const year = parseInt(invoiceYear);
-    
-    const transactions = parseCSVInvoice(text, {
+
+    const rows = await fileToRows(file);
+    const transactions = parseInvoiceRows(rows, {
       invoiceMonth: month,
       invoiceYear: year,
       closingDay: closingDay,
     });
-    
+
     if (transactions.length === 0) {
-      throw new Error("Nenhuma transação encontrada no CSV. Verifique se o formato está correto.");
+      throw new Error("Nenhuma transação encontrada na planilha. Verifique se o formato está correto.");
     }
     
     const { items, post_closing_count } = convertToImportedItems(
@@ -201,15 +202,23 @@ export function InvoiceImportModal({
     setError(null);
 
     try {
-      // Check if it's a CSV file - process locally
-      const isCSV = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
-      
-      if (isCSV) {
-        await processCSVFile(file);
+      // CSV e planilhas Excel (XLS/XLSX) são lidos localmente, de forma
+      // determinística. Só PDF/imagens vão para a IA.
+      const name = file.name.toLowerCase();
+      const isSpreadsheet =
+        name.endsWith('.csv') ||
+        name.endsWith('.xls') ||
+        name.endsWith('.xlsx') ||
+        file.type === 'text/csv' ||
+        file.type === 'application/vnd.ms-excel' ||
+        file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+      if (isSpreadsheet) {
+        await processSpreadsheetFile(file);
         return;
       }
-      
-      // For PDF/Excel/Images - call edge function
+
+      // For PDF/Images - call edge function
       const formData = new FormData();
       formData.append('file', file);
       formData.append('credit_card_id', creditCardId);
@@ -440,7 +449,7 @@ export function InvoiceImportModal({
               {isProcessing && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Lendo fatura com IA...</span>
+                  <span>Processando fatura...</span>
                 </div>
               )}
             </div>
