@@ -31,6 +31,7 @@ import { InstallmentsDashboard } from "@/components/credit-cards/InstallmentsDas
 import { ReconciliationCard } from "@/components/credit-cards/ReconciliationCard";
 import { useDate } from "@/contexts/DateContext";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useInvoiceTransactions } from "@/hooks/useInvoiceTransactions";
 
 const statusConfig = {
   open: { label: "Fatura Aberta", variant: "default" as const, className: "bg-balance text-balance-foreground" },
@@ -41,19 +42,33 @@ const statusConfig = {
 interface CreditCardComponentProps {
   card: CreditCardType;
   pendingAmount: number;
+  month: number;
+  year: number;
   onEdit: (card: CreditCardType) => void;
   onDelete: () => void;
   onImportInvoice: (card: CreditCardType) => void;
   onPayInvoice: (card: CreditCardType) => void;
 }
 
-function CreditCardComponent({ card, pendingAmount, onEdit, onDelete, onImportInvoice, onPayInvoice }: CreditCardComponentProps) {
+function CreditCardComponent({ card, pendingAmount, month, year, onEdit, onDelete, onImportInvoice, onPayInvoice }: CreditCardComponentProps) {
   const fmt = useFormatCurrency();
+
+  // "Fatura Atual" e o status do badge vêm do CICLO do mês selecionado (não do
+  // saldo global do cartão). Quando o ciclo foi formalmente fechado usamos o
+  // closed_amount; senão a soma ao vivo das transações daquele mês.
+  const { transactionsTotal, closedAmount, invoiceStatus } = useInvoiceTransactions({
+    creditCardId: card.id,
+    month,
+    year,
+  });
+  const currentInvoice = closedAmount ?? transactionsTotal;
+
   const limit = Number(card.credit_limit);
+  // Limite usa o saldo global em aberto do cartão (todas as faturas não pagas).
   const totalUsed = Number(card.current_invoice) + pendingAmount;
   const availableLimit = limit - totalUsed;
   const usagePercent = limit > 0 ? (totalUsed / limit) * 100 : 0;
-  const status = statusConfig[card.status as keyof typeof statusConfig] || statusConfig.open;
+  const status = statusConfig[invoiceStatus as keyof typeof statusConfig] || statusConfig.open;
 
   return (
     <div className="space-y-4 animate-scale-in">
@@ -126,7 +141,7 @@ function CreditCardComponent({ card, pendingAmount, onEdit, onDelete, onImportIn
           <div>
             <p className="text-sm text-muted-foreground">Fatura Atual</p>
             <p className="text-xl font-bold text-foreground">
-              {fmt(Number(card.current_invoice))}
+              {fmt(currentInvoice)}
             </p>
           </div>
           <div className="text-right">
@@ -367,10 +382,12 @@ export default function CreditCards() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {creditCards.map((card) => (
-            <CreditCardComponent 
-              key={card.id} 
+            <CreditCardComponent
+              key={card.id}
               card={card}
               pendingAmount={pendingByCard[card.id] || 0}
+              month={reconciliationMonth}
+              year={reconciliationYear}
               onEdit={handleEdit}
               onDelete={() => setDeleteCardId(card.id)}
               onImportInvoice={handleImportInvoice}

@@ -49,7 +49,7 @@ import {
 import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
-import { useCreditCards } from "@/hooks/useCreditCards";
+import { useCreditCardInvoiceSync } from "@/hooks/useCreditCardInvoiceSync";
 import { useExistingInstallments, detectDuplicates } from "@/hooks/useExistingInstallments";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -99,7 +99,7 @@ export function InvoiceReviewModal({
   const { expenseCategories, createCategory } = useCategories();
   const { findCategoryForDescription, findCorporateForDescription, createRule } = useCategorizationRules();
   const { createTransaction } = useTransactions();
-  const { updateCreditCard } = useCreditCards();
+  const { syncInvoiceForCard } = useCreditCardInvoiceSync();
   const { toast } = useToast();
 
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
@@ -538,7 +538,7 @@ export function InvoiceReviewModal({
       for (let i = 0; i < allTransactions.length; i++) {
         const transaction = allTransactions[i];
         try {
-          await createTransaction.mutateAsync({ ...transaction, silent: true });
+          await createTransaction.mutateAsync({ ...transaction, silent: true, skipSync: true });
           successCount++;
         } catch (error) {
           console.error("Error creating transaction:", error);
@@ -566,17 +566,13 @@ export function InvoiceReviewModal({
         }
       }
 
-      // Calculate total of completed transactions (current invoice items)
-      const completedTotal = allTransactions
-        .filter(t => t.status === "completed")
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      // Update credit card current_invoice
-      if (creditCardId && completedTotal > 0) {
-        await updateCreditCard.mutateAsync({
-          id: creditCardId,
-          current_invoice: completedTotal,
-        });
+      // Recalcula a fatura do cartão UMA vez ao final (as criações em massa
+      // passam skipSync). É a fonte de verdade: soma todas as transações
+      // completed/não-provisórias do cartão e reabre o status para "open"
+      // quando há saldo. Roda sempre que há cartão — mesmo com 0 itens novos
+      // (reimportar o mesmo arquivo conserta valor/status divergentes).
+      if (creditCardId) {
+        await syncInvoiceForCard(creditCardId);
       }
 
       const corporateCount = itemsToImport.filter((item) => item.is_corporate).length;
