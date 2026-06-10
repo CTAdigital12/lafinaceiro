@@ -176,13 +176,23 @@ function parseCardLastDigits(value: string | undefined): string | undefined {
   return match[1];
 }
 
-// Detecta uma célula que parece um valor monetário brasileiro: termina em ",dd",
-// com prefixo opcional "R$" e sinal negativo. Distingue de datas (16/07/2025) e
-// de marcadores de parcela na descrição (11/12).
+// Detecta uma célula que parece um valor monetário. Aceita tanto o formato
+// brasileiro em texto ("R$ 1.234,56", "285,12") quanto o numérico que o Excel
+// devolve ("299.99", "93.9", "50"). Rejeita datas (16/07/2025) e marcadores de
+// parcela (11/12), que contêm "/".
 function looksLikeAmount(value: string): boolean {
-  const cleaned = value.replace(/["']/g, "").trim();
-  if (!cleaned) return false;
-  return /^-?\s*R?\$?\s*[\d.]*\d,\d{2}$/i.test(cleaned);
+  const cleaned = value
+    .replace(/["']/g, "")
+    .replace(/R\$/i, "")
+    .replace(/\s/g, "")
+    .trim();
+  if (!cleaned || !/\d/.test(cleaned)) return false;
+  if (cleaned.includes("/")) return false;
+  return (
+    /^-?\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(cleaned) || // BR com milhar: 1.234,56
+    /^-?\d+,\d{1,2}$/.test(cleaned) ||                  // BR decimal: 285,12
+    /^-?\d+(\.\d{1,2})?$/.test(cleaned)                 // numérico (Excel): 299.99 / 93.9 / 50
+  );
 }
 
 // Detecta o cabeçalho de uma seção de cartão e retorna os 4 dígitos.
@@ -237,6 +247,7 @@ function tryParseTransaction(
     .map(c => c.replace(/["']/g, "").trim())
     .filter(Boolean)
     .join(" ")
+    .replace(/\s+/g, " ")
     .trim();
   if (!description) return null;
 

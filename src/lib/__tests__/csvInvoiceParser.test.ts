@@ -33,6 +33,21 @@ describe("parseInvoiceRows — section-aware", () => {
     expect(result.map(t => t.card_last_digits)).toEqual(["5391", "0993", "4420"]);
   });
 
+  it("lê valores numéricos do Excel (ponto decimal, sem R$)", () => {
+    // Como o XLS chega: data/descrição como string, valor como número -> "299.99".
+    const rows = [
+      ["ANDRE - final 5391 (titular)"],
+      ["data", "lançamento", "", "valor"],
+      ["16/07/2025", "Amazon Br 11/12", "", "299.99"],
+      ["14/05/2026", "Apple.com/bill", "", "93.9"],
+      ["20/05/2026", "Google Ads", "", "-0.02"],
+    ];
+    const result = parseInvoiceRows(rows, opts);
+    expect(result).toHaveLength(3);
+    expect(result.map(t => t.amount)).toEqual([299.99, 93.9, -0.02]);
+    expect(result.every(t => t.card_last_digits === "5391")).toBe(true);
+  });
+
   it("lê o valor mesmo afastado à direita (colunas vazias no meio)", () => {
     const rows = [
       ["ANDRE - final 5391 (titular)"],
