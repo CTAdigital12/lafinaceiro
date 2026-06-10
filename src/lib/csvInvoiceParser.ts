@@ -160,58 +160,6 @@ function parseDate(value: string, options: CSVInvoiceParseOptions): string | nul
   return null;
 }
 
-// Detect column mapping from headers
-interface ColumnMap {
-  dateColumn: number;
-  descriptionColumn: number;
-  amountColumn: number;
-  cardColumn: number; // -1 quando ausente; opcional
-  hasHeader: boolean;
-}
-
-function detectColumns(header: string[]): ColumnMap {
-  const datePatterns = ["data", "date", "dt", "data compra", "data transação", "data transacao", "data da compra"];
-  const descPatterns = ["descrição", "descricao", "description", "desc", "estabelecimento", "lançamento", "lancamento", "merchant", "local", "nome"];
-  const amountPatterns = ["valor", "amount", "value", "quantia", "vlr", "total"];
-  // "cartao"/"cartão"/"final"/"número"/"numero"/"card" — cobre Itaú e outros bancos.
-  const cardPatterns = ["cartão", "cartao", "card", "final", "número", "numero"];
-
-  let dateColumn = -1;
-  let descriptionColumn = -1;
-  let amountColumn = -1;
-  let cardColumn = -1;
-  let hasHeader = false;
-
-  header.forEach((col, index) => {
-    const normalized = col.toLowerCase().replace(/["']/g, "").trim();
-
-    if (datePatterns.some(p => normalized.includes(p))) {
-      dateColumn = index;
-      hasHeader = true;
-    }
-    if (descPatterns.some(p => normalized.includes(p))) {
-      descriptionColumn = index;
-      hasHeader = true;
-    }
-    if (amountPatterns.some(p => normalized.includes(p))) {
-      amountColumn = index;
-      hasHeader = true;
-    }
-    if (cardPatterns.some(p => normalized.includes(p))) {
-      cardColumn = index;
-      hasHeader = true;
-    }
-  });
-
-  // Defaults if not detected: assume date, description, amount order.
-  // Card column fica opcional (-1) — se não tiver cabeçalho explícito, pula.
-  if (dateColumn === -1) dateColumn = 0;
-  if (descriptionColumn === -1) descriptionColumn = 1;
-  if (amountColumn === -1) amountColumn = 2;
-
-  return { dateColumn, descriptionColumn, amountColumn, cardColumn, hasHeader };
-}
-
 // Extrai os 4 dígitos do cartão da célula. Aceita formatos comuns:
 // "1234", "•••• 1234", "XXXX 1234", "Final 1234", "**** 1234".
 // Retorna undefined se nada plausível for encontrado.
@@ -228,54 +176,140 @@ function parseCardLastDigits(value: string | undefined): string | undefined {
   return match[1];
 }
 
-export function parseCSVInvoice(content: string, options: CSVInvoiceParseOptions): CSVInvoiceTransaction[] {
+// Detecta uma célula que parece um valor monetário brasileiro: termina em ",dd",
+// com prefixo opcional "R$" e sinal negativo. Distingue de datas (16/07/2025) e
+// de marcadores de parcela na descrição (11/12).
+function looksLikeAmount(value: string): boolean {
+  const cleaned = value.replace(/["']/g, "").trim();
+  if (!cleaned) return false;
+  return /^-?\s*R?\$?\s*[\d.]*\d,\d{2}$/i.test(cleaned);
+}
+
+// Detecta o cabeçalho de uma seção de cartão e retorna os 4 dígitos.
+// Ex.: "ANDRE EDUARDO SANTOS DOMIN - final 5391 (titular)" -> "5391".
+function detectSectionCardDigits(row: string[]): string | undefined {
+  const text = row.join(" ");
+  const match = text.match(/final\s+(\d{4})\b/i);
+  return match ? match[1] : undefined;
+}
+
+// Tenta interpretar uma linha como transação, detectando as colunas pelo
+// CONTEÚDO das células (robusto a posições variáveis e à coluna "valor"
+// afastada à direita). Retorna null se não for uma transação válida.
+function tryParseTransaction(
+  row: string[],
+  options: CSVInvoiceParseOptions
+): CSVInvoiceTransaction | null {
+  // Âncora de data: primeira célula (esq -> dir) que parseia como data.
+  let dateIdx = -1;
+  let parsedDate: string | null = null;
+  for (let i = 0; i < row.length; i++) {
+    const d = parseDate(row[i], options);
+    if (d) {
+      dateIdx = i;
+      parsedDate = d;
+      break;
+    }
+  }
+  if (dateIdx === -1 || !parsedDate) return null;
+
+  // Âncora de valor: primeira célula monetária varrendo da DIREITA p/ esquerda.
+  let amountIdx = -1;
+  let amount = 0;
+  for (let i = row.length - 1; i >= 0; i--) {
+    if (i === dateIdx) continue;
+    if (looksLikeAmount(row[i])) {
+      const a = parseAmount(row[i]);
+      if (a !== 0) {
+        amountIdx = i;
+        amount = a;
+        break;
+      }
+    }
+  }
+  if (amountIdx === -1) return null;
+
+  // Descrição: células entre as duas âncoras (ignora vazias usadas p/ espaçamento).
+  const lo = Math.min(dateIdx, amountIdx);
+  const hi = Math.max(dateIdx, amountIdx);
+  const description = row
+    .slice(lo + 1, hi)
+    .map(c => c.replace(/["']/g, "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (!description) return null;
+
+  // Cartão explícito em coluna própria (CSV "...;valor;cartão"): procura nas
+  // células após o valor. Tem precedência sobre o cartão herdado da seção.
+  let explicitCard: string | undefined;
+  for (let i = hi + 1; i < row.length; i++) {
+    const c = parseCardLastDigits(row[i]);
+    if (c) {
+      explicitCard = c;
+      break;
+    }
+  }
+
+  const installments = detectInstallments(description);
+
+  return {
+    date: parsedDate,
+    description,
+    amount,
+    ...(installments && {
+      installment_current: installments.current,
+      installment_total: installments.total,
+    }),
+    ...(explicitCard && { card_last_digits: explicitCard }),
+  };
+}
+
+// Parser section-aware baseado em linhas (matriz de células). É o núcleo
+// compartilhado entre o caminho CSV (parseCSVInvoice) e o caminho XLS/XLSX.
+export function parseInvoiceRows(
+  rows: string[][],
+  options: CSVInvoiceParseOptions
+): CSVInvoiceTransaction[] {
   const transactions: CSVInvoiceTransaction[] = [];
-  const lines = content.split(/[\r\n]+/).filter(line => line.trim());
-  
-  if (lines.length === 0) return transactions;
-  
-  // Auto-detect delimiter
-  const delimiter = detectDelimiter(lines[0]);
-  
-  // Parse first line to detect columns
-  const firstRow = parseCSVLine(lines[0], delimiter);
-  const columnMap = detectColumns(firstRow);
-  
-  const startRow = columnMap.hasHeader ? 1 : 0;
-  
-  for (let i = startRow; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i], delimiter);
-    
-    if (values.length < 3) continue;
-    
-    const dateVal = values[columnMap.dateColumn] || "";
-    const descVal = values[columnMap.descriptionColumn]?.replace(/["']/g, "").trim() || "";
-    const amountVal = values[columnMap.amountColumn] || "";
-    const cardVal = columnMap.cardColumn >= 0 ? values[columnMap.cardColumn] : undefined;
+  let currentCardDigits: string | undefined;
 
-    const parsedDate = parseDate(dateVal, options);
-    const amount = parseAmount(amountVal);
+  for (const row of rows) {
+    if (!row || row.join("").trim() === "") continue;
 
-    // Skip rows without valid date or amount
-    if (!parsedDate || amount === 0 || !descVal) continue;
+    // 1) Transação? (testado ANTES do cabeçalho para não confundir uma
+    // descrição que contenha "final 1234" com cabeçalho de seção).
+    const tx = tryParseTransaction(row, options);
+    if (tx) {
+      if (!tx.card_last_digits && currentCardDigits) {
+        tx.card_last_digits = currentCardDigits;
+      }
+      transactions.push(tx);
+      continue;
+    }
 
-    // Detect installments
-    const installments = detectInstallments(descVal);
-    const cardLastDigits = parseCardLastDigits(cardVal);
+    // 2) Cabeçalho de seção? Atualiza o cartão vigente.
+    const sectionCard = detectSectionCardDigits(row);
+    if (sectionCard) {
+      currentCardDigits = sectionCard;
+      continue;
+    }
 
-    transactions.push({
-      date: parsedDate,
-      description: descVal,
-      amount,
-      ...(installments && {
-        installment_current: installments.current,
-        installment_total: installments.total,
-      }),
-      ...(cardLastDigits && { card_last_digits: cardLastDigits }),
-    });
+    // 3) Sub-header repetido ("data"/"lançamento"/"valor"), total, rodapé,
+    // linha em branco -> ignorado.
   }
 
   return transactions;
+}
+
+export function parseCSVInvoice(content: string, options: CSVInvoiceParseOptions): CSVInvoiceTransaction[] {
+  const lines = content.split(/[\r\n]+/).filter(line => line.trim());
+  if (lines.length === 0) return [];
+
+  const delimiter = detectDelimiter(lines[0]);
+  const rows = lines.map(line => parseCSVLine(line, delimiter));
+
+  return parseInvoiceRows(rows, options);
 }
 
 // Convert parsed CSV data to ImportedItem format for InvoiceReviewModal
