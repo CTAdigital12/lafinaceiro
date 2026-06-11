@@ -20,6 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableHead } from "@/components/ui/sortable-header";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
 import {
   Select,
   SelectContent,
@@ -172,7 +174,7 @@ export function InvoiceDiscrepancyReport({
     };
   }, [transactions, cardId]);
 
-  const filteredExpenses = useMemo(() => {
+  const baseExpenses = useMemo(() => {
     return analysis.expenses.filter((t) => {
       if (typeFilter === "corporate" && !t.is_corporate_expense) return false;
       if (typeFilter === "personal" && t.is_corporate_expense) return false;
@@ -182,8 +184,18 @@ export function InvoiceDiscrepancyReport({
         return t.description.toLowerCase().includes(search.toLowerCase());
       }
       return true;
-    }).sort((a, b) => Number(b.amount) - Number(a.amount));
+    });
   }, [analysis.expenses, search, typeFilter]);
+
+  // Ordenação sobre a lista já filtrada (busca + tipo). Default mantém Valor desc.
+  const { sort, toggleSort, items: filteredExpenses } = useListSearchSort(baseExpenses, {
+    sortAccessors: {
+      date: (t) => new Date(t.date),
+      description: (t) => t.description,
+      amount: (t) => Number(t.amount),
+    },
+    initialSort: { field: "amount", direction: "desc" },
+  });
 
   const exportCSV = () => {
     const headers = ["Data", "Descrição", "Valor", "Tipo", "Origem"];
@@ -506,11 +518,11 @@ export function InvoiceDiscrepancyReport({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Descrição</TableHead>
+                      <SortableHead field="date" label="Data" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                      <SortableHead field="description" label="Descrição" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
                       <TableHead>Tipo</TableHead>
                       <TableHead>Origem</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
+                      <SortableHead field="amount" label="Valor" activeField={sort.field} direction={sort.direction} onSort={toggleSort} className="text-right" align="right" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
