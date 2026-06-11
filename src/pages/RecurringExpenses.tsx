@@ -16,10 +16,21 @@ import {
 import { useRecurringRules, RecurringRule } from "@/hooks/useRecurringRules";
 import { RecurringRuleModal } from "@/components/modals/RecurringRuleModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 
 export default function RecurringExpenses() {
   const formatCurrency = useFormatCurrency();
   const { rules, isLoading, createRule, updateRule, deleteRule, toggleRule } = useRecurringRules();
+  const { query, setQuery, sort, toggleSort, items: displayedRules } = useListSearchSort(rules, {
+    searchAccessors: [(r) => r.description, (r) => r.categories?.name],
+    sortAccessors: {
+      description: (r) => r.description,
+      day: (r) => Number(r.day_of_month),
+      amount: (r) => Number(r.estimated_amount),
+    },
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RecurringRule | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -83,7 +94,29 @@ export default function RecurringExpenses() {
         </div>
       ) : (
         <div className="space-y-3">
-          {rules.map((rule) => (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <ListSearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar recorrência..."
+              className="sm:max-w-xs"
+            />
+            <ListSortButtons
+              options={[
+                { key: "description", label: "Descrição" },
+                { key: "day", label: "Dia" },
+                { key: "amount", label: "Valor" },
+              ]}
+              activeField={sort.field}
+              direction={sort.direction}
+              onSort={toggleSort}
+              className="sm:ml-auto"
+            />
+          </div>
+          {displayedRules.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">Nenhuma recorrência corresponde à busca.</div>
+          ) : (
+            displayedRules.map((rule) => (
             <div
               key={rule.id}
               className={`flex items-center gap-4 p-4 rounded-lg border bg-card transition-opacity ${
@@ -145,7 +178,8 @@ export default function RecurringExpenses() {
                 </Button>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
       )}
 

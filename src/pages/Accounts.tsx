@@ -23,6 +23,9 @@ import { AccountModal } from "@/components/modals/AccountModal";
 import { AccountImportModal, AccountImportedItem } from "@/components/modals/AccountImportModal";
 import { AccountReviewModal } from "@/components/modals/AccountReviewModal";
 import { AccountReconciliationModal } from "@/components/accounts/AccountReconciliationModal";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCategories } from "@/hooks/useCategories";
@@ -128,6 +131,13 @@ export default function Accounts() {
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
   const [reconcilingAccount, setReconcilingAccount] = useState<Account | null>(null);
   const { accounts, isLoading, totalBalance, deleteAccount } = useAccounts();
+  const { query, setQuery, sort, toggleSort, items: displayedAccounts } = useListSearchSort(accounts, {
+    searchAccessors: [(a) => a.name],
+    sortAccessors: {
+      name: (a) => a.name,
+      balance: (a) => Number(a.computed_balance),
+    },
+  });
   const { categories } = useCategories();
   const { toast } = useToast();
 
@@ -261,18 +271,42 @@ export default function Accounts() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {accounts.map((account) => (
-            <AccountCard 
-              key={account.id} 
-              account={account} 
-              onEdit={handleEdit}
-              onDelete={(id) => setDeleteAccountId(id)}
-              onImport={handleImport}
-              onExport={handleExport}
-              onReconcile={(acc) => setReconcilingAccount(acc)}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <ListSearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar conta..."
+              className="sm:max-w-xs"
             />
-          ))}
+            <ListSortButtons
+              options={[
+                { key: "name", label: "Nome" },
+                { key: "balance", label: "Saldo" },
+              ]}
+              activeField={sort.field}
+              direction={sort.direction}
+              onSort={toggleSort}
+              className="sm:ml-auto"
+            />
+          </div>
+          {displayedAccounts.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">Nenhuma conta corresponde à busca.</div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {displayedAccounts.map((account) => (
+                <AccountCard
+                  key={account.id}
+                  account={account}
+                  onEdit={handleEdit}
+                  onDelete={(id) => setDeleteAccountId(id)}
+                  onImport={handleImport}
+                  onExport={handleExport}
+                  onReconcile={(acc) => setReconcilingAccount(acc)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
