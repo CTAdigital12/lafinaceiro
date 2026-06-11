@@ -41,6 +41,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SortableHead } from "@/components/ui/sortable-header";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -139,6 +141,19 @@ export default function CorporateExpenses() {
       return cardMatch && reimbursementMatch && searchMatch;
     });
   }, [transactions, selectedCardId, reimbursementFilter, searchQuery]);
+
+  // Ordenação (a busca continua na searchQuery acima); só ordena a lista filtrada.
+  const { sort, toggleSort, items: sortedTransactions } = useListSearchSort(filteredTransactions, {
+    sortAccessors: {
+      date: (t) => new Date(t.date),
+      due_date: (t) => (t.due_date ? new Date(t.due_date) : new Date(0)),
+      description: (t) => t.description,
+      category: (t) => t.categories?.name ?? "",
+      card: (t) => t.credit_cards?.name ?? "",
+      status: (t) => t.reimbursement_status ?? "",
+      amount: (t) => Number(t.amount),
+    },
+  });
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -521,17 +536,17 @@ export default function CorporateExpenses() {
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Cartão</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
+                    <SortableHead field="date" label="Data" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="due_date" label="Vencimento" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="description" label="Descrição" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="category" label="Categoria" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="card" label="Cartão" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="status" label="Status" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="amount" label="Valor" activeField={sort.field} direction={sort.direction} onSort={toggleSort} className="text-right" align="right" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((transaction) => (
+                  {sortedTransactions.map((transaction) => (
                     <TableRow 
                       key={transaction.id}
                       className={cn(selectedIds.has(transaction.id) && "bg-primary/5")}
