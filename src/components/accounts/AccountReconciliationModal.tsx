@@ -612,7 +612,9 @@ export function AccountReconciliationModal({
                 })}
               </div>
 
-              <ScrollArea className="h-[40vh] border rounded-lg">
+              {/* Scroll comum (não ScrollArea): o wrapper display:table do Radix
+                  impede o truncate da descrição e empurra o valor pra fora. */}
+              <div className="h-[40vh] overflow-y-auto overflow-x-hidden border rounded-lg">
                 <div className="space-y-1 p-1">
                   {(() => {
                     // Build list of ALL bank items (matched + discrepancies + unmatched)
@@ -681,7 +683,7 @@ export function AccountReconciliationModal({
                     ));
                   })()}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
           )}
         </DialogContent>
