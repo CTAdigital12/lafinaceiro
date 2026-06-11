@@ -12,6 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import type { Project } from "@/hooks/useProjects";
 
 export default function Projects() {
@@ -22,9 +25,17 @@ export default function Projects() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"active" | "all">("active");
 
-  const displayedProjects = statusFilter === "active"
-    ? activeProjects
-    : projects;
+  const baseProjects = statusFilter === "active" ? activeProjects : projects;
+
+  const { query, setQuery, sort, toggleSort, items: displayedProjects } = useListSearchSort(baseProjects, {
+    searchAccessors: [(p) => p.name, (p) => p.description],
+    sortAccessors: {
+      name: (p) => p.name,
+      target: (p) => Number(p.target_amount),
+      spent: (p) => Number(p.spent_amount),
+      created: (p) => new Date(p.created_at),
+    },
+  });
 
   const handleCreate = async (data: { name: string; description: string | null; target_amount: number; icon: string; color: string }) => {
     await createProject.mutateAsync(data);
@@ -79,16 +90,35 @@ export default function Projects() {
         </Button>
       </div>
 
-      <div className="flex justify-end">
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "active" | "all")}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Ativos</SelectItem>
-            <SelectItem value="all">Todos</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <ListSearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Buscar projeto..."
+          className="sm:max-w-xs"
+        />
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <ListSortButtons
+            options={[
+              { key: "name", label: "Nome" },
+              { key: "target", label: "Meta" },
+              { key: "spent", label: "Gasto" },
+              { key: "created", label: "Criado" },
+            ]}
+            activeField={sort.field}
+            direction={sort.direction}
+            onSort={toggleSort}
+          />
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "active" | "all")}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Ativos</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {isLoading ? (
@@ -97,7 +127,7 @@ export default function Projects() {
             <div key={i} className="h-32 rounded-lg bg-muted animate-pulse" />
           ))}
         </div>
-      ) : displayedProjects.length === 0 ? (
+      ) : baseProjects.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-4xl mb-2">📦</p>
           <p className="text-muted-foreground">
@@ -106,6 +136,10 @@ export default function Projects() {
           <Button variant="outline" className="mt-4" onClick={() => { setEditingProject(null); setModalOpen(true); }}>
             Criar primeiro projeto
           </Button>
+        </div>
+      ) : displayedProjects.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Nenhum projeto corresponde à busca.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

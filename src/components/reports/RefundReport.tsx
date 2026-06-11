@@ -16,6 +16,9 @@ import { Badge } from "@/components/ui/badge";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCategories } from "@/hooks/useCategories";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface RefundSummary {
@@ -146,6 +149,20 @@ export function RefundReport() {
 
   const formatCurrency = useFormatCurrency();
 
+  const { query, setQuery, sort, toggleSort, items: displayedRefundData } = useListSearchSort(refundData, {
+    searchAccessors: [
+      (s) => s.categoryName,
+      (s) => s.transactions.map((t) => t.description).join(" "),
+    ],
+    sortAccessors: {
+      category: (s) => s.categoryName,
+      expense: (s) => s.totalExpense,
+      refund: (s) => s.totalRefund,
+      net: (s) => s.netExpense,
+    },
+    initialSort: { field: "refund", direction: "desc" },
+  });
+
   if (isLoading) {
     return (
       <Card>
@@ -269,7 +286,30 @@ export function RefundReport() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {refundData.map(category => (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <ListSearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar categoria ou descrição..."
+              className="sm:max-w-xs"
+            />
+            <ListSortButtons
+              options={[
+                { key: "category", label: "Categoria" },
+                { key: "expense", label: "Despesa" },
+                { key: "refund", label: "Reembolso" },
+                { key: "net", label: "Líquido" },
+              ]}
+              activeField={sort.field}
+              direction={sort.direction}
+              onSort={toggleSort}
+              className="sm:ml-auto"
+            />
+          </div>
+          {displayedRefundData.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Nenhuma categoria corresponde à busca.</p>
+          ) : (
+            displayedRefundData.map(category => (
             <Card key={category.categoryId}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -375,7 +415,8 @@ export function RefundReport() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            ))
+          )}
         </div>
       )}
     </div>
