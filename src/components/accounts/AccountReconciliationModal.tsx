@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -43,6 +44,9 @@ import {
   EyeOff,
   RefreshCw,
   Link,
+  Search,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,6 +96,8 @@ export function AccountReconciliationModal({
   const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
   const [syncingBalance, setSyncingBalance] = useState(false);
   const [reconcileTarget, setReconcileTarget] = useState<SystemTransaction | null>(null);
+  const [reconcileSearch, setReconcileSearch] = useState("");
+  const [reconcileSort, setReconcileSort] = useState<{ key: "date" | "description" | "amount"; dir: "asc" | "desc" }>({ key: "date", dir: "asc" });
 
   const fetchSystemTransactions = useCallback(async (minDate: string, maxDate: string): Promise<SystemTransaction[]> => {
     const { data, error } = await supabase
@@ -410,6 +416,34 @@ export function AccountReconciliationModal({
                       </Button>
                     )}
                   </div>
+
+                  {/* Indicador de conciliação incompleta — avisa mesmo com saldo
+                      igual, porque "Sincronizar" zera a diferença ajustando o
+                      saldo inicial e pode mascarar lançamentos faltantes. */}
+                  {(tabCounts.missing + tabCounts.extra + tabCounts.discrepancies) > 0 && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        {balanceDiff !== null && Math.abs(balanceDiff) <= 0.01 ? (
+                          <p className="font-medium">
+                            O saldo bate com o banco, mas ainda há lançamentos não conciliados — o saldo pode estar "fechando" por ajuste do saldo inicial, e não porque tudo foi lançado.
+                          </p>
+                        ) : (
+                          <p className="font-medium">
+                            Há lançamentos não conciliados que ajudam a explicar a diferença de saldo.
+                          </p>
+                        )}
+                        <p>
+                          {[
+                            tabCounts.missing > 0 ? `${tabCounts.missing} só no banco` : null,
+                            tabCounts.extra > 0 ? `${tabCounts.extra} só no sistema` : null,
+                            tabCounts.discrepancies > 0 ? `${tabCounts.discrepancies} com valor divergente` : null,
+                          ].filter(Boolean).join(" · ")}
+                          . Revise essas abas antes de sincronizar o saldo.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -511,7 +545,15 @@ export function AccountReconciliationModal({
       </AlertDialog>
 
       {/* Reconcile provisional with bank item */}
-      <Dialog open={!!reconcileTarget} onOpenChange={(o) => !o && setReconcileTarget(null)}>
+      <Dialog
+        open={!!reconcileTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setReconcileTarget(null);
+            setReconcileSearch("");
+          }
+        }}
+      >
         <DialogContent className="max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -527,8 +569,51 @@ export function AccountReconciliationModal({
                 <p className="font-mono">{formatCurrency(Number(reconcileTarget.amount))} — {format(new Date(reconcileTarget.date + "T12:00:00"), "dd/MM/yyyy")}</p>
               </div>
               <p className="text-sm text-muted-foreground">Selecione o item do extrato bancário correspondente:</p>
+
+              {/* Busca */}
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={reconcileSearch}
+                  onChange={(e) => setReconcileSearch(e.target.value)}
+                  placeholder="Buscar por descrição, valor ou data..."
+                  className="pl-8 h-9"
+                />
+              </div>
+
+              {/* Ordenação tipo planilha (clique para inverter) */}
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-muted-foreground mr-1">Ordenar por:</span>
+                {([
+                  ["date", "Data"],
+                  ["description", "Descrição"],
+                  ["amount", "Valor"],
+                ] as const).map(([key, label]) => {
+                  const active = reconcileSort.key === key;
+                  return (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant={active ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 px-2 gap-1"
+                      onClick={() =>
+                        setReconcileSort((s) =>
+                          s.key === key
+                            ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+                            : { key, dir: "asc" }
+                        )
+                      }
+                    >
+                      {label}
+                      {active && (reconcileSort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+                    </Button>
+                  );
+                })}
+              </div>
+
               <ScrollArea className="h-[40vh] border rounded-lg">
-                <div className="space-y-1">
+                <div className="space-y-1 p-1">
                   {(() => {
                     // Build list of ALL bank items (matched + discrepancies + unmatched)
                     const allBankItems: Array<{ item: SpreadsheetItem; alreadyMatched: boolean }> = [];
@@ -546,15 +631,42 @@ export function AccountReconciliationModal({
                     if (allBankItems.length === 0) {
                       return <p className="text-center text-muted-foreground py-4">Nenhum item disponível no extrato.</p>;
                     }
-                    return allBankItems.map((entry, i) => (
+
+                    // Filtro de busca (descrição, valor ou data)
+                    const q = reconcileSearch.trim().toLowerCase();
+                    let list = allBankItems;
+                    if (q) {
+                      list = list.filter(({ item }) =>
+                        item.description.toLowerCase().includes(q) ||
+                        item.amount.toFixed(2).includes(q) ||
+                        formatCurrency(item.amount).toLowerCase().includes(q) ||
+                        format(new Date(item.date + "T12:00:00"), "dd/MM/yyyy").includes(q)
+                      );
+                    }
+
+                    // Ordenação
+                    const sign = reconcileSort.dir === "asc" ? 1 : -1;
+                    list = [...list].sort((a, b) => {
+                      let cmp = 0;
+                      if (reconcileSort.key === "date") cmp = a.item.date.localeCompare(b.item.date);
+                      else if (reconcileSort.key === "description") cmp = a.item.description.localeCompare(b.item.description);
+                      else cmp = a.item.amount - b.item.amount;
+                      return cmp * sign;
+                    });
+
+                    if (list.length === 0) {
+                      return <p className="text-center text-muted-foreground py-4">Nenhum item corresponde à busca.</p>;
+                    }
+
+                    return list.map((entry, i) => (
                       <button
                         key={i}
                         className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors text-sm"
                         disabled={processingIds.has(`reconcile-${reconcileTarget.id}`)}
                         onClick={() => handleReconcileProvisional(reconcileTarget, entry.item)}
                       >
-                        <div className="flex justify-between items-center">
-                          <div>
+                        <div className="flex justify-between items-center gap-3">
+                          <div className="min-w-0 flex-1">
                             <p className="font-medium truncate">
                               {entry.item.description}
                               {entry.alreadyMatched && (
@@ -563,7 +675,7 @@ export function AccountReconciliationModal({
                             </p>
                             <p className="text-muted-foreground">{format(new Date(entry.item.date + "T12:00:00"), "dd/MM/yyyy")}</p>
                           </div>
-                          <span className="font-mono font-semibold">{formatCurrency(entry.item.amount)}</span>
+                          <span className="font-mono font-semibold whitespace-nowrap flex-shrink-0">{formatCurrency(entry.item.amount)}</span>
                         </div>
                       </button>
                     ));
