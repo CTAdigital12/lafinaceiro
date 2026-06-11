@@ -9,6 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import type { InvoiceTransaction } from "@/hooks/useInvoiceTransactions";
 
 interface InvoiceItemsModalProps {
@@ -79,10 +82,21 @@ export function InvoiceItemsModal({
     onOpenChange(false);
   };
 
+  // Busca + ordenação globais; as 3 seções derivam da lista já processada.
+  const { query, setQuery, sort, toggleSort, items: filteredTx } = useListSearchSort(transactions, {
+    searchAccessors: [(t) => t.description, (t) => t.category_name],
+    sortAccessors: {
+      date: (t) => new Date(t.date),
+      description: (t) => t.description,
+      amount: (t) => Number(t.amount),
+    },
+    initialSort: { field: "date", direction: "desc" },
+  });
+
   // Separate transactions by type (3 categories now)
-  const corporateTransactions = transactions.filter((t) => t.is_corporate_expense);
-  const reimbursableTransactions = transactions.filter((t) => t.is_reimbursable && !t.is_corporate_expense);
-  const personalTransactions = transactions.filter((t) => !t.is_corporate_expense && !t.is_reimbursable);
+  const corporateTransactions = filteredTx.filter((t) => t.is_corporate_expense);
+  const reimbursableTransactions = filteredTx.filter((t) => t.is_reimbursable && !t.is_corporate_expense);
+  const personalTransactions = filteredTx.filter((t) => !t.is_corporate_expense && !t.is_reimbursable);
 
   return (
     <ResponsiveDialog
@@ -106,8 +120,27 @@ export function InvoiceItemsModal({
             </span>
           </div>
 
+          {transactions.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <ListSearchInput value={query} onChange={setQuery} placeholder="Buscar por descrição ou categoria..." />
+              <ListSortButtons
+                options={[
+                  { key: "date", label: "Data" },
+                  { key: "description", label: "Descrição" },
+                  { key: "amount", label: "Valor" },
+                ]}
+                activeField={sort.field}
+                direction={sort.direction}
+                onSort={toggleSort}
+              />
+            </div>
+          )}
+
           <ScrollArea className="h-[300px] pr-4">
             <div className="space-y-4">
+              {filteredTx.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-4">Nenhum item corresponde à busca.</p>
+              )}
               {/* Corporate Transactions */}
               {corporateTransactions.length > 0 && (
                 <div className="space-y-2">

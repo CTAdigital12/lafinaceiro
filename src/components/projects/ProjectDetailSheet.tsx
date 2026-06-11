@@ -8,6 +8,9 @@ import { format } from "date-fns";
 import { Link2, Pencil, Trash2, X, CheckCircle, Ban, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LinkTransactionsModal } from "./LinkTransactionsModal";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import type { Project } from "@/hooks/useProjects";
 
 interface LinkedTransaction {
@@ -47,6 +50,16 @@ export function ProjectDetailSheet({
   const [transactions, setTransactions] = useState<LinkedTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+
+  const { query, setQuery, sort, toggleSort, items: visibleTx } = useListSearchSort(transactions, {
+    searchAccessors: [(t) => t.description, (t) => t.categories?.name],
+    sortAccessors: {
+      date: (t) => new Date(t.date),
+      description: (t) => t.description,
+      amount: (t) => Number(t.amount),
+    },
+    initialSort: { field: "date", direction: "desc" },
+  });
 
   useEffect(() => {
     if (open && project) {
@@ -158,6 +171,21 @@ export function ProjectDetailSheet({
             <h4 className="text-sm font-medium mb-2">
               Transações Vinculadas ({transactions.length})
             </h4>
+            {!loading && transactions.length > 0 && (
+              <div className="flex flex-col gap-2 mb-2">
+                <ListSearchInput value={query} onChange={setQuery} placeholder="Buscar transação..." />
+                <ListSortButtons
+                  options={[
+                    { key: "date", label: "Data" },
+                    { key: "description", label: "Descrição" },
+                    { key: "amount", label: "Valor" },
+                  ]}
+                  activeField={sort.field}
+                  direction={sort.direction}
+                  onSort={toggleSort}
+                />
+              </div>
+            )}
             <ScrollArea className="h-[200px]" data-vaul-no-drag>
               {loading ? (
                 <div className="flex justify-center py-4">
@@ -167,9 +195,13 @@ export function ProjectDetailSheet({
                 <p className="text-sm text-muted-foreground text-center py-4">
                   Nenhuma transação vinculada
                 </p>
+              ) : visibleTx.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma transação corresponde à busca.
+                </p>
               ) : (
                 <div className="space-y-1" data-vaul-no-drag>
-                  {transactions.map((tx) => (
+                  {visibleTx.map((tx) => (
                     <div key={tx.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 group">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate">
