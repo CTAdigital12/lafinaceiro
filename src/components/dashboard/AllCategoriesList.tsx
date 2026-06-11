@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Currency } from "@/components/ui/currency";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 
 interface CategoryData {
   name: string;
@@ -18,12 +21,32 @@ interface AllCategoriesListProps {
 }
 
 export function AllCategoriesList({ data, total, onCategoryClick }: AllCategoriesListProps) {
-  const sortedData = [...data].sort((a, b) => b.value - a.value);
+  const { query, setQuery, sort, toggleSort, items: sortedData } = useListSearchSort(data, {
+    searchAccessors: [(c) => c.name],
+    sortAccessors: {
+      name: (c) => c.name,
+      value: (c) => c.value,
+    },
+    initialSort: { field: "value", direction: "desc" },
+  });
 
   return (
-    <ScrollArea className="h-[300px]">
-      <ul className="space-y-2 pr-4">
-        {sortedData.map((item, index) => {
+    <div className="space-y-2">
+      <ListSearchInput value={query} onChange={setQuery} placeholder="Buscar categoria..." />
+      <ListSortButtons
+        options={[
+          { key: "name", label: "Nome" },
+          { key: "value", label: "Valor" },
+        ]}
+        activeField={sort.field}
+        direction={sort.direction}
+        onSort={toggleSort}
+      />
+      <ScrollArea className="h-[300px]">
+        <ul className="space-y-2 pr-4">
+          {sortedData.length === 0 ? (
+            <li className="text-center text-muted-foreground text-sm py-4">Nenhuma categoria corresponde à busca.</li>
+          ) : sortedData.map((item, index) => {
           const percentage = ((item.value / total) * 100).toFixed(1);
           return (
             <li 
@@ -49,5 +72,6 @@ export function AllCategoriesList({ data, total, onCategoryClick }: AllCategorie
         })}
       </ul>
     </ScrollArea>
+    </div>
   );
 }

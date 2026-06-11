@@ -21,6 +21,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditCards";
 import { useCreditCardReconciliation } from "@/hooks/useCreditCardReconciliation";
 import { CreditCardModal } from "@/components/modals/CreditCardModal";
@@ -213,6 +216,15 @@ export default function CreditCards() {
   }, [globalMonth, globalYear]);
   
   const { creditCards, isLoading, totalInvoice, totalAvailable, totalPendingInstallments, pendingByCard, deleteCreditCard } = useCreditCards();
+  const { query: cardQuery, setQuery: setCardQuery, sort: cardSort, toggleSort: toggleCardSort, items: displayCards } = useListSearchSort(creditCards, {
+    searchAccessors: [(c) => c.name, (c) => c.brand, (c) => c.last_digits],
+    sortAccessors: {
+      name: (c) => c.name,
+      invoice: (c) => Number(c.current_invoice),
+      limit: (c) => Number(c.credit_limit),
+      due: (c) => Number(c.due_date),
+    },
+  });
   const { reconciliation, isLoading: isReconciliationLoading, transactions } = useCreditCardReconciliation({
     month: reconciliationMonth,
     year: reconciliationYear,
@@ -380,20 +392,46 @@ export default function CreditCards() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {creditCards.map((card) => (
-            <CreditCardComponent
-              key={card.id}
-              card={card}
-              pendingAmount={pendingByCard[card.id] || 0}
-              month={reconciliationMonth}
-              year={reconciliationYear}
-              onEdit={handleEdit}
-              onDelete={() => setDeleteCardId(card.id)}
-              onImportInvoice={handleImportInvoice}
-              onPayInvoice={handlePayInvoice}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <ListSearchInput
+              value={cardQuery}
+              onChange={setCardQuery}
+              placeholder="Buscar por nome, bandeira ou dígitos..."
+              className="sm:max-w-xs"
             />
-          ))}
+            <ListSortButtons
+              options={[
+                { key: "name", label: "Nome" },
+                { key: "invoice", label: "Fatura" },
+                { key: "limit", label: "Limite" },
+                { key: "due", label: "Vencimento" },
+              ]}
+              activeField={cardSort.field}
+              direction={cardSort.direction}
+              onSort={toggleCardSort}
+              className="sm:ml-auto"
+            />
+          </div>
+          {displayCards.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">Nenhum cartão corresponde à busca.</div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {displayCards.map((card) => (
+                <CreditCardComponent
+                  key={card.id}
+                  card={card}
+                  pendingAmount={pendingByCard[card.id] || 0}
+                  month={reconciliationMonth}
+                  year={reconciliationYear}
+                  onEdit={handleEdit}
+                  onDelete={() => setDeleteCardId(card.id)}
+                  onImportInvoice={handleImportInvoice}
+                  onPayInvoice={handlePayInvoice}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
