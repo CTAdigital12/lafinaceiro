@@ -111,6 +111,11 @@ export default function CorporateExpenses() {
           credit_cards (name, last_digits)
         `)
         .eq("is_corporate_expense", true)
+        // Exclui o espelho de reembolso (is_card_payment=true, type='income'):
+        // ele herda is_corporate_expense=true mas representa o reembolso recebido,
+        // não uma despesa. Sem isto, ele dobra o total e vira um "Pendente" fantasma
+        // (o espelho não define reimbursement_status, caindo no default 'pending').
+        .eq("is_card_payment", false)
         .or(
           `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate}),` +
           `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`
