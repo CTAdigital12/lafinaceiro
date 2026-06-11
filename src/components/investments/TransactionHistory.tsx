@@ -28,6 +28,9 @@ import {
 import { InvestmentTransaction, InvestmentAsset } from "@/hooks/useInvestments";
 import { cn } from "@/lib/utils";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { SortableHead } from "@/components/ui/sortable-header";
+import { ListSearchInput } from "@/components/ui/list-search-input";
 
 type InvestmentTx = InvestmentTransaction & { asset: InvestmentAsset };
 
@@ -125,6 +128,25 @@ export function TransactionHistory({ transactions, onEdit, onDelete }: Transacti
   const formatNumber = (value: number) =>
     new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(value);
 
+  const { query, setQuery, sort, toggleSort, items: processed } = useListSearchSort(transactions, {
+    searchAccessors: [
+      (t) => t.asset?.ticker,
+      (t) => t.asset?.name,
+      (t) => TYPE_LABELS[t.type],
+    ],
+    sortAccessors: {
+      date: (t) => new Date(t.date),
+      type: (t) => TYPE_LABELS[t.type] ?? t.type,
+      ticker: (t) => t.asset?.ticker ?? "",
+      quantity: (t) => Number(t.quantity),
+      price: (t) => Number(t.unit_price),
+      total: (t) => Number(t.total_value),
+      profit: (t) => Number(t.realized_profit ?? 0),
+    },
+    initialSort: { field: "date", direction: "desc" },
+  });
+  const visible = processed.slice(0, 50);
+
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur">
       <CardHeader>
@@ -137,23 +159,33 @@ export function TransactionHistory({ transactions, onEdit, onDelete }: Transacti
           </div>
         ) : (
           <>
+            <ListSearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar por ativo ou tipo..."
+              className="mb-3 max-w-xs"
+            />
+            {visible.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Nenhuma movimentação corresponde à busca.</p>
+            ) : (
+              <>
             {/* Desktop Table */}
             <div className="hidden md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Ativo</TableHead>
-                    <TableHead className="text-right">Qtd</TableHead>
-                    <TableHead className="text-right">Preço</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Lucro</TableHead>
+                    <SortableHead field="date" label="Data" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="type" label="Tipo" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="ticker" label="Ativo" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+                    <SortableHead field="quantity" label="Qtd" activeField={sort.field} direction={sort.direction} onSort={toggleSort} className="text-right" align="right" />
+                    <SortableHead field="price" label="Preço" activeField={sort.field} direction={sort.direction} onSort={toggleSort} className="text-right" align="right" />
+                    <SortableHead field="total" label="Total" activeField={sort.field} direction={sort.direction} onSort={toggleSort} className="text-right" align="right" />
+                    <SortableHead field="profit" label="Lucro" activeField={sort.field} direction={sort.direction} onSort={toggleSort} className="text-right" align="right" />
                     <TableHead className="w-[48px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.slice(0, 50).map((tx) => (
+                  {visible.map((tx) => (
                     <TableRow key={tx.id}>
                       <TableCell>
                         {format(new Date(tx.date), "dd/MM/yyyy", { locale: ptBR })}
@@ -190,7 +222,7 @@ export function TransactionHistory({ transactions, onEdit, onDelete }: Transacti
 
             {/* Mobile Cards */}
             <div className="md:hidden space-y-2">
-              {transactions.slice(0, 50).map((tx) => (
+              {visible.map((tx) => (
                 <div key={tx.id} className="border border-border/50 rounded-lg p-3 bg-background/50">
                   <div className="flex items-center justify-between mb-2 gap-2">
                     <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -231,6 +263,13 @@ export function TransactionHistory({ transactions, onEdit, onDelete }: Transacti
                 </div>
               ))}
             </div>
+              </>
+            )}
+            {processed.length > 50 && (
+              <p className="text-xs text-muted-foreground text-center mt-3">
+                Mostrando 50 de {processed.length} movimentações — use a busca para refinar.
+              </p>
+            )}
           </>
         )}
       </CardContent>
