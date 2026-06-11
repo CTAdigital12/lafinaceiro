@@ -27,11 +27,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useActivities, Activity } from "@/hooks/useActivities";
 import { cn } from "@/lib/utils";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 
 export default function Activities() {
   const formatCurrency = useFormatCurrency();
   const { activities, isLoading, undoActivity, isUndoing } = useActivities();
   const [activityToUndo, setActivityToUndo] = useState<Activity | null>(null);
+
+  const { query, setQuery, sort, toggleSort, items: filteredActivities } = useListSearchSort(activities, {
+    searchAccessors: [
+      (a) => a.source_name,
+      (a) => (a.source_type === "credit_card" ? "fatura cartão" : "extrato conta"),
+    ],
+    sortAccessors: {
+      imported_at: (a) => new Date(a.imported_at),
+      amount: (a) => Number(a.total_amount),
+      count: (a) => Number(a.transaction_count),
+      name: (a) => a.source_name ?? "",
+    },
+    initialSort: { field: "imported_at", direction: "desc" },
+  });
 
   const handleUndo = () => {
     if (activityToUndo) {
@@ -88,7 +105,30 @@ export default function Activities() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {activities.map((activity) => (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <ListSearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar por conta ou cartão..."
+              className="sm:max-w-xs"
+            />
+            <ListSortButtons
+              options={[
+                { key: "imported_at", label: "Data" },
+                { key: "amount", label: "Valor" },
+                { key: "count", label: "Nº transações" },
+                { key: "name", label: "Origem" },
+              ]}
+              activeField={sort.field}
+              direction={sort.direction}
+              onSort={toggleSort}
+              className="sm:ml-auto"
+            />
+          </div>
+          {filteredActivities.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Nenhuma importação corresponde à busca.</p>
+          ) : (
+            filteredActivities.map((activity) => (
             <Card 
               key={activity.imported_at} 
               className="overflow-hidden hover:border-primary/30 transition-colors"
@@ -162,7 +202,8 @@ export default function Activities() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            ))
+          )}
         </div>
       )}
 

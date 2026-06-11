@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Trash2, ChevronDown, ChevronRight, Pencil, AlertTriangle, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,9 @@ import {
 } from "@/components/ui/tooltip";
 import { InvestmentAsset, ASSET_TYPE_LABELS, getAssetPatrimony, getAssetAppliedValue, usesTotalBalancePricing } from "@/hooks/useInvestments";
 import { InvestmentInstitution } from "@/hooks/useInstitutions";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
+import { ListSearchInput } from "@/components/ui/list-search-input";
+import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import { cn } from "@/lib/utils";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -80,14 +83,83 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
 
   const assetTypes = ["renda_fixa", "renda_variavel", "fundos", "crypto", "saldo_corretora"];
 
+  // Busca + ordenação globais aplicadas dentro de cada grupo. Roda o hook sobre a
+  // lista achatada e re-agrupa por tipo preservando a ordem.
+  const allAssets = useMemo(
+    () => assetTypes.flatMap((t) => assetsByType[t] || []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assetsByType]
+  );
+  const typeById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of assetTypes) for (const a of assetsByType[t] || []) m.set(a.id, t);
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetsByType]);
+
+  const institutionName = (id: string | null | undefined) =>
+    institutions.find((i) => i.id === id)?.name ?? "";
+
+  const { query, setQuery, sort, toggleSort, items: processedAssets } = useListSearchSort(allAssets, {
+    searchAccessors: [
+      (a) => a.ticker,
+      (a) => a.name,
+      (a) => institutionName(a.institution_id),
+    ],
+    sortAccessors: {
+      name: (a) => a.ticker || a.name || "",
+      institution: (a) => institutionName(a.institution_id),
+      applied: (a) => getAssetAppliedValue(a),
+      balance: (a) => getAssetPatrimony(a),
+      yield: (a) => {
+        const saldo = getAssetPatrimony(a);
+        const custo = getAssetAppliedValue(a);
+        return custo > 0 ? (saldo - custo) / custo : 0;
+      },
+    },
+  });
+
+  const processedByType = useMemo(() => {
+    const g: Record<string, InvestmentAsset[]> = {};
+    for (const a of processedAssets) {
+      const t = typeById.get(a.id);
+      if (!t) continue;
+      (g[t] ||= []).push(a);
+    }
+    return g;
+  }, [processedAssets, typeById]);
+
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur">
       <CardHeader>
         <CardTitle className="text-lg">Meus Investimentos</CardTitle>
       </CardHeader>
       <CardContent>
+        {allAssets.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+            <ListSearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar por ativo ou instituição..."
+              className="sm:max-w-xs"
+            />
+            <ListSortButtons
+              options={[
+                { key: "name", label: "Ativo" },
+                { key: "institution", label: "Instituição" },
+                { key: "applied", label: "Aplicado" },
+                { key: "balance", label: "Saldo" },
+                { key: "yield", label: "Rent." },
+              ]}
+              activeField={sort.field}
+              direction={sort.direction}
+              onSort={toggleSort}
+              className="sm:ml-auto"
+            />
+          </div>
+        )}
         {assetTypes.map((type) => {
-          const assets = assetsByType[type] || [];
+          const assets = processedByType[type] || [];
           if (assets.length === 0) return null;
 
           const groupTotal = assets.reduce((sum, a) => sum + getAssetPatrimony(a), 0);
@@ -393,6 +465,10 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
             </Collapsible>
           );
         })}
+
+        {allAssets.length > 0 && processedAssets.length === 0 && (
+          <p className="text-center text-muted-foreground py-8">Nenhum ativo corresponde à busca.</p>
+        )}
 
         {Object.keys(assetsByType).length === 0 && (
           <div className="text-center py-8">
