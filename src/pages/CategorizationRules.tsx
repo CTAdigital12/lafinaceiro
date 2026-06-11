@@ -24,6 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableHead } from "@/components/ui/sortable-header";
+import { useListSearchSort } from "@/hooks/useListSearchSort";
 import {
   Dialog,
   DialogContent,
@@ -77,6 +79,14 @@ export default function CategorizationRules() {
       rule.keyword.toLowerCase().includes(searchQuery.toLowerCase()) ||
       categoryName.toLowerCase().includes(searchQuery.toLowerCase())
     );
+  });
+
+  // Ordenação sobre a lista já filtrada pela busca existente.
+  const { sort, toggleSort, items: sortedRules } = useListSearchSort(filteredRules, {
+    sortAccessors: {
+      keyword: (r) => r.keyword,
+      category: (r) => categories.find((c) => c.id === r.category_id)?.name ?? "",
+    },
   });
 
   const handleEditClick = (rule: CategorizationRule) => {
@@ -214,14 +224,14 @@ export default function CategorizationRules() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Palavra-chave</TableHead>
-              <TableHead>Categoria</TableHead>
+              <SortableHead field="keyword" label="Palavra-chave" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
+              <SortableHead field="category" label="Categoria" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
               <TableHead className="text-center">Corporativa</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredRules.length === 0 ? (
+            {sortedRules.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                   {searchQuery
@@ -230,7 +240,7 @@ export default function CategorizationRules() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredRules.map((rule) => {
+              sortedRules.map((rule) => {
                 const category = getCategoryInfo(rule.category_id);
                 return (
                   <TableRow key={rule.id}>
