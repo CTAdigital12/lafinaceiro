@@ -58,10 +58,8 @@ export function BalanceChart() {
 
       // Aggregate by month
       const result: MonthData[] = months.map((m) => {
-        const monthTransactions = data?.filter((t) => {
-          const tDate = new Date(t.date);
-          return tDate.getMonth() + 1 === m.month && tDate.getFullYear() === m.year;
-        }) || [];
+        const key = `${m.year}-${String(m.month).padStart(2, "0")}`; // "YYYY-MM"
+        const monthTransactions = data?.filter((t) => t.date.substring(0, 7) === key) || [];
 
         const receitas = monthTransactions
           .filter(isMonthlyIncome)
