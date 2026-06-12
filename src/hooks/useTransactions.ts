@@ -13,9 +13,9 @@ async function checkInvoiceClosed(creditCardId: string | null | undefined, dueDa
     return { isClosed: false };
   }
 
-  const dateObj = new Date(dueDate);
-  const month = dateObj.getMonth() + 1;
-  const year = dateObj.getFullYear();
+  const [yearStr, monthStr] = dueDate.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
 
   const { data, error } = await supabase
     .from("credit_card_invoices")

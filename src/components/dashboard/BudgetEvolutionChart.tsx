@@ -71,8 +71,7 @@ export function BudgetEvolutionChart({ currentYear }: BudgetEvolutionChartProps)
 
     // Sum transactions by month
     transactionsData?.forEach((transaction) => {
-      const date = new Date(transaction.date);
-      const monthIndex = date.getMonth();
+      const monthIndex = Number(transaction.date.substring(5, 7)) - 1; // "MM" → 0-11
       if (monthIndex >= 0 && monthIndex < 12) {
         monthlyData[monthIndex].gasto += Number(transaction.amount);
       }
