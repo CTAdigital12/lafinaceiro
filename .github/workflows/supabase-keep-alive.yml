@@ -1,0 +1,49 @@
+name: Supabase Keep-Alive
+
+# Evita que o projeto Supabase (free tier) pause por inatividade.
+# O free tier pausa após ~7 dias sem atividade; este job faz uma query
+# leve no banco todos os dias, mantendo o projeto ativo.
+#
+# Requer dois secrets no repositório (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL       -> ex.: https://vbrdtxgsiwhgeexihgwk.supabase.co  (VITE_SUPABASE_URL do .env)
+#   SUPABASE_ANON_KEY  -> a anon/publishable key (VITE_SUPABASE_PUBLISHABLE_KEY do .env)
+
+on:
+  schedule:
+    # Todo dia às 06:00 UTC (~03:00 BRT). Diário dá folga sobre a janela de 7 dias.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {} # permite rodar manualmente pra testar
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "::error::Secrets SUPABASE_URL e/ou SUPABASE_ANON_KEY não configurados."
+            exit 1
+          fi
+
+          # SELECT leve numa tabela real -> chega ao Postgres e conta como atividade.
+          # (RLS pode retornar 0 linhas; o que importa é a query ter executado.)
+          status=$(curl -sS -o /tmp/body.txt -w "%{http_code}" --max-time 30 \
+            "${SUPABASE_URL}/rest/v1/categories?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+
+          echo "HTTP ${status}"
+          echo "Resposta: $(cat /tmp/body.txt)"
+
+          # 2xx = projeto ativo e respondendo. Qualquer outra coisa falha o job
+          # (você recebe notificação do GitHub e sabe que algo está errado).
+          if [ "${status}" -ge 200 ] && [ "${status}" -lt 300 ]; then
+            echo "Keep-alive OK — projeto ativo."
+          else
+            echo "::error::Supabase respondeu HTTP ${status} (esperado 2xx). Projeto pode estar pausado/indisponível."
+            exit 1
+          fi
