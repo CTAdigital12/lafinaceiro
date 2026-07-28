@@ -28,7 +28,9 @@ import {
   buildInstallmentGroups,
   buildInstallmentsOverview,
   buildMonthlyInstallments,
+  earliestInstallmentMonth,
   monthLabel,
+  usableHistoryWindows,
   type InstallmentGroupSummary,
 } from "@/lib/installmentsReport";
 import { cn } from "@/lib/utils";
@@ -43,7 +45,10 @@ import { cn } from "@/lib/utils";
 const COLOR_REALIZADO = "hsl(var(--chart-1))";
 const COLOR_PREVISTO = "hsl(45 93% 36%)";
 
-type HistoryWindow = "6" | "12" | "24";
+/** Janelas de histórico oferecidas, em meses. Crescente — `usableHistoryWindows`
+ *  depende dessa ordem para achar a menor que já cobre todo o histórico. */
+const HISTORY_OPTIONS = [6, 12, 24] as const;
+
 type GroupSortKey = "remaining" | "installment" | "next" | "description";
 
 function KpiCard({
@@ -138,15 +143,21 @@ export function InstallmentsTab() {
   const formatCurrency = useFormatCurrency();
   const { isHidden } = usePrivacyMode();
   const { rows, isLoading } = useInstallmentsReport();
-  const [historyWindow, setHistoryWindow] = useState<HistoryWindow>("6");
+  const [historyWindow, setHistoryWindow] = useState<number>(HISTORY_OPTIONS[0]);
   const [showOnlyActive, setShowOnlyActive] = useState(true);
 
   const currentMonth = format(new Date(), "yyyy-MM");
 
+  const historyOptions = useMemo(
+    () => usableHistoryWindows(HISTORY_OPTIONS, rows, currentMonth),
+    [rows, currentMonth]
+  );
+  const earliestMonth = useMemo(() => earliestInstallmentMonth(rows), [rows]);
+
   const { points, groups, overview } = useMemo(() => {
     const monthly = buildMonthlyInstallments(rows, {
       currentMonth,
-      monthsBack: Number(historyWindow),
+      monthsBack: historyWindow,
     });
     const grouped = buildInstallmentGroups(rows, { currentMonth });
     return {
@@ -279,26 +290,32 @@ export function InstallmentsTab() {
               <h3 className="text-sm font-semibold text-foreground">
                 Parcelamento mês a mês
               </h3>
-              <p className="text-xs text-muted-foreground">
-                Histórico e previsão até a última parcela conhecida
+              <p className="text-xs text-muted-foreground capitalize">
+                {points[0].label} → {points[points.length - 1].label}
               </p>
             </div>
             <ToggleGroup
               type="single"
               size="sm"
-              value={historyWindow}
-              onValueChange={(v) => v && setHistoryWindow(v as HistoryWindow)}
+              value={String(historyWindow)}
+              onValueChange={(v) => v && setHistoryWindow(Number(v))}
               className="justify-start"
             >
-              <ToggleGroupItem value="6" aria-label="6 meses de histórico">
-                6m
-              </ToggleGroupItem>
-              <ToggleGroupItem value="12" aria-label="12 meses de histórico">
-                12m
-              </ToggleGroupItem>
-              <ToggleGroupItem value="24" aria-label="24 meses de histórico">
-                24m
-              </ToggleGroupItem>
+              {historyOptions.map(({ months, enabled }) => (
+                <ToggleGroupItem
+                  key={months}
+                  value={String(months)}
+                  disabled={!enabled}
+                  aria-label={`${months} meses de histórico`}
+                  title={
+                    enabled
+                      ? undefined
+                      : `Sem parcelas antes de ${earliestMonth ? monthLabel(earliestMonth) : "então"}`
+                  }
+                >
+                  {months}m
+                </ToggleGroupItem>
+              ))}
             </ToggleGroup>
           </div>
 

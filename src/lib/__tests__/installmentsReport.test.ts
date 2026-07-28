@@ -4,9 +4,12 @@ import {
   buildInstallmentGroups,
   buildInstallmentsOverview,
   buildMonthlyInstallments,
+  earliestInstallmentMonth,
   installmentCompetenceMonth,
   isInstallmentRow,
+  monthsBetween,
   stripInstallmentSuffix,
+  usableHistoryWindows,
   type InstallmentRow,
 } from "@/lib/installmentsReport";
 
@@ -155,6 +158,53 @@ describe("buildMonthlyInstallments", () => {
         monthsBack: 6,
       })
     ).toEqual([]);
+  });
+});
+
+describe("earliestInstallmentMonth", () => {
+  it("acha o primeiro mês com parcela e ignora quem não é parcelado", () => {
+    const rows = [
+      row({ id: "a", date: "2026-07-10", due_date: "2026-07-10" }),
+      row({ id: "b", date: "2026-02-10", due_date: "2026-02-10" }),
+      row({ id: "avista", total_installments: 1, date: "2024-01-10", due_date: "2024-01-10" }),
+    ];
+    expect(earliestInstallmentMonth(rows)).toBe("2026-02");
+    expect(earliestInstallmentMonth([])).toBeNull();
+  });
+});
+
+describe("monthsBetween", () => {
+  it("conta meses inteiros", () => {
+    expect(monthsBetween("2026-01", "2026-07")).toBe(6);
+    expect(monthsBetween("2026-07", "2026-07")).toBe(0);
+  });
+});
+
+describe("usableHistoryWindows", () => {
+  const options = [6, 12, 24] as const;
+
+  it("desabilita a janela que não acrescenta mês nenhum", () => {
+    // Histórico começa em abr/26: só 3 meses antes do mês atual.
+    const rows = [row({ id: "a", date: "2026-04-10", due_date: "2026-04-10" })];
+    expect(usableHistoryWindows(options, rows, CURRENT)).toEqual([
+      { months: 6, enabled: true }, // menor janela que cobre tudo
+      { months: 12, enabled: false },
+      { months: 24, enabled: false },
+    ]);
+  });
+
+  it("libera as janelas cobertas pelo histórico", () => {
+    // Histórico de 14 meses: 6m mostra parte, 12m mostra mais, 24m cobre tudo.
+    const rows = [row({ id: "a", date: "2025-05-10", due_date: "2025-05-10" })];
+    expect(usableHistoryWindows(options, rows, CURRENT)).toEqual([
+      { months: 6, enabled: true },
+      { months: 12, enabled: true },
+      { months: 24, enabled: true },
+    ]);
+  });
+
+  it("não desabilita nada quando não há parcelamento", () => {
+    expect(usableHistoryWindows(options, [], CURRENT).every((o) => o.enabled)).toBe(true);
   });
 });
 
