@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
@@ -24,7 +25,7 @@ export function EditInstallmentsModal({
   onSave,
 }: EditInstallmentsModalProps) {
   const [description, setDescription] = useState(baseDescription);
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState<number | undefined>(undefined);
   const [categoryId, setCategoryId] = useState("");
   
   const [updateDescription, setUpdateDescription] = useState(false);
@@ -37,7 +38,7 @@ export function EditInstallmentsModal({
   useEffect(() => {
     if (open && installments.length > 0) {
       setDescription(baseDescription);
-      setAmount(String(installments[0].amount));
+      setAmount(Number(installments[0].amount));
       setCategoryId(installments[0].category_id || "");
       setUpdateDescription(false);
       setUpdateAmount(false);
@@ -57,7 +58,7 @@ export function EditInstallmentsModal({
       const data: { description?: string; amount?: number; category_id?: string } = {};
       
       if (updateDescription) data.description = description;
-      if (updateAmount) data.amount = parseFloat(amount);
+      if (updateAmount) data.amount = amount ?? 0;
       if (updateCategory) data.category_id = categoryId;
       
       await onSave(data);
@@ -112,13 +113,9 @@ export function EditInstallmentsModal({
             </Label>
           </div>
           {updateAmount && (
-            <Input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
+            <CurrencyInput
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onValueChange={setAmount}
               placeholder="Novo valor por parcela"
             />
           )}

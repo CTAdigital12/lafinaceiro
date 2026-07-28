@@ -89,6 +89,45 @@ describe("CurrencyInput", () => {
     expect(lastValue ?? 0).not.toBeLessThan(0);
   });
 
+  it("accepts negative values when allowNegative is set (saldo devedor)", () => {
+    const onValueChange = vi.fn();
+    render(
+      <CurrencyInput value={undefined} onValueChange={onValueChange} allowNegative />,
+    );
+    const input = screen.getByPlaceholderText("R$ 0,00") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "-1.234,56" } });
+
+    expect(lastEmittedValue(onValueChange)).toBe(-1234.56);
+  });
+
+  it("keeps extra decimals when decimalScale is raised (quantidade de cotas)", () => {
+    const onValueChange = vi.fn();
+    render(
+      <CurrencyInput
+        value={undefined}
+        onValueChange={onValueChange}
+        withPrefix={false}
+        decimalScale={8}
+      />,
+    );
+    const input = screen.getByPlaceholderText("0,00") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "0,00000001" } });
+
+    expect(lastEmittedValue(onValueChange)).toBe(0.00000001);
+  });
+
+  it("truncates past 2 decimals by default", () => {
+    const onValueChange = vi.fn();
+    render(<CurrencyInput value={undefined} onValueChange={onValueChange} />);
+    const input = screen.getByPlaceholderText("R$ 0,00") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "10,999" } });
+
+    expect(lastEmittedValue(onValueChange)).toBe(10.99);
+  });
+
   it("respects fixedDecimalScale by padding to 2 decimals", () => {
     render(
       <CurrencyInput

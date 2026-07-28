@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -421,14 +422,13 @@ export function AssetModal({
                               <FormItem>
                                 <FormLabel>Valor Aplicado (R$)</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="0.01"
-                                    placeholder="10000.00"
-                                    {...field}
-                                    value={field.value || ""}
-                                    onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                                  <CurrencyInput
+                                    name={field.name}
+                                    ref={field.ref}
+                                    onBlur={field.onBlur}
+                                    value={field.value}
+                                    onValueChange={field.onChange}
+                                    placeholder="R$ 10.000,00"
                                   />
                                 </FormControl>
                                 <p className="text-xs text-muted-foreground">
@@ -446,14 +446,13 @@ export function AssetModal({
                               <FormItem>
                                 <FormLabel>Saldo Atual Bruto (R$)</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="0.01"
-                                    placeholder="11234.56"
-                                    {...field}
-                                    value={field.value || ""}
-                                    onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                                  <CurrencyInput
+                                    name={field.name}
+                                    ref={field.ref}
+                                    onBlur={field.onBlur}
+                                    value={field.value}
+                                    onValueChange={field.onChange}
+                                    placeholder="R$ 11.234,56"
                                   />
                                 </FormControl>
                                 <p className="text-xs text-muted-foreground">
@@ -502,13 +501,12 @@ export function AssetModal({
                           <FormItem>
                             <FormLabel>Cotação Atual</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.01"
-                                placeholder="0.00"
-                                {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              <CurrencyInput
+                                name={field.name}
+                                ref={field.ref}
+                                onBlur={field.onBlur}
+                                value={field.value}
+                                onValueChange={field.onChange}
                               />
                             </FormControl>
                             <FormMessage />
@@ -601,14 +599,12 @@ export function AssetModal({
                                 <FormItem>
                                   <FormLabel>Valor Total Aplicado (R$)</FormLabel>
                                   <FormControl>
-                                    <Input
-                                      type="number"
-                                      inputMode="decimal"
-                                      step="0.01"
-                                      placeholder="0.00"
-                                      {...field}
-                                      value={field.value || ""}
-                                      onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                                    <CurrencyInput
+                                      name={field.name}
+                                      ref={field.ref}
+                                      onBlur={field.onBlur}
+                                      value={field.value}
+                                      onValueChange={field.onChange}
                                     />
                                   </FormControl>
                                   <FormMessage />
@@ -623,14 +619,15 @@ export function AssetModal({
                                 <FormItem>
                                   <FormLabel>Quantidade de Cotas/Ações</FormLabel>
                                   <FormControl>
-                                    <Input
-                                      type="number"
-                                      inputMode="decimal"
-                                      step="0.000001"
+                                    <CurrencyInput
+                                      name={field.name}
+                                      ref={field.ref}
+                                      onBlur={field.onBlur}
+                                      value={field.value}
+                                      onValueChange={field.onChange}
+                                      withPrefix={false}
+                                      decimalScale={8}
                                       placeholder="0"
-                                      {...field}
-                                      value={field.value || ""}
-                                      onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
                                     />
                                   </FormControl>
                                   <FormMessage />

@@ -18,7 +18,7 @@ import {
 import { logError } from "@/lib/errorHandler";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -47,6 +47,7 @@ import { useCreditCards, CreditCard as CreditCardType } from "@/hooks/useCreditC
 import { useInvoiceTransactions } from "@/hooks/useInvoiceTransactions";
 import { useBankPaymentCandidates } from "@/hooks/useBankPaymentCandidates";
 import { cn } from "@/lib/utils";
+import { round2 } from "@/lib/splitTransaction";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { InvoiceItemsModal } from "./InvoiceItemsModal";
 
@@ -94,9 +95,9 @@ export function PayInvoiceModal({
   // State
   const [date, setDate] = useState<Date>(new Date());
   const [includeCorporate, setIncludeCorporate] = useState(true);
-  const [corporateAmount, setCorporateAmount] = useState("0");
+  const [corporateAmount, setCorporateAmount] = useState<number | undefined>(0);
   const [includePersonal, setIncludePersonal] = useState(true);
-  const [personalAmount, setPersonalAmount] = useState("0");
+  const [personalAmount, setPersonalAmount] = useState<number | undefined>(0);
   const [personalPaymentType, setPersonalPaymentType] = useState<"bank" | "external">("bank");
   const [accountId, setAccountId] = useState("");
   const [linkToTransaction, setLinkToTransaction] = useState(false);
@@ -109,7 +110,7 @@ export function PayInvoiceModal({
   
   // Residual balance state
   const [includeResidual, setIncludeResidual] = useState(false);
-  const [residualAmount, setResidualAmount] = useState("0");
+  const [residualAmount, setResidualAmount] = useState<number | undefined>(0);
   const [residualPaymentType, setResidualPaymentType] = useState<"bank" | "external">("bank");
   const [residualAccountId, setResidualAccountId] = useState("");
   const [residualLinkToTransaction, setResidualLinkToTransaction] = useState(false);
@@ -139,7 +140,7 @@ export function PayInvoiceModal({
   // No more "partially paid" logic based on global current_invoice
   const shouldHideTransactionSections = false;
   
-  const myPaymentAmount = parseFloat(personalAmount) || myTotalToPay;
+  const myPaymentAmount = personalAmount || myTotalToPay;
   const { candidates: bankCandidates, isLoading: isLoadingCandidates } = useBankPaymentCandidates({
     targetAmount: myPaymentAmount,
     dueDate,
@@ -147,7 +148,7 @@ export function PayInvoiceModal({
   });
 
   // Fetch candidates for residual balance linking
-  const residualSearchAmount = parseFloat(residualAmount) || calculatedResidual;
+  const residualSearchAmount = residualAmount || calculatedResidual;
   const { candidates: residualCandidates, isLoading: isLoadingResidualCandidates } = useBankPaymentCandidates({
     targetAmount: residualSearchAmount,
     dueDate,
@@ -157,8 +158,8 @@ export function PayInvoiceModal({
   // Reset form when modal opens
   useEffect(() => {
     if (open && creditCard) {
-      setCorporateAmount(corporateTotal.toFixed(2));
-      setPersonalAmount(myTotalToPay.toFixed(2)); // Use myTotalToPay (reimbursable + personal)
+      setCorporateAmount(round2(corporateTotal));
+      setPersonalAmount(round2(myTotalToPay)); // Use myTotalToPay (reimbursable + personal)
       setIncludeCorporate(corporateTotal > 0);
       setIncludePersonal(myTotalToPay > 0);
       setAccountId("");
@@ -174,7 +175,7 @@ export function PayInvoiceModal({
         ? Math.max(0, closedAmount - (corporateTotal + myTotalToPay))
         : 0;
       
-      setResidualAmount(residual.toFixed(2));
+      setResidualAmount(round2(residual));
       setIncludeResidual(false);
       setResidualPaymentType("bank");
       setResidualAccountId("");
@@ -186,9 +187,9 @@ export function PayInvoiceModal({
   // Calculate payment summary
   const totalToPay = useMemo(() => {
     let total = 0;
-    if (includeCorporate) total += parseFloat(corporateAmount) || 0;
-    if (includePersonal) total += parseFloat(personalAmount) || 0;
-    if (includeResidual) total += parseFloat(residualAmount) || 0;
+    if (includeCorporate) total += corporateAmount ?? 0;
+    if (includePersonal) total += personalAmount ?? 0;
+    if (includeResidual) total += residualAmount ?? 0;
     return total;
   }, [includeCorporate, corporateAmount, includePersonal, personalAmount, includeResidual, residualAmount]);
 
@@ -211,14 +212,14 @@ export function PayInvoiceModal({
         creditCardName: creditCard.name,
         month: invoiceMonth,
         year: invoiceYear,
-        corporateAmount: parseFloat(corporateAmount) || 0,
+        corporateAmount: corporateAmount ?? 0,
         includeCorporate,
-        personalAmount: parseFloat(personalAmount) || 0,
+        personalAmount: personalAmount ?? 0,
         includePersonal,
         personalPaymentType,
         accountId: personalPaymentType === "bank" && !linkToTransaction ? accountId : null,
         linkToTransactionId: linkToTransaction ? linkedTransactionId : null,
-        residualAmount: parseFloat(residualAmount) || 0,
+        residualAmount: residualAmount ?? 0,
         includeResidual,
         residualPaymentType,
         residualAccountId: residualPaymentType === "bank" && !residualLinkToTransaction ? residualAccountId : null,
@@ -267,8 +268,8 @@ export function PayInvoiceModal({
     // My part = reimbursable + personal
     const myPart = newReimbursable + newPersonal;
 
-    setCorporateAmount(newCorporate.toFixed(2));
-    setPersonalAmount(myPart.toFixed(2));
+    setCorporateAmount(round2(newCorporate));
+    setPersonalAmount(round2(myPart));
     setIncludeCorporate(newCorporate > 0);
     setIncludePersonal(myPart > 0);
   };
@@ -431,21 +432,12 @@ export function PayInvoiceModal({
                         <Label htmlFor="corporateAmount" className="text-xs">
                           Valor a baixar
                         </Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                            R$
-                          </span>
-                          <Input
-                            id="corporateAmount"
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            min="0"
-                            value={corporateAmount}
-                            onChange={(e) => setCorporateAmount(e.target.value)}
-                            className="pl-10 h-9"
-                          />
-                        </div>
+                        <CurrencyInput
+                          id="corporateAmount"
+                          value={corporateAmount}
+                          onValueChange={setCorporateAmount}
+                          className="h-9"
+                        />
                       </div>
                     )}
                   </CollapsibleContent>
@@ -495,20 +487,11 @@ export function PayInvoiceModal({
                     <div className="space-y-4 pl-6">
                       <div className="space-y-2">
                         <Label className="text-xs">Valor a pagar</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                            R$
-                          </span>
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            min="0"
-                            value={personalAmount}
-                            onChange={(e) => setPersonalAmount(e.target.value)}
-                            className="pl-10 h-9"
-                          />
-                        </div>
+                        <CurrencyInput
+                          value={personalAmount}
+                          onValueChange={setPersonalAmount}
+                          className="h-9"
+                        />
                       </div>
 
                       <div className="space-y-3">
@@ -660,20 +643,11 @@ export function PayInvoiceModal({
                   <div className="space-y-4 pl-6">
                     <div className="space-y-2">
                       <Label className="text-xs">Valor a pagar</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                          R$
-                        </span>
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.01"
-                          min="0"
-                          value={residualAmount}
-                          onChange={(e) => setResidualAmount(e.target.value)}
-                          className="pl-10 h-9"
-                        />
-                      </div>
+                      <CurrencyInput
+                        value={residualAmount}
+                        onValueChange={setResidualAmount}
+                        className="h-9"
+                      />
                     </div>
 
                     <div className="space-y-3">
@@ -797,14 +771,14 @@ export function PayInvoiceModal({
               </h3>
 
               <div className="space-y-2 text-sm">
-                {includeCorporate && parseFloat(corporateAmount) > 0 && (
+                {includeCorporate && (corporateAmount ?? 0) > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Baixa corporativa</span>
-                    <span className="font-medium">{formatCurrency(parseFloat(corporateAmount))}</span>
+                    <span className="font-medium">{formatCurrency(corporateAmount ?? 0)}</span>
                   </div>
                 )}
                 
-                {includePersonal && parseFloat(personalAmount) > 0 && (
+                {includePersonal && (personalAmount ?? 0) > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
                       {personalPaymentType === "bank"
@@ -813,11 +787,11 @@ export function PayInvoiceModal({
                           : "Débito em conta"
                         : "Pagamento externo"}
                     </span>
-                    <span className="font-medium">{formatCurrency(parseFloat(personalAmount))}</span>
+                    <span className="font-medium">{formatCurrency(personalAmount ?? 0)}</span>
                   </div>
                 )}
 
-                {includeResidual && parseFloat(residualAmount) > 0 && (
+                {includeResidual && (residualAmount ?? 0) > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
                       Saldo residual {residualPaymentType === "bank"
@@ -826,7 +800,7 @@ export function PayInvoiceModal({
                           : "(débito)"
                         : "(externo)"}
                     </span>
-                    <span className="font-medium">{formatCurrency(parseFloat(residualAmount))}</span>
+                    <span className="font-medium">{formatCurrency(residualAmount ?? 0)}</span>
                   </div>
                 )}
 

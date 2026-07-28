@@ -33,6 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -435,12 +436,15 @@ export function OperationModal({
                   <FormItem>
                     <FormLabel>Quantidade</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      <CurrencyInput
+                        name={field.name}
+                        ref={field.ref}
+                        onBlur={field.onBlur}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        withPrefix={false}
+                        decimalScale={8}
+                        placeholder="0"
                       />
                     </FormControl>
                     <FormMessage />
@@ -454,12 +458,12 @@ export function OperationModal({
                   <FormItem>
                     <FormLabel>Preço Unitário</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      <CurrencyInput
+                        name={field.name}
+                        ref={field.ref}
+                        onBlur={field.onBlur}
+                        value={field.value}
+                        onValueChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -476,12 +480,12 @@ export function OperationModal({
                   <FormItem>
                     <FormLabel>Taxas</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      <CurrencyInput
+                        name={field.name}
+                        ref={field.ref}
+                        onBlur={field.onBlur}
+                        value={field.value}
+                        onValueChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />

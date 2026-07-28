@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
@@ -21,7 +22,7 @@ interface ProjectModalProps {
 export function ProjectModal({ open, onOpenChange, project, onSave, isPending }: ProjectModalProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [targetAmount, setTargetAmount] = useState("");
+  const [targetAmount, setTargetAmount] = useState<number | undefined>(undefined);
   const [icon, setIcon] = useState("📦");
   const [color, setColor] = useState("#3B82F6");
 
@@ -29,13 +30,13 @@ export function ProjectModal({ open, onOpenChange, project, onSave, isPending }:
     if (project) {
       setName(project.name);
       setDescription(project.description || "");
-      setTargetAmount(String(project.target_amount));
+      setTargetAmount(Number(project.target_amount));
       setIcon(project.icon || "📦");
       setColor(project.color || "#3B82F6");
     } else {
       setName("");
       setDescription("");
-      setTargetAmount("");
+      setTargetAmount(undefined);
       setIcon("📦");
       setColor("#3B82F6");
     }
@@ -46,7 +47,7 @@ export function ProjectModal({ open, onOpenChange, project, onSave, isPending }:
     await onSave({
       name,
       description: description || null,
-      target_amount: parseFloat(targetAmount) || 0,
+      target_amount: targetAmount ?? 0,
       icon,
       color,
     });
@@ -73,15 +74,11 @@ export function ProjectModal({ open, onOpenChange, project, onSave, isPending }:
 
         <div className="space-y-2">
           <Label htmlFor="project-amount">Orçamento (R$)</Label>
-          <Input
+          <CurrencyInput
             id="project-amount"
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
             value={targetAmount}
-            onChange={(e) => setTargetAmount(e.target.value)}
-            placeholder="5000.00"
+            onValueChange={setTargetAmount}
+            placeholder="R$ 5.000,00"
             required
           />
         </div>
