@@ -28,9 +28,9 @@ import {
   buildInstallmentGroups,
   buildInstallmentsOverview,
   buildMonthlyInstallments,
-  earliestInstallmentMonth,
+  latestInstallmentMonth,
   monthLabel,
-  usableHistoryWindows,
+  usableForwardWindows,
   type InstallmentGroupSummary,
 } from "@/lib/installmentsReport";
 import { cn } from "@/lib/utils";
