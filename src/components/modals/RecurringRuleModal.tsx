@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 
 import { useAccounts } from "@/hooks/useAccounts";
@@ -44,7 +45,7 @@ export function RecurringRuleModal({ open, onOpenChange, editingRule, onSave }: 
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [creditCardId, setCreditCardId] = useState<string | null>(null);
-  const [estimatedAmount, setEstimatedAmount] = useState("");
+  const [estimatedAmount, setEstimatedAmount] = useState<number | undefined>(undefined);
   const [type, setType] = useState<"income" | "expense">("expense");
   const [dayOfMonth, setDayOfMonth] = useState("1");
   const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_card">("account");
@@ -55,7 +56,7 @@ export function RecurringRuleModal({ open, onOpenChange, editingRule, onSave }: 
       setCategoryId(editingRule.category_id);
       setAccountId(editingRule.account_id);
       setCreditCardId(editingRule.credit_card_id);
-      setEstimatedAmount(String(editingRule.estimated_amount));
+      setEstimatedAmount(Number(editingRule.estimated_amount));
       setType(editingRule.type);
       setDayOfMonth(String(editingRule.day_of_month));
       setPaymentMethod(editingRule.credit_card_id ? "credit_card" : "account");
@@ -64,7 +65,7 @@ export function RecurringRuleModal({ open, onOpenChange, editingRule, onSave }: 
       setCategoryId(null);
       setAccountId(null);
       setCreditCardId(null);
-      setEstimatedAmount("");
+      setEstimatedAmount(undefined);
       setType("expense");
       setDayOfMonth("1");
       setPaymentMethod("account");
@@ -79,7 +80,7 @@ export function RecurringRuleModal({ open, onOpenChange, editingRule, onSave }: 
       category_id: categoryId,
       account_id: paymentMethod === "account" ? accountId : null,
       credit_card_id: paymentMethod === "credit_card" ? creditCardId : null,
-      estimated_amount: parseFloat(estimatedAmount),
+      estimated_amount: estimatedAmount,
       type,
       day_of_month: parseInt(dayOfMonth) || 1,
       active: editingRule?.active ?? true,
@@ -123,13 +124,9 @@ export function RecurringRuleModal({ open, onOpenChange, editingRule, onSave }: 
         {/* Estimated Amount */}
         <div className="space-y-2">
           <Label>Valor Estimado (R$)</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
+          <CurrencyInput
             value={estimatedAmount}
-            onChange={(e) => setEstimatedAmount(e.target.value)}
-            placeholder="0,00"
+            onValueChange={setEstimatedAmount}
           />
         </div>
 

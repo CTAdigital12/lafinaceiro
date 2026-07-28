@@ -29,6 +29,7 @@ import {
   useSplittableInstallments,
   useTransactionSplit,
 } from "@/hooks/useTransactionSplit";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { round2, sumParts, validateParts, type SplitPart } from "@/lib/splitTransaction";
 import type { Transaction } from "@/hooks/useTransactions";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ interface PartForm {
   key: string;
   /** Presente apenas quando a parte já existe no banco (divisão em edição). */
   id?: string;
-  amount: string;
+  amount: number | undefined;
   categoryId: string;
   label: string;
   isReimbursable: boolean;
@@ -61,7 +62,7 @@ const newKey = () => `part-${partKeySeq++}`;
 
 const emptyPart = (): PartForm => ({
   key: newKey(),
-  amount: "",
+  amount: undefined,
   categoryId: "",
   label: "",
   isReimbursable: false,
@@ -142,7 +143,7 @@ export function SplitTransactionModal({
         existingParts.map((p) => ({
           key: p.id,
           id: p.id,
-          amount: String(Number(p.amount).toFixed(2)),
+          amount: round2(Number(p.amount)),
           categoryId: p.category_id ?? "",
           label: "",
           isReimbursable: p.is_reimbursable,
@@ -162,7 +163,7 @@ export function SplitTransactionModal({
     setParts([
       {
         ...emptyPart(),
-        amount: Number(transaction.amount).toFixed(2),
+        amount: round2(Number(transaction.amount)),
         categoryId: transaction.category_id ?? "",
         isReimbursable: transaction.is_reimbursable,
         isCorporate: transaction.is_corporate_expense,
@@ -181,7 +182,7 @@ export function SplitTransactionModal({
   }, [open]);
 
   const numericParts: SplitPart[] = parts.map((p) => ({
-    amount: round2(Number(p.amount.replace(",", ".")) || 0),
+    amount: round2(p.amount ?? 0),
     category_id: p.categoryId || null,
     label: p.label.trim() || null,
     is_reimbursable: p.isReimbursable,
@@ -199,17 +200,16 @@ export function SplitTransactionModal({
   /** Com exatamente duas partes, a outra absorve o complemento — que é o caso
    *  típico ("R$ 300 são do amigo, o resto é meu"). Com três ou mais, o campo
    *  "Restante" e o botão de atalho fazem esse papel. */
-  const handleAmountChange = (index: number, raw: string) => {
-    const value = raw.replace(",", ".");
+  const handleAmountChange = (index: number, value: number | undefined) => {
     setParts((prev) => {
       const next = prev.map((p, i) => (i === index ? { ...p, amount: value } : p));
       if (next.length === 2) {
         const otherIndex = index === 0 ? 1 : 0;
         if (!next[otherIndex].locked) {
-          const complement = round2(totalAmount - (Number(value) || 0));
+          const complement = round2(totalAmount - (value ?? 0));
           next[otherIndex] = {
             ...next[otherIndex],
-            amount: complement > 0 ? complement.toFixed(2) : "",
+            amount: complement > 0 ? complement : undefined,
           };
         }
       }
@@ -220,7 +220,7 @@ export function SplitTransactionModal({
   const fillRemaining = (index: number) => {
     const others = numericParts.reduce((sum, p, i) => (i === index ? sum : sum + p.amount), 0);
     const value = round2(totalAmount - others);
-    updatePart(index, { amount: value > 0 ? value.toFixed(2) : "" });
+    updatePart(index, { amount: value > 0 ? value : undefined });
   };
 
   const handleCategoryChange = (index: number, categoryId: string) => {
@@ -347,15 +347,10 @@ export function SplitTransactionModal({
                     <div className="space-y-1.5">
                       <Label className="text-xs text-muted-foreground">Valor</Label>
                       <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.01"
-                          min="0"
+                        <CurrencyInput
                           value={part.amount}
                           disabled={part.locked}
-                          onChange={(e) => handleAmountChange(index, e.target.value)}
-                          placeholder="0,00"
+                          onValueChange={(value) => handleAmountChange(index, value)}
                         />
                         {parts.length > 2 && !part.locked && (
                           <Button

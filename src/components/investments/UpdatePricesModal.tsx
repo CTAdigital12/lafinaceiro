@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -127,15 +127,12 @@ export function UpdatePricesModal({
                         </div>
                         <div className="w-28">
                           <Label className="sr-only">Cotação</Label>
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
+                          <CurrencyInput
                             value={prices[asset.id] || 0}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               setPrices((prev) => ({
                                 ...prev,
-                                [asset.id]: parseFloat(e.target.value) || 0,
+                                [asset.id]: value ?? 0,
                               }))
                             }
                             className="text-right h-9"
@@ -196,15 +193,12 @@ export function UpdatePricesModal({
                             <Label className="text-xs text-muted-foreground whitespace-nowrap">
                               Saldo atual:
                             </Label>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.01"
+                            <CurrencyInput
                               value={balances[asset.id] || 0}
-                              onChange={(e) =>
+                              onValueChange={(value) =>
                                 setBalances((prev) => ({
                                   ...prev,
-                                  [asset.id]: parseFloat(e.target.value) || 0,
+                                  [asset.id]: value ?? 0,
                                 }))
                               }
                               className="text-right h-9"

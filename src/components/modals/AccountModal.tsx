@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import {
@@ -40,7 +41,7 @@ const colorOptions = [
 export function AccountModal({ open, onOpenChange, account }: AccountModalProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"bank" | "wallet" | "savings" | "investment">("bank");
-  const [balance, setBalance] = useState("");
+  const [balance, setBalance] = useState<number | undefined>(undefined);
   const [color, setColor] = useState("from-blue-500 to-blue-600");
   const [icon, setIcon] = useState("🏦");
   const [detectedBank, setDetectedBank] = useState<string | null>(null);
@@ -53,13 +54,13 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
     if (account) {
       setName(account.name);
       setType(account.type);
-      setBalance(String(account.computed_balance));
+      setBalance(Number(account.computed_balance));
       setColor(account.color);
       setIcon(account.icon);
     } else {
       setName("");
       setType("bank");
-      setBalance("");
+      setBalance(undefined);
       setColor("from-blue-500 to-blue-600");
       setIcon("🏦");
       setDetectedBank(null);
@@ -87,7 +88,7 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const balanceValue = parseFloat(balance) || 0;
+    const balanceValue = balance ?? 0;
     const accountData = {
       name,
       type,
@@ -167,14 +168,11 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
           {/* Balance */}
           <div className="space-y-2">
             <Label htmlFor="balance">{isEditing ? "Saldo Atual" : "Saldo Inicial"}</Label>
-            <Input
+            <CurrencyInput
               id="balance"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
               value={balance}
-              onChange={(e) => setBalance(e.target.value)}
-              placeholder="0,00"
+              onValueChange={setBalance}
+              allowNegative
             />
           </div>
 

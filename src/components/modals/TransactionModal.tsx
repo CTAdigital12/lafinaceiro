@@ -4,6 +4,7 @@ import { format, parseISO, addMonths } from "date-fns";
 import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,7 +50,7 @@ interface TransactionModalProps {
 export function TransactionModal({ open, onOpenChange, transaction, duplicateFrom, refundFrom }: TransactionModalProps) {
   const [type, setType] = useState<"income" | "expense">("expense");
   const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState<number | undefined>(undefined);
   const [categoryId, setCategoryId] = useState("");
   const [accountId, setAccountId] = useState("");
   const [creditCardId, setCreditCardId] = useState("");
@@ -129,7 +130,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       // Creating a refund from an existing transaction
       setType(refundFrom.type as "income" | "expense");
       setDescription(`Extorno: ${refundFrom.description}`);
-      setAmount(String(refundFrom.amount));
+      setAmount(Number(refundFrom.amount));
       setCategoryId(refundFrom.category_id || "");
       setAccountId(refundFrom.account_id || "");
       setCreditCardId(refundFrom.credit_card_id || "");
@@ -147,7 +148,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
     } else if (sourceData) {
       setType(sourceData.type as "income" | "expense");
       setDescription(sourceData.description);
-      setAmount(String(sourceData.amount));
+      setAmount(Number(sourceData.amount));
       setCategoryId(sourceData.category_id || "");
       setAccountId(sourceData.account_id || "");
       setCreditCardId(sourceData.credit_card_id || "");
@@ -178,7 +179,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
     } else {
       setType("expense");
       setDescription("");
-      setAmount("");
+      setAmount(undefined);
       setCategoryId("");
       setAccountId("");
       setCreditCardId("");
@@ -233,7 +234,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         
         const installmentData = {
           description: `${description} ${i}/${totalInstallments}`,
-          amount: parseFloat(amount),
+          amount: amount ?? 0,
           type,
           category_id: categoryId || null,
           account_id: paymentMethod === "account" ? (accountId || null) : null,
@@ -297,7 +298,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
 
       const transactionData = {
         description,
-        amount: parseFloat(amount),
+        amount: amount ?? 0,
         type,
         category_id: categoryId || null,
         account_id: paymentMethod === "account" ? (accountId || null) : null,
@@ -394,15 +395,10 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           {/* Amount */}
           <div className="space-y-2">
             <Label htmlFor="amount">Valor</Label>
-            <Input
+            <CurrencyInput
               id="amount"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0,00"
+              onValueChange={setAmount}
               required
             />
           </div>

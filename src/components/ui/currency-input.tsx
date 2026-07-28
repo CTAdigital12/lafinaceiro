@@ -16,6 +16,10 @@ export interface CurrencyInputProps
   withPrefix?: boolean;
   /** Force fixed 2 decimal places (e.g. 1234.5 → "1.234,50"). Default false. */
   fixedDecimalScale?: boolean;
+  /** Max decimal places. Default 2 — raise it for quantities (cotas, cripto). */
+  decimalScale?: number;
+  /** Allow negative values (e.g. saldo devedor). Default false. */
+  allowNegative?: boolean;
   /** Forwarded to the underlying input. */
   className?: string;
   /** Forwarded to the underlying input. */
@@ -48,6 +52,8 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       onValueChange,
       withPrefix = true,
       fixedDecimalScale = false,
+      decimalScale = 2,
+      allowNegative = false,
       placeholder,
       ...rest
     },
@@ -63,9 +69,9 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         }}
         thousandSeparator="."
         decimalSeparator=","
-        decimalScale={2}
+        decimalScale={decimalScale}
         fixedDecimalScale={fixedDecimalScale}
-        allowNegative={false}
+        allowNegative={allowNegative}
         prefix={withPrefix ? "R$ " : undefined}
         inputMode="decimal"
         placeholder={placeholder ?? (withPrefix ? "R$ 0,00" : "0,00")}
