@@ -441,6 +441,27 @@ totalExpense = normalExpenses - expenseRefunds
 | `is_reimbursable` | Gasto pessoal que será reembolsado | ❌ Não |
 | Nenhum | Gasto pessoal normal | ✅ Sim |
 
+#### Quando a despesa é quitada (e por onde o dinheiro volta)
+
+São **dois caminhos**, e escolher o errado desencontra a fatura do que o banco cobra:
+
+| Origem do dinheiro | RPC | Efeito |
+|---|---|---|
+| Crédito na **própria fatura** (a empresa paga o cartão direto) | `mark_reimbursed` | Cria o espelho `is_card_payment` no mesmo ciclo → **abate a fatura** |
+| **PIX / transferência** numa conta (um amigo te paga) | `settle_reimbursement` | Cria receita `is_reimbursement` na conta (`credit_card_id = null`) → **não toca na fatura**, que você já pagou cheia |
+
+Em `Reimbursements.tsx`, uma despesa **de cartão** abre um diálogo perguntando a
+origem antes de quitar (antes assumia sempre o espelho). Fora do cartão, vai
+direto para o `SettleReimbursementModal`.
+
+⚠️ **`paySplitInvoice` NÃO marca as reembolsáveis não-corporativas como
+quitadas.** Pagar a fatura só significa que o dinheiro saiu do seu bolso — o
+valor já está em "Meu Total a Pagar" (reembolsáveis + pessoais). Quem te deve
+não pagou nada nesse momento, então elas seguem pendentes em Reembolsos
+Diversos até o dinheiro voltar. O corporativo continua sendo baixado no
+pagamento (espelho por despesa). Ver [[3.9]] — com a divisão de transações,
+marcar cedo demais apagaria o rastro da parte do amigo em cada parcela.
+
 ---
 
 ### ⚠️ 3.5 Parcelamentos
@@ -520,6 +541,75 @@ Ao editar transação existente:
 - Fatura `"paid"` → pagamento registrado
 
 O hook `useInvoiceCycles` gerencia os estados. `useTransactions` verifica o status antes de mutações.
+
+---
+
+### ⚠️ 3.9 Divisão de Transação (rateio por categoria)
+
+Uma compra única cujo valor pertence a mais de uma categoria — ex.: "Airbnb 2/4" de
+R$ 800,00 em que R$ 300,00 são de um amigo que vai pagar de volta.
+
+**Modelo:** as partes são **transações irmãs de verdade**, não linhas de uma tabela
+auxiliar. A transação original vira a *parte primária* (mantém o `id`, os vínculos e o
+grupo de parcelas) com o valor reduzido; as demais são inseridas ao lado dela.
+
+```typescript
+{
+  split_group_id: 'uuid-do-rateio',  // MESMO em todas as partes
+  split_parent_id: 'uuid-primaria',  // NULL na própria primária
+}
+```
+
+Consequência: **nenhuma agregação precisou mudar**. Cada parte é uma despesa comum, com
+a sua categoria e as suas flags — o dashboard, a fatura, os orçamentos e os relatórios
+continuam somando certo, e a parte com `is_reimbursable` entra em Reembolsos Diversos
+pelo fluxo normal (`mark_reimbursed` / `settle_reimbursement`).
+
+```
+Airbnb 2/4  R$ 800,00
+  ├─ parte 1 (primária)  R$ 500,00  Viagem        pessoal
+  └─ parte 2             R$ 300,00  Reembolsos    is_reimbursable ✓  "… - João"
+        soma sempre = valor original → fatura e saldo não se movem
+```
+
+**Regras:**
+- A soma das partes tem que ser **exatamente** o valor original (validado no cliente e
+  de novo na RPC). Todo arredondamento é resolvido em `src/lib/splitTransaction.ts`.
+- Partes secundárias **não** herdam `installment_group_id` — só `installment_number` /
+  `total_installments` (badge "2/4"). Herdá-lo colocaria 2 linhas por parcela no grupo e
+  quebraria a contagem/renumeração de `useInstallmentGroup`.
+- Dividir todas as parcelas de um parcelamento é feito no cliente, chamando a RPC uma vez
+  por parcela com as partes rateadas (`prorateParts`). Parcela em fatura fechada é pulada
+  e reportada, não aborta o lote.
+- Recusa dividir: fatura fechada, transação já dividida, já reembolsada, ou `is_card_payment`.
+- `unsplit_transaction` devolve o valor à primária e apaga as secundárias — bloqueado se
+  alguma parte já foi reembolsada ou tem estorno vinculado.
+
+**Conciliação — a regra que não pode ser esquecida:** a fatura do banco traz UMA
+linha ("Airbnb R$ 800,00") e o sistema tem duas (R$ 500 + R$ 300). Toda comparação
+**item-a-item** precisa colapsar o grupo antes, via `collapseSplitGroups()`:
+
+| Tipo de conciliação | Onde | Status |
+|---|---|---|
+| Por **total** (fatura, limite, "Meu Total a Pagar") | `useCreditCardInvoiceSync`, `useCreditCardReconciliation`, `useInvoiceTransactions` | ✅ imune — a soma das partes é o valor original |
+| **Dedup de importação** de fatura | `detectDuplicates` (`src/lib/deduplication.ts`) | ✅ colapsa o grupo; sem isso a reimportação **recriaria** a despesa |
+| **Dedup de importação** de extrato de conta | `detectAccountDuplicates` + match de pendentes no `AccountReviewModal` | ✅ colapsa o grupo; pendente já dividida é tratada como duplicata (confirmar vincularia só a primária) |
+| **Planilha × sistema** | `reconcileSpreadsheet` (`src/lib/spreadsheetReconciliation.ts`) | ✅ colapsa o grupo; sem isso toda transação dividida vira falsa divergência |
+
+Nas linhas colapsadas, "Corrigir valor" e "Excluir" ficam **bloqueados** no
+`SpreadsheetReconciliationModal`: agiriam apenas sobre a parte primária, quebrando a
+soma ou deixando partes órfãs.
+
+⚠️ **Ao criar qualquer nova comparação item-a-item com extrato/fatura, passe as
+transações por `collapseSplitGroups()` primeiro.**
+
+| Peça | Arquivo |
+|------|---------|
+| Schema + RPCs | `supabase/migrations/20260727120000_split_transaction.sql` |
+| Rateio, validação e colapso (puro) | `src/lib/splitTransaction.ts` |
+| Mutations e queries | `src/hooks/useTransactionSplit.ts` |
+| UI | `src/components/modals/SplitTransactionModal.tsx` |
+| Pontos de acesso | `src/pages/Transactions.tsx`, `src/components/modals/InvoiceItemsModal.tsx` |
 
 ---
 

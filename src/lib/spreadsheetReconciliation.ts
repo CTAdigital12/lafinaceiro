@@ -1,4 +1,5 @@
 import { normalizeString, normalizeDate } from "./deduplication";
+import { collapseSplitGroups, type CollapsedRow } from "./splitTransaction";
 import * as XLSX from "xlsx";
 
 export interface SpreadsheetItem {
@@ -21,13 +22,19 @@ export interface SystemTransaction {
   status: string;
   is_provisional?: boolean;
   recurring_rule_id?: string | null;
+  /** Divisão por categoria: as partes são colapsadas antes do matching. */
+  split_group_id?: string | null;
+  split_parent_id?: string | null;
 }
 
+/** Linha do sistema já com as partes de uma divisão somadas numa só. */
+export type SystemRow = CollapsedRow<SystemTransaction>;
+
 export interface ReconciliationResult {
-  matched: Array<{ spreadsheet: SpreadsheetItem; transaction: SystemTransaction }>;
-  valueDiscrepancies: Array<{ spreadsheet: SpreadsheetItem; transaction: SystemTransaction; difference: number }>;
+  matched: Array<{ spreadsheet: SpreadsheetItem; transaction: SystemRow }>;
+  valueDiscrepancies: Array<{ spreadsheet: SpreadsheetItem; transaction: SystemRow; difference: number }>;
   onlyInSpreadsheet: SpreadsheetItem[];
-  onlyInSystem: SystemTransaction[];
+  onlyInSystem: SystemRow[];
   summary: {
     total: number;
     matched: number;
@@ -69,6 +76,10 @@ export function reconcileSpreadsheet(
   spreadsheetItems: SpreadsheetItem[],
   systemTransactions: SystemTransaction[]
 ): ReconciliationResult {
+  // Uma transação dividida vira uma linha só, com o valor somado — é assim que
+  // ela aparece na planilha/fatura do banco.
+  const systemRows = collapseSplitGroups(systemTransactions);
+
   const usedSpreadsheetIndices = new Set<number>();
   const usedSystemIds = new Set<string>();
 
@@ -81,8 +92,8 @@ export function reconcileSpreadsheet(
     const normalizedItemDate = normalizeDate(item.date);
 
     // Collect all candidates with matching date + amount
-    const candidates: SystemTransaction[] = [];
-    for (const tx of systemTransactions) {
+    const candidates: SystemRow[] = [];
+    for (const tx of systemRows) {
       if (usedSystemIds.has(tx.id)) continue;
       const normalizedTxDate = normalizeDate(tx.date);
       if (normalizedItemDate === normalizedTxDate && Math.abs(item.amount - Number(tx.amount)) <= TOLERANCE) {
@@ -120,7 +131,7 @@ export function reconcileSpreadsheet(
     const item = spreadsheetItems[si];
     const normalizedItemDate = normalizeDate(item.date);
 
-    for (const tx of systemTransactions) {
+    for (const tx of systemRows) {
       if (usedSystemIds.has(tx.id)) continue;
 
       const normalizedTxDate = normalizeDate(tx.date);
@@ -136,7 +147,7 @@ export function reconcileSpreadsheet(
   }
 
   const onlyInSpreadsheet = spreadsheetItems.filter((_, i) => !usedSpreadsheetIndices.has(i));
-  const onlyInSystem = systemTransactions.filter((tx) => !usedSystemIds.has(tx.id));
+  const onlyInSystem = systemRows.filter((tx) => !usedSystemIds.has(tx.id));
 
   return {
     matched,
@@ -144,7 +155,7 @@ export function reconcileSpreadsheet(
     onlyInSpreadsheet,
     onlyInSystem,
     summary: {
-      total: spreadsheetItems.length + systemTransactions.length,
+      total: spreadsheetItems.length + systemRows.length,
       matched: matched.length,
       discrepancies: valueDiscrepancies.length,
       missing: onlyInSpreadsheet.length,

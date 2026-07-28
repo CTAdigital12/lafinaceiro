@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Building2, User, Check, RefreshCw } from "lucide-react";
+import { Building2, User, Check, RefreshCw, SplitSquareHorizontal } from "lucide-react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +12,8 @@ import { ptBR } from "date-fns/locale";
 import { useListSearchSort } from "@/hooks/useListSearchSort";
 import { ListSearchInput } from "@/components/ui/list-search-input";
 import { ListSortButtons } from "@/components/ui/list-sort-buttons";
+import { SplitTransactionModal } from "@/components/modals/SplitTransactionModal";
+import { cn } from "@/lib/utils";
 import type { InvoiceTransaction } from "@/hooks/useInvoiceTransactions";
 
 interface InvoiceItemsModalProps {
@@ -31,6 +33,7 @@ export function InvoiceItemsModal({
 }: InvoiceItemsModalProps) {
   const formatCurrency = useFormatCurrency();
   const [selected, setSelected] = useState<Set<string>>(new Set(selectedItems));
+  const [splitTransactionId, setSplitTransactionId] = useState<string | null>(null);
 
   // Reset selection when modal opens
   useEffect(() => {
@@ -158,6 +161,7 @@ export function InvoiceItemsModal({
                         transaction={tx}
                         isSelected={selected.has(tx.id)}
                         onToggle={() => toggleItem(tx.id)}
+                        onSplit={() => setSplitTransactionId(tx.id)}
                         typeIcon="corporate"
                       />
                     ))}
@@ -182,6 +186,7 @@ export function InvoiceItemsModal({
                         transaction={tx}
                         isSelected={selected.has(tx.id)}
                         onToggle={() => toggleItem(tx.id)}
+                        onSplit={() => setSplitTransactionId(tx.id)}
                         typeIcon="reimbursable"
                       />
                     ))}
@@ -206,6 +211,7 @@ export function InvoiceItemsModal({
                         transaction={tx}
                         isSelected={selected.has(tx.id)}
                         onToggle={() => toggleItem(tx.id)}
+                        onSplit={() => setSplitTransactionId(tx.id)}
                         typeIcon="personal"
                       />
                     ))}
@@ -255,6 +261,14 @@ export function InvoiceItemsModal({
             Aplicar Seleção
           </Button>
         </div>
+
+        {/* Dividir um item da fatura entre categorias (parte reembolsável de
+            um gasto compartilhado, por exemplo) sem sair da revisão. */}
+        <SplitTransactionModal
+          open={!!splitTransactionId}
+          onOpenChange={(isOpen) => !isOpen && setSplitTransactionId(null)}
+          transactionId={splitTransactionId}
+        />
     </ResponsiveDialog>
   );
 }
@@ -263,11 +277,13 @@ function TransactionItem({
   transaction,
   isSelected,
   onToggle,
+  onSplit,
   typeIcon,
 }: {
   transaction: InvoiceTransaction;
   isSelected: boolean;
   onToggle: () => void;
+  onSplit: () => void;
   typeIcon: "corporate" | "reimbursable" | "personal";
 }) {
   const formatCurrency = useFormatCurrency();
@@ -302,6 +318,23 @@ function TransactionItem({
         {transaction.is_refund ? "-" : ""}
         {formatCurrency(transaction.amount)}
       </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0"
+        title={transaction.split_group_id ? "Ver / editar divisão" : "Dividir em categorias"}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSplit();
+        }}
+      >
+        <SplitSquareHorizontal
+          className={cn(
+            "h-3.5 w-3.5",
+            transaction.split_group_id ? "text-violet-600" : "text-muted-foreground",
+          )}
+        />
+      </Button>
     </div>
   );
 }

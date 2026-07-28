@@ -251,32 +251,19 @@ export function useCreditCards() {
 
       // 2. Handle personal portion
       if (includePersonal && personalAmount > 0) {
-        // Auto-mark reimbursable (non-corp) as reimbursed — status only, no mirror.
-        // Mirror would double-count: user já está pagando do bolso via expense bank.
-        const { data: reimbTxs, error: reimbFetchError } = await supabase
-          .from("transactions")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("credit_card_id", creditCardId)
-          .eq("type", "expense")
-          .eq("status", "completed")
-          .eq("is_reimbursable", true)
-          .eq("is_corporate_expense", false)
-          .eq("is_refund", false)
-          .or("reimbursement_status.in.(pending,requested),reimbursement_status.is.null")
-          .or(periodFilter);
-
-        if (reimbFetchError) throw reimbFetchError;
-
-        if (reimbTxs && reimbTxs.length > 0) {
-          const reimbIds = reimbTxs.map((t) => t.id);
-          const { error: updErr } = await supabase
-            .from("transactions")
-            .update({ reimbursement_status: "reimbursed" })
-            .in("id", reimbIds);
-          if (updErr) throw updErr;
-        }
-
+        // As despesas REEMBOLSÁVEIS não-corporativas continuam PENDENTES aqui.
+        //
+        // Pagar a fatura significa apenas que o dinheiro saiu do seu bolso — o
+        // valor já está dentro de personalAmount ("Meu Total a Pagar" =
+        // reembolsáveis + pessoais). Quem ainda te deve não pagou nada nesse
+        // momento. Marcá-las como "reimbursed" aqui (comportamento anterior)
+        // apagava o rastro do que falta receber, o que ficou evidente com a
+        // divisão de transações: numa compra parcelada dividida com um amigo,
+        // a parte dele sumia de Reembolsos assim que você pagava a fatura.
+        //
+        // A baixa acontece quando o dinheiro volta, em Reembolsos Diversos
+        // (mark_reimbursed para crédito na fatura, settle_reimbursement para
+        // PIX/transferência). O corporativo segue tratado no passo 1.
         if (linkToTransactionId) {
           // Link to existing transaction - also set credit_card_id for reconciliation
           const { error: linkError } = await supabase

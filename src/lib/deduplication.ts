@@ -2,6 +2,8 @@
  * Funções utilitárias para normalização e detecção de duplicatas em importações.
  */
 
+import { collapseSplitGroups } from "./splitTransaction";
+
 /**
  * Normaliza uma string para comparação resiliente:
  * - lowercase
@@ -46,6 +48,9 @@ export interface ExistingTransaction {
   date: string;
   installment_number: number | null;
   total_installments: number | null;
+  /** Divisão por categoria: as partes são colapsadas antes da comparação. */
+  split_group_id?: string | null;
+  split_parent_id?: string | null;
 }
 
 export interface ImportedItem {
@@ -64,6 +69,8 @@ export interface ImportedItem {
  * 2. Valor: tolerância Math.abs(a - b) <= 0.05
  * 3. String: compara importado normalizado com original_description (fallback description)
  * 4. Parcela: se importado tem installment_current, exige match de installment_number + total_installments
+ * 5. Divisão: as partes de uma transação dividida contam como UMA linha, com o
+ *    valor somado — é assim que o gasto aparece na fatura importada.
  */
 export function detectDuplicates(
   importedItems: ImportedItem[],
@@ -73,10 +80,12 @@ export function detectDuplicates(
   const usedExistingIds = new Set<string>();
   const TOLERANCE = 0.05;
 
+  const collapsed = collapseSplitGroups(existingTransactions);
+
   importedItems.forEach((item, index) => {
     const isInstallment = !!(item.installment_current && item.installment_total);
 
-    const match = existingTransactions.find((existing) => {
+    const match = collapsed.find((existing) => {
       if (usedExistingIds.has(existing.id)) return false;
 
       // Rule 2: Amount tolerance
@@ -103,7 +112,8 @@ export function detectDuplicates(
 
     if (match) {
       duplicateMap.set(index, match);
-      usedExistingIds.add(match.id);
+      // Consome TODAS as partes do grupo: nenhuma delas pode casar de novo.
+      match.splitMemberIds.forEach((id) => usedExistingIds.add(id));
     }
   });
 
@@ -113,18 +123,36 @@ export function detectDuplicates(
 /**
  * Detecta duplicatas para importação de extratos bancários (contas).
  * Similar a detectDuplicates mas com interface adaptada para AccountImportedItem.
+ *
+ * Assim como na fatura, as partes de uma transação dividida contam como UMA
+ * linha com o valor somado — o extrato traz o PIX cheio (R$ 1.611,00) e o
+ * sistema tem R$ 110,92 + R$ 1.500,08.
  */
 export function detectAccountDuplicates(
   importedItems: Array<{ date: string; description: string; amount: number }>,
-  existingTransactions: Array<{ date: string; description: string; original_description: string | null; amount: number }>
+  existingTransactions: Array<{
+    id?: string;
+    date: string;
+    description: string;
+    original_description: string | null;
+    amount: number;
+    split_group_id?: string | null;
+    split_parent_id?: string | null;
+  }>
 ): Set<number> {
   const duplicateIndices = new Set<number>();
-  const usedExistingIndices = new Set<number>();
+  const usedExistingIds = new Set<string>();
   const TOLERANCE = 0.05;
 
+  // `id` é opcional nesta assinatura (chamadores antigos não o passavam); o
+  // índice serve de chave estável quando ele não vem.
+  const collapsed = collapseSplitGroups(
+    existingTransactions.map((tx, i) => ({ ...tx, id: tx.id ?? `row-${i}` })),
+  );
+
   importedItems.forEach((item, index) => {
-    const match = existingTransactions.findIndex((existing, existIdx) => {
-      if (usedExistingIndices.has(existIdx)) return false;
+    const match = collapsed.find((existing) => {
+      if (usedExistingIds.has(existing.id)) return false;
 
       // Date match
       const dateMatch = normalizeDate(existing.date) === normalizeDate(item.date);
@@ -140,9 +168,9 @@ export function detectAccountDuplicates(
       return existingStr === importedStr;
     });
 
-    if (match >= 0) {
+    if (match) {
       duplicateIndices.add(index);
-      usedExistingIndices.add(match);
+      match.splitMemberIds.forEach((id) => usedExistingIds.add(id));
     }
   });
 

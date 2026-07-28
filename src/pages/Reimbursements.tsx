@@ -13,7 +13,9 @@ import {
   Clock,
   Send,
   CheckCircle2,
-  Search
+  Search,
+  CreditCard,
+  Wallet
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { SortableHead } from "@/components/ui/sortable-header";
 import { useListSearchSort } from "@/hooks/useListSearchSort";
 import { cn } from "@/lib/utils";
@@ -91,6 +102,9 @@ export default function Reimbursements() {
   const [reimbursementFilter, setReimbursementFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [settleTarget, setSettleTarget] = useState<ReimbursementTransaction | null>(null);
+  // Despesa de cartão sendo quitada: precisamos saber por onde o dinheiro
+  // voltou antes de escolher entre espelho na fatura e receita numa conta.
+  const [originTarget, setOriginTarget] = useState<ReimbursementTransaction[] | null>(null);
 
   const startDate = format(startOfMonth(new Date(selectedYear, selectedMonth - 1)), "yyyy-MM-dd");
   const endDate = format(endOfMonth(new Date(selectedYear, selectedMonth - 1)), "yyyy-MM-dd");
@@ -213,8 +227,12 @@ export default function Reimbursements() {
 
     if (newStatus === "reimbursed") {
       if (transaction.credit_card_id) {
-        // Despesa no cartão: baixa direto na fatura (espelho is_card_payment).
-        await markAsReimbursed.mutateAsync({ transactionId: transaction.id });
+        // Despesa no cartão: o destino depende de COMO o dinheiro voltou.
+        //  - crédito na própria fatura (empresa paga o cartão) → espelho
+        //  - PIX/transferência numa conta (o amigo te pagou) → receita
+        // Os dois reduzem coisas diferentes; assumir sempre o espelho deixava
+        // a fatura menor do que o banco cobra. Perguntamos.
+        setOriginTarget([transaction]);
       } else {
         // Despesa fora do cartão (paga do bolso): o reembolso chega por PIX /
         // transferência numa conta. Abrimos o modal para vincular/criar a receita.
@@ -243,10 +261,47 @@ export default function Reimbursements() {
 
   const updateSelectedStatus = async (status: ReimbursementStatus) => {
     const selectedItems = filteredTransactions.filter((t) => selectedIds.has(t.id));
+
+    // Quitar em massa: perguntamos a origem UMA vez para todas as despesas de
+    // cartão. As sem cartão exigem vincular o recebimento individualmente.
+    if (status === "reimbursed") {
+      const toSettle = selectedItems.filter((t) => t.reimbursement_status !== "reimbursed");
+      const withCard = toSettle.filter((t) => t.credit_card_id);
+      const withoutCard = toSettle.filter((t) => !t.credit_card_id);
+
+      if (withoutCard.length > 0) {
+        toast({
+          title: "Quite uma a uma",
+          description: `${withoutCard.length} despesa(s) fora do cartão precisam do recebimento vinculado individualmente.`,
+        });
+      }
+      if (withCard.length > 0) {
+        setOriginTarget(withCard);
+      }
+      setSelectedIds(new Set());
+      return;
+    }
+
     for (const item of selectedItems) {
       await handleStatusChange(item, status);
     }
     setSelectedIds(new Set());
+  };
+
+  /** Reembolso veio como crédito na própria fatura (quem devia pagou o cartão). */
+  const handleOriginInvoice = async () => {
+    const targets = originTarget ?? [];
+    setOriginTarget(null);
+    for (const item of targets) {
+      await markAsReimbursed.mutateAsync({ transactionId: item.id });
+    }
+  };
+
+  /** Reembolso caiu numa conta (PIX/transferência) — vira receita neutra. */
+  const handleOriginAccount = () => {
+    const target = originTarget?.[0];
+    setOriginTarget(null);
+    if (target) setSettleTarget(target);
   };
 
   const exportToCSV = () => {
@@ -681,6 +736,61 @@ export default function Reimbursements() {
         onOpenChange={(open) => !open && setSettleTarget(null)}
         transaction={settleTarget}
       />
+
+      {/* Origem do reembolso de uma despesa de CARTÃO. Os dois caminhos mexem
+          em lugares diferentes: o crédito na fatura abate a própria fatura; o
+          PIX entra como receita na conta e não toca no que o banco vai cobrar. */}
+      <AlertDialog open={!!originTarget} onOpenChange={(open) => !open && setOriginTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Como o reembolso chegou?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {originTarget?.length === 1
+                ? originTarget[0].description
+                : `${originTarget?.length ?? 0} despesas selecionadas`}
+              {" — "}
+              <strong>{fmt((originTarget ?? []).reduce((s, t) => s + Number(t.amount), 0))}</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="grid gap-2 py-2">
+            <Button
+              variant="outline"
+              className="h-auto justify-start gap-3 py-3 text-left"
+              onClick={handleOriginInvoice}
+            >
+              <CreditCard className="h-5 w-5 shrink-0 text-primary" />
+              <span className="flex flex-col gap-0.5">
+                <span className="font-medium">Crédito na fatura do cartão</span>
+                <span className="text-xs text-muted-foreground whitespace-normal">
+                  Quem devia pagou o cartão direto. Abate o valor da fatura.
+                </span>
+              </span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-auto justify-start gap-3 py-3 text-left"
+              disabled={(originTarget?.length ?? 0) > 1}
+              onClick={handleOriginAccount}
+            >
+              <Wallet className="h-5 w-5 shrink-0 text-income" />
+              <span className="flex flex-col gap-0.5">
+                <span className="font-medium">PIX / transferência numa conta</span>
+                <span className="text-xs text-muted-foreground whitespace-normal">
+                  {(originTarget?.length ?? 0) > 1
+                    ? "Disponível ao quitar uma despesa por vez."
+                    : "O dinheiro caiu na sua conta. A fatura continua cheia — você já a pagou."}
+                </span>
+              </span>
+            </Button>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

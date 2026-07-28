@@ -30,6 +30,7 @@ import {
   ArrowUp,
   ArrowDown,
   Clock,
+  SplitSquareHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +62,7 @@ import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { TransactionModal } from "@/components/modals/TransactionModal";
+import { SplitTransactionModal } from "@/components/modals/SplitTransactionModal";
 import { TransactionFiltersModal, TransactionFilters } from "@/components/modals/TransactionFiltersModal";
 import { CategorySelector } from "@/components/CategorySelector";
 import { InstallmentDetailsSheet } from "@/components/InstallmentDetailsSheet";
@@ -121,6 +123,7 @@ export default function Transactions() {
   const [showBulkCategorySelector, setShowBulkCategorySelector] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [selectedInstallmentGroupId, setSelectedInstallmentGroupId] = useState<string | null>(null);
+  const [splitTransactionId, setSplitTransactionId] = useState<string | null>(null);
   const [filters, setFilters] = useState<TransactionFilters>({
     categoryIds: [],
     type: "all",
@@ -997,6 +1000,12 @@ export default function Transactions() {
                                   Reembolsável
                                 </Badge>
                               )}
+                              {transaction.split_group_id && (
+                                <Badge variant="outline" className="text-xs text-violet-600 border-violet-300 bg-violet-50">
+                                  <SplitSquareHorizontal className="h-3 w-3 mr-1" />
+                                  Dividido
+                                </Badge>
+                              )}
                               {transaction.is_provisional && (
                                 <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100">
                                   <Clock className="h-3 w-3 mr-1" />
@@ -1058,6 +1067,21 @@ export default function Transactions() {
                               >
                                 <Copy className="h-4 w-4" />
                               </Button>
+                              {!transaction.is_card_payment && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setSplitTransactionId(transaction.id)}
+                                  title={
+                                    transaction.split_group_id
+                                      ? "Ver / editar divisão"
+                                      : "Dividir em categorias"
+                                  }
+                                >
+                                  <SplitSquareHorizontal className="h-4 w-4" />
+                                </Button>
+                              )}
                               {!transaction.is_refund && (
                                 <Button
                                   variant="ghost"
@@ -1137,6 +1161,9 @@ export default function Transactions() {
                             {transaction.total_installments && transaction.total_installments > 1 && (
                               <span className="text-primary"> • {transaction.installment_number}/{transaction.total_installments}</span>
                             )}
+                            {transaction.split_group_id && (
+                              <span className="text-violet-600"> • Dividido</span>
+                            )}
                           </p>
                         </div>
                         <div className="text-right shrink-0">
@@ -1153,6 +1180,25 @@ export default function Transactions() {
                             <span className="text-[10px] text-muted-foreground">Empresa</span>
                           )}
                         </div>
+                        {!transaction.is_card_payment && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSplitTransactionId(transaction.id);
+                            }}
+                            title="Dividir em categorias"
+                          >
+                            <SplitSquareHorizontal
+                              className={cn(
+                                "h-4 w-4",
+                                transaction.split_group_id ? "text-violet-600" : "text-muted-foreground"
+                              )}
+                            />
+                          </Button>
+                        )}
                       </div>
                     );
                   })}
@@ -1283,6 +1329,13 @@ export default function Transactions() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Split Transaction Modal */}
+      <SplitTransactionModal
+        open={!!splitTransactionId}
+        onOpenChange={(open) => !open && setSplitTransactionId(null)}
+        transactionId={splitTransactionId}
+      />
 
       {/* Installment Details Sheet */}
       <InstallmentDetailsSheet
