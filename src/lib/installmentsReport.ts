@@ -19,7 +19,7 @@
  * Já a CONTAGEM de parcelas precisa deduplicar por (grupo, nº da parcela).
  */
 
-import { addMonths, format, parse } from "date-fns";
+import { addMonths, differenceInMonths, format, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { round2 } from "./splitTransaction";
 
@@ -130,6 +130,51 @@ export function buildGroupKeyResolver(
 
 function monthLabel(month: string): string {
   return format(parse(month, "yyyy-MM", new Date()), "MMM/yy", { locale: ptBR });
+}
+
+/** Primeiro mês que tem parcela, ou null quando não há parcelamento nenhum. */
+export function earliestInstallmentMonth(rows: InstallmentRow[]): string | null {
+  let earliest: string | null = null;
+  for (const row of rows) {
+    if (!isInstallmentRow(row)) continue;
+    const month = installmentCompetenceMonth(row);
+    if (earliest === null || month < earliest) earliest = month;
+  }
+  return earliest;
+}
+
+/** Quantos meses inteiros separam dois yyyy-MM (negativo se `to` for anterior). */
+export function monthsBetween(from: string, to: string): number {
+  return differenceInMonths(
+    parse(to, "yyyy-MM", new Date()),
+    parse(from, "yyyy-MM", new Date())
+  );
+}
+
+/**
+ * Quais janelas de histórico mudam alguma coisa no gráfico.
+ *
+ * A série começa no primeiro mês com parcela — pedir 24m de histórico com 3
+ * meses de dado devolve o mesmo gráfico que 6m. Em vez de encher o eixo de
+ * meses vazios (que diriam "R$ 0 de parcela" onde na verdade não há dado), as
+ * janelas que não acrescentam nada vêm desabilitadas. A menor janela que já
+ * cobre todo o histórico continua ativa, senão não sobraria opção nenhuma.
+ */
+export function usableHistoryWindows(
+  options: readonly number[],
+  rows: InstallmentRow[],
+  currentMonth: string
+): { months: number; enabled: boolean }[] {
+  const earliest = earliestInstallmentMonth(rows);
+  if (!earliest) return options.map((months) => ({ months, enabled: true }));
+
+  const available = Math.max(0, monthsBetween(earliest, currentMonth));
+  const firstCovering = options.find((m) => m >= available) ?? options[options.length - 1];
+
+  return options.map((months) => ({
+    months,
+    enabled: months <= available || months === firstCovering,
+  }));
 }
 
 /**
