@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { detectAccountDuplicates } from "@/lib/deduplication";
+import { collapseSplitGroups } from "@/lib/splitTransaction";
 import {
   Dialog,
   DialogContent,
@@ -158,7 +159,10 @@ export function AccountReviewModal({
         // Fetch existing transactions for this account
         const { data: existingTransactions } = await supabase
           .from("transactions")
-          .select("id, date, amount, description, original_description, status, is_provisional")
+          // split_group_id/split_parent_id: uma despesa dividida ocupa várias
+          // linhas aqui, mas o extrato traz o lançamento cheio — a dedup soma
+          // as partes antes de comparar.
+          .select("id, date, amount, description, original_description, status, is_provisional, split_group_id, split_parent_id")
           .eq("account_id", accountId);
 
         const existing = existingTransactions || [];
@@ -170,28 +174,40 @@ export function AccountReviewModal({
         // Use robust deduplication against completed transactions only
         const duplicateIndices = detectAccountDuplicates(
           items.map(i => ({ date: i.date, description: i.description, amount: i.amount })),
-          completedTransactions.map(tx => ({ date: tx.date, amount: Number(tx.amount), description: tx.description, original_description: tx.original_description }))
+          completedTransactions.map(tx => ({ id: tx.id, date: tx.date, amount: Number(tx.amount), description: tx.description, original_description: tx.original_description, split_group_id: tx.split_group_id, split_parent_id: tx.split_parent_id }))
         );
 
         // Track which pending transactions have already been matched
         const usedPendingIds = new Set<string>();
 
+        // Pendentes também são colapsadas: uma parcela futura já dividida
+        // ocupa duas linhas, e o extrato traz o débito cheio.
+        const pendingRows = collapseSplitGroups(
+          pendingTransactions.map(tx => ({ ...tx, amount: Number(tx.amount) })),
+        );
+
         const itemsWithCategories = items.map((item, index) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
           const isCorporate = findCorporateForDescription(item.description);
-          const isDuplicate = duplicateIndices.has(index);
+          let isDuplicate = duplicateIndices.has(index);
 
           // Try to match against pending/provisional transactions
           let matchedPendingId: string | null = null;
           let matchedPendingDescription: string | null = null;
           if (!isDuplicate) {
-            const pendingMatch = pendingTransactions.find(tx => {
+            const pendingMatch = pendingRows.find(tx => {
               if (usedPendingIds.has(tx.id)) return false;
               const sameDate = tx.date === item.date;
               const sameAmount = Math.abs(Number(tx.amount) - item.amount) < 0.05;
               return sameDate && sameAmount;
             });
-            if (pendingMatch) {
+            if (pendingMatch?.isSplitGroup) {
+              // O gasto já está lançado e rateado. Confirmar vincularia só a
+              // parte primária (quebrando a soma), então tratamos como
+              // duplicata: nada novo é criado.
+              isDuplicate = true;
+              pendingMatch.splitMemberIds.forEach(id => usedPendingIds.add(id));
+            } else if (pendingMatch) {
               matchedPendingId = pendingMatch.id;
               matchedPendingDescription = pendingMatch.description;
               usedPendingIds.add(pendingMatch.id);

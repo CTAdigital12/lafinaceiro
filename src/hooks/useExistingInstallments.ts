@@ -11,6 +11,8 @@ export interface ExistingInstallment {
   date: string;
   installment_number: number | null;
   total_installments: number | null;
+  split_group_id: string | null;
+  split_parent_id: string | null;
 }
 
 interface UseExistingInstallmentsParams {
@@ -40,7 +42,9 @@ export function useExistingInstallments({
     queryFn: async (): Promise<ExistingInstallment[]> => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("id, description, original_description, amount, date, installment_number, total_installments")
+        // split_group_id/split_parent_id: detectDuplicates colapsa as partes de
+        // uma transação dividida para casar com a linha única da fatura.
+        .select("id, description, original_description, amount, date, installment_number, total_installments, split_group_id, split_parent_id")
         .eq("credit_card_id", creditCardId)
         .eq("type", "expense")
         .or(

@@ -53,6 +53,7 @@ import {
   reconcileSpreadsheet,
   type SpreadsheetItem,
   type SystemTransaction,
+  type SystemRow,
   type ReconciliationResult,
 } from "@/lib/spreadsheetReconciliation";
 
@@ -84,7 +85,7 @@ export function SpreadsheetReconciliationModal({
 
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ReconciliationResult | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<SystemTransaction | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<SystemRow | null>(null);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [refundItems, setRefundItems] = useState<Set<number>>(new Set());
   const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
@@ -96,7 +97,9 @@ export function SpreadsheetReconciliationModal({
 
     const { data, error } = await supabase
       .from("transactions")
-      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status")
+      // split_group_id/split_parent_id: reconcileSpreadsheet soma as partes de
+      // uma transação dividida numa linha só, para casar com a planilha.
+      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status, split_group_id, split_parent_id")
       .eq("credit_card_id", creditCardId)
       .or(`and(due_date.gte.${startDate},due_date.lte.${endDate}),and(due_date.is.null,date.gte.${startDate},date.lte.${endDate})`)
       .eq("is_card_payment", false);
@@ -184,7 +187,18 @@ export function SpreadsheetReconciliationModal({
     }
   }, [user, createTransaction, creditCardId, month, year, fetchSystemTransactions, result, toast, refundItems]);
 
-  const handleDeleteTransaction = useCallback(async (tx: SystemTransaction) => {
+  const handleDeleteTransaction = useCallback(async (tx: SystemRow) => {
+    // Linha colapsada de uma divisão: excluir/corrigir agiria só sobre a parte
+    // primária e deixaria as outras órfãs (ou a soma quebrada).
+    if (tx.isSplitGroup) {
+      toast({
+        title: "Transação dividida",
+        description: "Desfaça a divisão em Transações antes de excluir por aqui.",
+        variant: "destructive",
+      });
+      setDeleteConfirm(null);
+      return;
+    }
     const key = `del-${tx.id}`;
     setProcessingIds((prev) => new Set(prev).add(key));
     try {
@@ -208,7 +222,16 @@ export function SpreadsheetReconciliationModal({
     }
   }, [deleteTransaction, fetchSystemTransactions, result, toast]);
 
-  const handleCorrectValue = useCallback(async (item: SpreadsheetItem, tx: SystemTransaction) => {
+  const handleCorrectValue = useCallback(async (item: SpreadsheetItem, tx: SystemRow) => {
+    if (tx.isSplitGroup) {
+      toast({
+        title: "Transação dividida",
+        description:
+          "O valor da planilha é o total do gasto. Ajuste as partes em Transações → ícone de divisão.",
+        variant: "destructive",
+      });
+      return;
+    }
     const key = `fix-${tx.id}`;
     setProcessingIds((prev) => new Set(prev).add(key));
     try {
@@ -390,8 +413,8 @@ interface ResultTableProps {
   filter: "all" | "matched" | "discrepancies" | "missing" | "extra";
   processingIds: Set<string>;
   onAdd: (item: SpreadsheetItem) => void;
-  onDelete: (tx: SystemTransaction) => void;
-  onCorrect: (item: SpreadsheetItem, tx: SystemTransaction) => void;
+  onDelete: (tx: SystemRow) => void;
+  onCorrect: (item: SpreadsheetItem, tx: SystemRow) => void;
   refundItems: Set<number>;
   onToggleRefund: (rowIndex: number) => void;
   ignoredKeys: Set<string>;
@@ -407,7 +430,7 @@ type RowData = {
   systemAmount?: number;
   difference?: number;
   spreadsheetItem?: SpreadsheetItem;
-  systemTx?: SystemTransaction;
+  systemTx?: SystemRow;
 };
 
 function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect, refundItems, onToggleRefund, ignoredKeys, onIgnore }: ResultTableProps) {
@@ -533,7 +556,14 @@ function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect
                     variant="ghost"
                     size="sm"
                     className="h-7 text-xs text-destructive"
-                    disabled={processingIds.has(`del-${row.systemTx.id}`)}
+                    disabled={
+                      processingIds.has(`del-${row.systemTx.id}`) || row.systemTx.isSplitGroup
+                    }
+                    title={
+                      row.systemTx.isSplitGroup
+                        ? "Transação dividida — desfaça a divisão em Transações"
+                        : undefined
+                    }
                     onClick={() => onDelete(row.systemTx!)}
                   >
                     <Trash2 className="h-3 w-3 mr-1" /> Excluir
@@ -545,7 +575,14 @@ function ResultTable({ result, filter, processingIds, onAdd, onDelete, onCorrect
                       variant="ghost"
                       size="sm"
                       className="h-7 text-xs text-chart-4"
-                      disabled={processingIds.has(`fix-${row.systemTx.id}`)}
+                      disabled={
+                        processingIds.has(`fix-${row.systemTx.id}`) || row.systemTx.isSplitGroup
+                      }
+                      title={
+                        row.systemTx.isSplitGroup
+                          ? "Transação dividida — ajuste as partes em Transações"
+                          : undefined
+                      }
                       onClick={() => onCorrect(row.spreadsheetItem!, row.systemTx!)}
                     >
                       <PenLine className="h-3 w-3 mr-1" /> Corrigir
