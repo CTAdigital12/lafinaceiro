@@ -14,6 +14,7 @@ export interface InvoiceTransaction {
   is_refund: boolean;
   status: string;
   reimbursement_status: string | null;
+  split_group_id: string | null;
   category_name: string | null;
   category_icon: string | null;
 }
@@ -53,6 +54,7 @@ export function useInvoiceTransactions({
           is_refund,
           status,
           reimbursement_status,
+          split_group_id,
           categories(name, icon)
         `
         )
@@ -77,6 +79,7 @@ export function useInvoiceTransactions({
         is_refund: t.is_refund,
         status: t.status,
         reimbursement_status: t.reimbursement_status ?? null,
+        split_group_id: t.split_group_id ?? null,
         category_name: (t.categories as { name: string } | null)?.name || null,
         category_icon: (t.categories as { icon: string } | null)?.icon || null,
       })) as InvoiceTransaction[];

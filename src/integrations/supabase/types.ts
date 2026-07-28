@@ -707,6 +707,8 @@ export type Database = {
           reimbursement_income_id: string | null
           reimbursement_payment_id: string | null
           reimbursement_status: string | null
+          split_group_id: string | null
+          split_parent_id: string | null
           status: string
           total_installments: number | null
           type: string
@@ -740,6 +742,8 @@ export type Database = {
           reimbursement_income_id?: string | null
           reimbursement_payment_id?: string | null
           reimbursement_status?: string | null
+          split_group_id?: string | null
+          split_parent_id?: string | null
           status?: string
           total_installments?: number | null
           type: string
@@ -773,6 +777,8 @@ export type Database = {
           reimbursement_income_id?: string | null
           reimbursement_payment_id?: string | null
           reimbursement_status?: string | null
+          split_group_id?: string | null
+          split_parent_id?: string | null
           status?: string
           total_installments?: number | null
           type?: string
@@ -816,6 +822,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transactions_split_parent_id_fkey"
+            columns: ["split_parent_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "transactions_refunded_transaction_id_fkey"
             columns: ["refunded_transaction_id"]
             isOneToOne: false
@@ -853,9 +866,17 @@ export type Database = {
         }
         Returns: string
       }
+      split_transaction: {
+        Args: { p_parts: Json; p_transaction_id: string }
+        Returns: string
+      }
       unmark_reimbursed: {
         Args: { p_transaction_id: string; p_new_status: string }
         Returns: undefined
+      }
+      unsplit_transaction: {
+        Args: { p_transaction_id: string }
+        Returns: string
       }
     }
     Enums: {

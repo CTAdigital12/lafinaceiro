@@ -66,6 +66,9 @@ export interface Transaction {
   installment_group_id: string | null;
   installment_number: number | null;
   total_installments: number | null;
+  // Split fields (transação dividida em várias categorias)
+  split_group_id: string | null;
+  split_parent_id: string | null;
   is_provisional: boolean;
   recurring_rule_id: string | null;
   project_id: string | null;
@@ -167,7 +170,9 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const hasMore = transactions.length < totalCount;
 
   const createTransaction = useMutation({
-    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "projects" | "due_date" | "imported_at" | "reimbursement_status" | "is_provisional" | "recurring_rule_id" | "project_id"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; is_provisional?: boolean; recurring_rule_id?: string | null; project_id?: string | null; original_description?: string | null; silent?: boolean; skipInvoiceCheck?: boolean; skipSync?: boolean }) => {
+    // split_group_id/split_parent_id ficam fora: uma transação nunca nasce
+    // dividida — o rateio é feito depois, pela RPC split_transaction.
+    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "projects" | "due_date" | "imported_at" | "reimbursement_status" | "is_provisional" | "recurring_rule_id" | "project_id" | "split_group_id" | "split_parent_id"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; is_provisional?: boolean; recurring_rule_id?: string | null; project_id?: string | null; original_description?: string | null; silent?: boolean; skipInvoiceCheck?: boolean; skipSync?: boolean }) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
