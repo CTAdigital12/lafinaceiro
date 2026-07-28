@@ -4,6 +4,7 @@ import { CashFlowTab } from "@/components/reports/CashFlowTab";
 import { ExpenseXRayTab } from "@/components/reports/ExpenseXRayTab";
 import { NetWorthTab } from "@/components/reports/NetWorthTab";
 import { ProjectsPlanningTab } from "@/components/reports/ProjectsPlanningTab";
+import { InstallmentsTab } from "@/components/reports/InstallmentsTab";
 
 export default function Reports() {
   return (
@@ -19,6 +20,7 @@ export default function Reports() {
             <TabsTrigger value="fluxo">Fluxo de Caixa</TabsTrigger>
             <TabsTrigger value="raio-x">Raio-X</TabsTrigger>
             <TabsTrigger value="patrimonio">Patrimônio</TabsTrigger>
+            <TabsTrigger value="parcelamentos">Parcelamentos</TabsTrigger>
             <TabsTrigger value="projetos">Projetos</TabsTrigger>
           </TabsList>
           <ScrollBar orientation="horizontal" />
@@ -32,6 +34,9 @@ export default function Reports() {
         </TabsContent>
         <TabsContent value="patrimonio">
           <NetWorthTab />
+        </TabsContent>
+        <TabsContent value="parcelamentos">
+          <InstallmentsTab />
         </TabsContent>
         <TabsContent value="projetos">
           <ProjectsPlanningTab />
