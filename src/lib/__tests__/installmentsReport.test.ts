@@ -4,12 +4,12 @@ import {
   buildInstallmentGroups,
   buildInstallmentsOverview,
   buildMonthlyInstallments,
-  earliestInstallmentMonth,
   installmentCompetenceMonth,
   isInstallmentRow,
+  latestInstallmentMonth,
   monthsBetween,
   stripInstallmentSuffix,
-  usableHistoryWindows,
+  usableForwardWindows,
   type InstallmentRow,
 } from "@/lib/installmentsReport";
 
@@ -161,15 +161,15 @@ describe("buildMonthlyInstallments", () => {
   });
 });
 
-describe("earliestInstallmentMonth", () => {
-  it("acha o primeiro mês com parcela e ignora quem não é parcelado", () => {
+describe("latestInstallmentMonth", () => {
+  it("acha a última parcela e ignora quem não é parcelado", () => {
     const rows = [
       row({ id: "a", date: "2026-07-10", due_date: "2026-07-10" }),
-      row({ id: "b", date: "2026-02-10", due_date: "2026-02-10" }),
-      row({ id: "avista", total_installments: 1, date: "2024-01-10", due_date: "2024-01-10" }),
+      row({ id: "b", date: "2027-02-10", due_date: "2027-02-10" }),
+      row({ id: "avista", total_installments: 1, date: "2030-01-10", due_date: "2030-01-10" }),
     ];
-    expect(earliestInstallmentMonth(rows)).toBe("2026-02");
-    expect(earliestInstallmentMonth([])).toBeNull();
+    expect(latestInstallmentMonth(rows)).toBe("2027-02");
+    expect(latestInstallmentMonth([])).toBeNull();
   });
 });
 
@@ -180,31 +180,72 @@ describe("monthsBetween", () => {
   });
 });
 
-describe("usableHistoryWindows", () => {
+describe("usableForwardWindows", () => {
   const options = [6, 12, 24] as const;
 
-  it("desabilita a janela que não acrescenta mês nenhum", () => {
-    // Histórico começa em abr/26: só 3 meses antes do mês atual.
-    const rows = [row({ id: "a", date: "2026-04-10", due_date: "2026-04-10" })];
-    expect(usableHistoryWindows(options, rows, CURRENT)).toEqual([
-      { months: 6, enabled: true }, // menor janela que cobre tudo
-      { months: 12, enabled: false },
+  it("desabilita o horizonte que já alcança a última parcela", () => {
+    // Última parcela em mar/27: 8 meses à frente.
+    const rows = [row({ id: "a", date: "2027-03-10", due_date: "2027-03-10" })];
+    expect(usableForwardWindows(options, rows, CURRENT)).toEqual([
+      { months: 6, enabled: true }, // mostra menos que tudo
+      { months: 12, enabled: false }, // idêntico a "Tudo"
       { months: 24, enabled: false },
     ]);
   });
 
-  it("libera as janelas cobertas pelo histórico", () => {
-    // Histórico de 14 meses: 6m mostra parte, 12m mostra mais, 24m cobre tudo.
-    const rows = [row({ id: "a", date: "2025-05-10", due_date: "2025-05-10" })];
-    expect(usableHistoryWindows(options, rows, CURRENT)).toEqual([
+  it("libera os horizontes menores que a cauda", () => {
+    // Última parcela daqui a 30 meses.
+    const rows = [row({ id: "a", date: "2029-01-10", due_date: "2029-01-10" })];
+    expect(usableForwardWindows(options, rows, CURRENT)).toEqual([
       { months: 6, enabled: true },
       { months: 12, enabled: true },
       { months: 24, enabled: true },
     ]);
   });
 
-  it("não desabilita nada quando não há parcelamento", () => {
-    expect(usableHistoryWindows(options, [], CURRENT).every((o) => o.enabled)).toBe(true);
+  it("desabilita tudo quando não há parcela futura", () => {
+    const rows = [row({ id: "a", date: "2026-05-10", due_date: "2026-05-10" })];
+    expect(usableForwardWindows(options, rows, CURRENT).every((o) => !o.enabled)).toBe(true);
+    expect(usableForwardWindows(options, [], CURRENT).every((o) => !o.enabled)).toBe(true);
+  });
+});
+
+describe("buildMonthlyInstallments — horizonte", () => {
+  const longTail = () =>
+    Array.from({ length: 13 }, (_, i) => {
+      const month = 7 + i;
+      const year = 2026 + Math.floor((month - 1) / 12);
+      const mm = String(((month - 1) % 12) + 1).padStart(2, "0");
+      return row({
+        id: `p${i}`,
+        installment_number: i + 1,
+        total_installments: 13,
+        date: `${year}-${mm}-10`,
+        due_date: `${year}-${mm}-10`,
+      });
+    });
+
+  it("corta a previsão no horizonte pedido", () => {
+    const p = buildMonthlyInstallments(longTail(), {
+      currentMonth: CURRENT,
+      monthsBack: 3,
+      monthsForward: 6,
+    });
+    expect(p[p.length - 1].month).toBe("2027-01"); // jul/26 + 6
+  });
+
+  it("sem horizonte, vai até a última parcela", () => {
+    const p = buildMonthlyInstallments(longTail(), { currentMonth: CURRENT, monthsBack: 3 });
+    expect(p[p.length - 1].month).toBe("2027-07");
+  });
+
+  it("nunca estica além da última parcela", () => {
+    const p = buildMonthlyInstallments(threeInstallments(), {
+      currentMonth: CURRENT,
+      monthsBack: 3,
+      monthsForward: 24,
+    });
+    expect(p[p.length - 1].month).toBe("2026-09");
   });
 });
 

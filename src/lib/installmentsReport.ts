@@ -132,15 +132,15 @@ function monthLabel(month: string): string {
   return format(parse(month, "yyyy-MM", new Date()), "MMM/yy", { locale: ptBR });
 }
 
-/** Primeiro mês que tem parcela, ou null quando não há parcelamento nenhum. */
-export function earliestInstallmentMonth(rows: InstallmentRow[]): string | null {
-  let earliest: string | null = null;
+/** Último mês que tem parcela, ou null quando não há parcelamento nenhum. */
+export function latestInstallmentMonth(rows: InstallmentRow[]): string | null {
+  let latest: string | null = null;
   for (const row of rows) {
     if (!isInstallmentRow(row)) continue;
     const month = installmentCompetenceMonth(row);
-    if (earliest === null || month < earliest) earliest = month;
+    if (latest === null || month > latest) latest = month;
   }
-  return earliest;
+  return latest;
 }
 
 /** Quantos meses inteiros separam dois yyyy-MM (negativo se `to` for anterior). */
@@ -152,39 +152,40 @@ export function monthsBetween(from: string, to: string): number {
 }
 
 /**
- * Quais janelas de histórico mudam alguma coisa no gráfico.
+ * Quais horizontes futuros mostram algo diferente de "tudo".
  *
- * A série começa no primeiro mês com parcela — pedir 24m de histórico com 3
- * meses de dado devolve o mesmo gráfico que 6m. Em vez de encher o eixo de
- * meses vazios (que diriam "R$ 0 de parcela" onde na verdade não há dado), as
- * janelas que não acrescentam nada vêm desabilitadas. A menor janela que já
- * cobre todo o histórico continua ativa, senão não sobraria opção nenhuma.
+ * A previsão termina na última parcela conhecida: se o parcelamento mais longo
+ * acaba em 8 meses, pedir 12 ou 24 meses à frente devolve exatamente o mesmo
+ * gráfico que "Tudo". Preencher o resto com meses zerados seria mentira — ali
+ * não há parcela nenhuma, e não "R$ 0 de parcela previsto". Então o horizonte
+ * que já alcança o fim vem desabilitado, e "Tudo" cobre esse caso.
  */
-export function usableHistoryWindows(
+export function usableForwardWindows(
   options: readonly number[],
   rows: InstallmentRow[],
   currentMonth: string
 ): { months: number; enabled: boolean }[] {
-  const earliest = earliestInstallmentMonth(rows);
-  if (!earliest) return options.map((months) => ({ months, enabled: true }));
+  const latest = latestInstallmentMonth(rows);
+  if (!latest) return options.map((months) => ({ months, enabled: false }));
 
-  const available = Math.max(0, monthsBetween(earliest, currentMonth));
-  const firstCovering = options.find((m) => m >= available) ?? options[options.length - 1];
-
-  return options.map((months) => ({
-    months,
-    enabled: months <= available || months === firstCovering,
-  }));
+  const tail = Math.max(0, monthsBetween(currentMonth, latest));
+  // `months < tail`: um horizonte que alcança ou passa o fim é idêntico a "Tudo".
+  return options.map((months) => ({ months, enabled: months < tail }));
 }
 
 /**
  * Série mês a mês: `monthsBack` meses de histórico (recortados no primeiro mês
- * com dado) até a última parcela conhecida. Meses sem parcela entram zerados,
- * para o gráfico não "pular" períodos.
+ * com dado) e, à frente, ou `monthsForward` meses ou tudo até a última parcela
+ * conhecida (`monthsForward: null`). Meses sem parcela DENTRO do intervalo
+ * entram zerados, para o gráfico não "pular" períodos.
  */
 export function buildMonthlyInstallments(
   rows: InstallmentRow[],
-  { currentMonth, monthsBack }: { currentMonth: string; monthsBack: number }
+  {
+    currentMonth,
+    monthsBack,
+    monthsForward = null,
+  }: { currentMonth: string; monthsBack: number; monthsForward?: number | null }
 ): InstallmentMonthPoint[] {
   const relevant = rows.filter(isInstallmentRow);
   if (relevant.length === 0) return [];
@@ -209,7 +210,19 @@ export function buildMonthlyInstallments(
     "yyyy-MM"
   );
   const startMonth = earliest > windowStart ? earliest : windowStart;
-  const endMonth = latest > currentMonth ? latest : currentMonth;
+
+  // Fim: a última parcela conhecida, opcionalmente encurtada pelo horizonte
+  // pedido. Nunca esticamos além dela — mês sem parcela lá na frente não é
+  // "R$ 0 previsto", é ausência de compromisso.
+  const lastKnown = latest > currentMonth ? latest : currentMonth;
+  const horizonEnd =
+    monthsForward === null
+      ? lastKnown
+      : format(
+          addMonths(parse(currentMonth, "yyyy-MM", new Date()), monthsForward),
+          "yyyy-MM"
+        );
+  const endMonth = horizonEnd < lastKnown ? horizonEnd : lastKnown;
 
   const points: InstallmentMonthPoint[] = [];
   let cursor = parse(startMonth, "yyyy-MM", new Date());
