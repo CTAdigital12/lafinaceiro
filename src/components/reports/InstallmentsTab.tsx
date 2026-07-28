@@ -45,10 +45,15 @@ import { cn } from "@/lib/utils";
 const COLOR_REALIZADO = "hsl(var(--chart-1))";
 const COLOR_PREVISTO = "hsl(45 93% 36%)";
 
-/** Janelas de histórico oferecidas, em meses. Crescente — `usableHistoryWindows`
- *  depende dessa ordem para achar a menor que já cobre todo o histórico. */
-const HISTORY_OPTIONS = [6, 12, 24] as const;
+/** Horizontes de previsão oferecidos, em meses à frente. "Tudo" vai até a
+ *  última parcela conhecida. */
+const FORWARD_OPTIONS = [6, 12, 24] as const;
 
+/** Meses de passado mostrados junto, só como contexto para enxergar a
+ *  tendência — o seletor é do futuro, que é o que interessa aqui. */
+const HISTORY_MONTHS = 3;
+
+type Horizon = number | "all";
 type GroupSortKey = "remaining" | "installment" | "next" | "description";
 
 function KpiCard({
@@ -143,29 +148,40 @@ export function InstallmentsTab() {
   const formatCurrency = useFormatCurrency();
   const { isHidden } = usePrivacyMode();
   const { rows, isLoading } = useInstallmentsReport();
-  const [historyWindow, setHistoryWindow] = useState<number>(HISTORY_OPTIONS[0]);
+  const [horizon, setHorizon] = useState<Horizon>("all");
   const [showOnlyActive, setShowOnlyActive] = useState(true);
 
   const currentMonth = format(new Date(), "yyyy-MM");
 
-  const historyOptions = useMemo(
-    () => usableHistoryWindows(HISTORY_OPTIONS, rows, currentMonth),
+  const forwardOptions = useMemo(
+    () => usableForwardWindows(FORWARD_OPTIONS, rows, currentMonth),
     [rows, currentMonth]
   );
-  const earliestMonth = useMemo(() => earliestInstallmentMonth(rows), [rows]);
+  const lastMonth = useMemo(() => latestInstallmentMonth(rows), [rows]);
 
   const { points, groups, overview } = useMemo(() => {
-    const monthly = buildMonthlyInstallments(rows, {
+    // A série completa manda nos KPIs: "total em aberto" e "livre em X meses"
+    // são do compromisso inteiro, não do pedaço que está visível no gráfico.
+    const full = buildMonthlyInstallments(rows, {
       currentMonth,
-      monthsBack: historyWindow,
+      monthsBack: HISTORY_MONTHS,
     });
     const grouped = buildInstallmentGroups(rows, { currentMonth });
+    const visible =
+      horizon === "all"
+        ? full
+        : buildMonthlyInstallments(rows, {
+            currentMonth,
+            monthsBack: HISTORY_MONTHS,
+            monthsForward: horizon,
+          });
+
     return {
-      points: monthly,
+      points: visible,
       groups: grouped,
-      overview: buildInstallmentsOverview(monthly, grouped, { currentMonth }),
+      overview: buildInstallmentsOverview(full, grouped, { currentMonth }),
     };
-  }, [rows, currentMonth, historyWindow]);
+  }, [rows, currentMonth, horizon]);
 
   const visibleGroups = useMemo(
     () => (showOnlyActive ? groups.filter((g) => g.isActive) : groups),
@@ -297,25 +313,28 @@ export function InstallmentsTab() {
             <ToggleGroup
               type="single"
               size="sm"
-              value={String(historyWindow)}
-              onValueChange={(v) => v && setHistoryWindow(Number(v))}
+              value={String(horizon)}
+              onValueChange={(v) => v && setHorizon(v === "all" ? "all" : Number(v))}
               className="justify-start"
             >
-              {historyOptions.map(({ months, enabled }) => (
+              {forwardOptions.map(({ months, enabled }) => (
                 <ToggleGroupItem
                   key={months}
                   value={String(months)}
                   disabled={!enabled}
-                  aria-label={`${months} meses de histórico`}
+                  aria-label={`Próximos ${months} meses`}
                   title={
                     enabled
-                      ? undefined
-                      : `Sem parcelas antes de ${earliestMonth ? monthLabel(earliestMonth) : "então"}`
+                      ? `Próximos ${months} meses`
+                      : `Suas parcelas terminam em ${lastMonth ? monthLabel(lastMonth) : "breve"} — use "Tudo"`
                   }
                 >
                   {months}m
                 </ToggleGroupItem>
               ))}
+              <ToggleGroupItem value="all" aria-label="Toda a previsão" title="Até a última parcela">
+                Tudo
+              </ToggleGroupItem>
             </ToggleGroup>
           </div>
 
