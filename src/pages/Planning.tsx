@@ -43,6 +43,14 @@ import {
   buildHierarchicalBudgets,
   type HierarchicalBudget,
 } from "@/lib/buildHierarchicalBudgets";
+import {
+  isForecastExpense,
+  isMonthlyExpense,
+  isMonthlyExpenseRefund,
+} from "@/lib/transactionFilters";
+
+// Despesa que consome orçamento: paga (efetivada) ou prevista (provisória/pendente).
+const isBudgetExpense = (t: Transaction) => isMonthlyExpense(t) || isForecastExpense(t);
 
 const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -70,25 +78,44 @@ export default function Planning() {
     return budgets.map(b => b.category_id).filter(Boolean) as string[];
   }, [budgets]);
 
-  // Calculate spent per category (excluding corporate expenses, refunds, and reimbursable expenses)
-  // Also aggregates subcategory spending into parent categories
-  const spentByCategory = useMemo(() => {
-    const result: Record<string, number> = {};
-    
-    transactions
-      .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable && !t.is_card_payment)
-      .forEach((t) => {
-        const catId = t.category_id || "uncategorized";
-        result[catId] = (result[catId] || 0) + Number(t.amount);
-        
-        // If the category is a subcategory, also add to the parent's total
-        const category = categories.find(c => c.id === catId);
-        if (category?.parent_id) {
-          result[category.parent_id] = (result[category.parent_id] || 0) + Number(t.amount);
-        }
-      });
-      
-    return result;
+  // Per-category totals, aggregating subcategory spending into parent categories.
+  // "paid" segue o mesmo filtro das telas de Transações/Dashboard (isMonthlyExpense,
+  // com estornos abatidos); "forecast" são as provisórias/pendentes; "spent" é a soma.
+  const { paidByCategory, forecastByCategory, spentByCategory } = useMemo(() => {
+    const paid: Record<string, number> = {};
+    const forecast: Record<string, number> = {};
+
+    transactions.forEach((t) => {
+      let target: Record<string, number>;
+      let amount = Number(t.amount);
+
+      if (isMonthlyExpense(t)) {
+        target = paid;
+      } else if (isMonthlyExpenseRefund(t)) {
+        target = paid;
+        amount = -amount;
+      } else if (isForecastExpense(t)) {
+        target = forecast;
+      } else {
+        return;
+      }
+
+      const catId = t.category_id || "uncategorized";
+      target[catId] = (target[catId] || 0) + amount;
+
+      // If the category is a subcategory, also add to the parent's total
+      const category = categories.find(c => c.id === catId);
+      if (category?.parent_id) {
+        target[category.parent_id] = (target[category.parent_id] || 0) + amount;
+      }
+    });
+
+    const spent: Record<string, number> = {};
+    new Set([...Object.keys(paid), ...Object.keys(forecast)]).forEach((catId) => {
+      spent[catId] = (paid[catId] || 0) + (forecast[catId] || 0);
+    });
+
+    return { paidByCategory: paid, forecastByCategory: forecast, spentByCategory: spent };
   }, [transactions, categories]);
 
   // Build hierarchical structure (extracted to a pure helper for unit testing
@@ -99,12 +126,20 @@ export default function Planning() {
     [budgets, spentByCategory, categories],
   );
 
-  // Calculate total spent from transactions directly (not from spentByCategory which has duplicates)
-  const totalSpent = useMemo(() => {
-    return transactions
-      .filter((t) => t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable && !t.is_card_payment)
-      .reduce((sum, t) => sum + Number(t.amount), 0);
+  // Calculate totals from transactions directly (not from spentByCategory which has duplicates).
+  // totalPaid bate com o "total de despesas" das telas de Transações/Dashboard.
+  const { totalPaid, totalForecast } = useMemo(() => {
+    let paid = 0;
+    let forecast = 0;
+    transactions.forEach((t) => {
+      if (isMonthlyExpense(t)) paid += Number(t.amount);
+      else if (isMonthlyExpenseRefund(t)) paid -= Number(t.amount);
+      else if (isForecastExpense(t)) forecast += Number(t.amount);
+    });
+    return { totalPaid: paid, totalForecast: forecast };
   }, [transactions]);
+
+  const totalSpent = totalPaid + totalForecast;
   
   const totalRemaining = totalPlanned - totalSpent;
   const totalPercentage = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
@@ -112,15 +147,7 @@ export default function Planning() {
 
   // Uncategorized transactions
   const uncategorizedTransactions = useMemo(() => {
-    return transactions.filter(
-      (t) => 
-        t.type === "expense" && 
-        !t.category_id && 
-        !t.is_corporate_expense && 
-        !t.is_refund && 
-        !t.is_reimbursable &&
-        !t.is_card_payment
-    );
+    return transactions.filter((t) => isBudgetExpense(t) && !t.category_id);
   }, [transactions]);
 
   const uncategorizedTotal = useMemo(() => {
@@ -182,8 +209,8 @@ export default function Planning() {
       ? categories.filter(c => c.parent_id === categoryId).map(c => c.id)
       : [];
     
-    return transactions.filter(t => 
-      t.type === "expense" && !t.is_corporate_expense && !t.is_refund && !t.is_reimbursable && !t.is_card_payment &&
+    return transactions.filter(t =>
+      isBudgetExpense(t) &&
       (t.category_id === categoryId || (isParent && childCategoryIds.includes(t.category_id || "")))
     ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
@@ -222,6 +249,8 @@ export default function Planning() {
   const renderBudgetRow = (budget: HierarchicalBudget, isChild: boolean = false) => {
     const planned = budget.isParent ? budget.totalPlanned : Number(budget.planned_amount);
     const spent = budget.isParent ? budget.totalSpent : (spentByCategory[budget.category_id || ""] || 0);
+    const paid = paidByCategory[budget.category_id || ""] || 0;
+    const forecast = forecastByCategory[budget.category_id || ""] || 0;
     const remaining = planned - spent;
     const percentage = planned > 0 ? (spent / planned) * 100 : 0;
     const isOverBudget = spent > planned;
@@ -279,10 +308,10 @@ export default function Planning() {
           {fmt(planned)}
         </TableCell>
         <TableCell className="text-right text-muted-foreground">
-          {fmt(0)}
+          {fmt(paid)}
         </TableCell>
         <TableCell className="text-right text-muted-foreground">
-          {fmt(spent)}
+          {fmt(forecast)}
         </TableCell>
         <TableCell className="text-right font-medium">
           {fmt(spent)}
@@ -382,7 +411,14 @@ export default function Planning() {
         <TableCell className="pl-12 text-sm text-muted-foreground">
           {new Date(t.date).toLocaleDateString("pt-BR")}
         </TableCell>
-        <TableCell colSpan={3} className="text-sm">{t.description}</TableCell>
+        <TableCell colSpan={3} className="text-sm">
+          {t.description}
+          {isForecastExpense(t) && (
+            <span className="ml-2 text-[10px] font-medium text-chart-4 bg-chart-4/10 rounded px-1.5 py-0.5">
+              prevista
+            </span>
+          )}
+        </TableCell>
         <TableCell className="text-right text-sm font-medium text-expense">
           {fmt(Number(t.amount))}
         </TableCell>
@@ -462,7 +498,15 @@ export default function Planning() {
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg gradient-expense flex items-center justify-center"><TrendingDown className="h-5 w-5 text-expense-foreground" /></div>
-            <div><p className="text-xs text-muted-foreground">Total Gasto</p><Currency value={totalSpent} className="text-lg font-bold text-foreground block" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Gasto</p>
+              <Currency value={totalSpent} className="text-lg font-bold text-foreground block" />
+              {totalForecast > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  {fmt(totalPaid)} pagas · {fmt(totalForecast)} previstas
+                </p>
+              )}
+            </div>
           </div>
         </div>
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
@@ -586,6 +630,7 @@ export default function Planning() {
               const isCollapsed = collapsedCategories.has(categoryId);
               const planned = parentBudget.isParent ? parentBudget.totalPlanned : Number(parentBudget.planned_amount);
               const spent = parentBudget.isParent ? parentBudget.totalSpent : (spentByCategory[parentBudget.category_id || ""] || 0);
+              const forecast = forecastByCategory[parentBudget.category_id || ""] || 0;
               const remaining = planned - spent;
               const percentage = planned > 0 ? (spent / planned) * 100 : 0;
               const isOverBudget = spent > planned;
@@ -669,6 +714,11 @@ export default function Planning() {
                       <div>
                         <p className="text-muted-foreground text-xs">Gasto</p>
                         <p className="font-semibold text-expense">{fmt(spent)}</p>
+                        {forecast > 0 && (
+                          <p className="text-[10px] text-muted-foreground">
+                            {fmt(forecast)} previstas
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -714,7 +764,14 @@ export default function Planning() {
                             onClick={() => { setEditingTransaction(t); setTransactionModalOpen(true); }}
                           >
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm truncate">{t.description}</p>
+                              <p className="text-sm truncate">
+                                {t.description}
+                                {isForecastExpense(t) && (
+                                  <span className="ml-2 text-[10px] font-medium text-chart-4 bg-chart-4/10 rounded px-1.5 py-0.5">
+                                    prevista
+                                  </span>
+                                )}
+                              </p>
                               <p className="text-xs text-muted-foreground">{new Date(t.date).toLocaleDateString("pt-BR")}</p>
                             </div>
                             <span className="text-sm font-medium text-expense shrink-0">
@@ -813,7 +870,14 @@ export default function Planning() {
                                       onClick={() => { setEditingTransaction(t); setTransactionModalOpen(true); }}
                                     >
                                       <div className="min-w-0 flex-1">
-                                        <p className="text-xs truncate">{t.description}</p>
+                                        <p className="text-xs truncate">
+                                          {t.description}
+                                          {isForecastExpense(t) && (
+                                            <span className="ml-1.5 text-[9px] font-medium text-chart-4 bg-chart-4/10 rounded px-1 py-0.5">
+                                              prevista
+                                            </span>
+                                          )}
+                                        </p>
                                         <p className="text-[10px] text-muted-foreground">{new Date(t.date).toLocaleDateString("pt-BR")}</p>
                                       </div>
                                       <span className="text-xs font-medium text-expense shrink-0">

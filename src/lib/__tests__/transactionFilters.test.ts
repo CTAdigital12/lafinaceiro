@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  isForecastExpense,
   isMonthlyExpense,
   isMonthlyExpenseRefund,
   isMonthlyIncome,
@@ -97,6 +98,44 @@ describe("isMonthlyIncome", () => {
 
   it("retorna false para expense", () => {
     expect(isMonthlyIncome(tx("expense"))).toBe(false);
+  });
+});
+
+describe("isForecastExpense", () => {
+  it("retorna true para expense provisória", () => {
+    expect(isForecastExpense(tx("expense", { is_provisional: true }))).toBe(true);
+  });
+
+  it("retorna true para expense com status='pending'", () => {
+    expect(isForecastExpense(tx("expense", { status: "pending" }))).toBe(true);
+  });
+
+  it("retorna false para expense comum já efetivada", () => {
+    expect(isForecastExpense(tx("expense"))).toBe(false);
+  });
+
+  it("retorna false para provisória corporativa/reembolsável/estorno/pgto de fatura", () => {
+    expect(isForecastExpense(tx("expense", { is_provisional: true, is_corporate_expense: true }))).toBe(false);
+    expect(isForecastExpense(tx("expense", { is_provisional: true, is_reimbursable: true }))).toBe(false);
+    expect(isForecastExpense(tx("expense", { is_provisional: true, is_refund: true }))).toBe(false);
+    expect(isForecastExpense(tx("expense", { is_provisional: true, is_card_payment: true }))).toBe(false);
+  });
+
+  it("retorna false para income provisória", () => {
+    expect(isForecastExpense(tx("income", { is_provisional: true }))).toBe(false);
+  });
+
+  it("particiona a base com isMonthlyExpense: toda despesa pessoal é paga OU prevista, nunca ambas", () => {
+    const casos = [
+      tx("expense"),
+      tx("expense", { is_provisional: true }),
+      tx("expense", { status: "pending" }),
+      tx("expense", { is_provisional: true, status: "pending" }),
+    ];
+    casos.forEach((t) => {
+      expect(isMonthlyExpense(t) || isForecastExpense(t)).toBe(true);
+      expect(isMonthlyExpense(t) && isForecastExpense(t)).toBe(false);
+    });
   });
 });
 
