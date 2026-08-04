@@ -21,6 +21,21 @@ export function isMonthlyExpense(t: T): boolean {
   );
 }
 
+// Despesa "prevista": ainda não efetivada (provisória ou pendente), mas que
+// consome orçamento no Planejamento. Complemento de isMonthlyExpense dentro
+// da mesma base (pessoal, não-estorno, não-pagamento-de-fatura): toda despesa
+// dessa base é paga OU prevista, nunca ambas.
+export function isForecastExpense(t: T): boolean {
+  return (
+    t.type === 'expense' &&
+    !t.is_corporate_expense &&
+    !t.is_refund &&
+    !t.is_reimbursable &&
+    !t.is_card_payment &&
+    (Boolean(t.is_provisional) || t.status === 'pending')
+  );
+}
+
 export function isMonthlyExpenseRefund(t: T): boolean {
   return (
     t.type === 'expense' &&
