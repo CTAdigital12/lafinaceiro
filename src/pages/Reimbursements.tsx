@@ -129,9 +129,12 @@ export default function Reimbursements() {
           credit_cards (name, last_digits)
         `)
         .eq("is_reimbursable", true)
+        // Mesmo fallback de CorporateExpenses: cartão com due_date nulo
+        // precisa cair pela data da compra, senão some de todos os meses.
         .or(
           `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate}),` +
-          `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`
+          `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate}),` +
+          `and(credit_card_id.not.is.null,due_date.is.null,date.gte.${startDate},date.lte.${endDate})`
         )
         .order("date", { ascending: false });
 
