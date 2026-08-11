@@ -11,8 +11,12 @@ verify_jwt = true
 [functions.migrate-installments]
 verify_jwt = true
 
-[functions.admin-reset-password]
-verify_jwt = true
+# admin-reset-password foi REMOVIDA (auditoria C1).
+# Ela permitia que qualquer usuário autenticado redefinisse a senha de outro:
+# add-member criava shared_access sem consentimento do alvo, e a autorização do
+# reset olhava só para owner_id = quem chamou. Recuperação de senha agora é só
+# pelo fluxo próprio do usuário (/forgot-password -> e-mail -> /reset-password).
+# Se ela já foi deployada, apague no painel: Edge Functions > admin-reset-password.
 
 [functions.add-member]
 verify_jwt = true
