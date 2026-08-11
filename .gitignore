@@ -26,6 +26,11 @@ supabase/.branches/
 .vercel/
 *.pem
 
+# Claude Code: settings locais e, principalmente, .claude/backups/, que guarda
+# dumps de transações reais (valores, estabelecimentos, contas). Nunca esteve
+# versionado; o ignore existe para que um `git add .` não versione por acidente.
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
