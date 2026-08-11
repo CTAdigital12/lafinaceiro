@@ -58,7 +58,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import {
+  isForecastExpense,
+  isMonthlyExpense,
+  isMonthlyExpenseRefund,
+  isMonthlyIncome,
+} from "@/lib/transactionFilters";
+import { affectedCardIds, findClosedInvoiceBlock } from "@/lib/invoiceGuard";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
+import { useCreditCardInvoiceSync } from "@/hooks/useCreditCardInvoiceSync";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { TransactionModal } from "@/components/modals/TransactionModal";
@@ -170,6 +178,7 @@ export default function Transactions() {
     searchQuery: debouncedSearchQuery,
   });
   const { totalBalance } = useAccounts();
+  const { syncInvoiceForCard } = useCreditCardInvoiceSync();
   
   // Count active filters
   const activeFiltersCount =
@@ -183,10 +192,36 @@ export default function Transactions() {
     (filters.corporateFilter !== "all" ? 1 : 0) +
     (filters.cardPaymentFilter !== "all" ? 1 : 0);
 
+  // As operações em lote escrevem direto na tabela, sem passar por
+  // useTransactions. Faltava nelas o guard de fatura fechada e o recálculo de
+  // current_invoice, então dava para apagar/alterar lançamentos de uma fatura
+  // já fechada e o total do cartão ficava divergente (auditoria A3).
+  const selectedRows = () =>
+    filteredTransactions.filter((t) => selectedTransactions.includes(t.id));
+
+  const guardBulkClosedInvoice = async () => {
+    const message = await findClosedInvoiceBlock(selectedRows());
+    if (message) {
+      toast({ title: "Fatura fechada", description: message, variant: "destructive" });
+      return false;
+    }
+    return true;
+  };
+
+  const syncBulkAffectedCards = async (rows: Transaction[]) => {
+    for (const cardId of affectedCardIds(rows)) {
+      await syncInvoiceForCard(cardId);
+    }
+    queryClient.invalidateQueries({ queryKey: ["credit_cards"] });
+  };
+
   // Bulk delete handler
   const handleBulkDelete = async () => {
     const count = selectedTransactions.length;
+    const rows = selectedRows();
     try {
+      if (!(await guardBulkClosedInvoice())) return;
+
       const { error } = await supabase
         .from("transactions")
         .delete()
@@ -194,11 +229,13 @@ export default function Transactions() {
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      await syncBulkAffectedCards(rows);
       setSelectedTransactions([]);
-      setShowDeleteDialog(false);
       toast({ title: `${count} transações excluídas!` });
     } catch (error: any) {
       toast({ title: "Erro ao excluir transações", description: error.message, variant: "destructive" });
+    } finally {
+      setShowDeleteDialog(false);
     }
   };
 
@@ -206,6 +243,8 @@ export default function Transactions() {
   const handleBulkCategoryUpdate = async (categoryId: string) => {
     const count = selectedTransactions.length;
     try {
+      if (!(await guardBulkClosedInvoice())) return;
+
       const { error } = await supabase
         .from("transactions")
         .update({ category_id: categoryId })
@@ -223,13 +262,17 @@ export default function Transactions() {
   // Bulk corporate expense toggle handler
   const handleBulkCorporateToggle = async (markAsCorporate: boolean) => {
     const count = selectedTransactions.length;
+    const rows = selectedRows();
     try {
+      if (!(await guardBulkClosedInvoice())) return;
+
       const { error } = await supabase
         .from("transactions")
         .update({ is_corporate_expense: markAsCorporate })
         .in("id", selectedTransactions);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      await syncBulkAffectedCards(rows);
       setSelectedTransactions([]);
       toast({ 
         title: markAsCorporate 
@@ -456,26 +499,44 @@ export default function Transactions() {
     }
   };
 
-  // Calculate totals based on filtered transactions (respects all filters and refunds)
-  const tabTotalIncome = filteredTransactions
-    .filter((t) =>
-      (t.type === "income" && !t.is_refund && !t.is_corporate_expense && !t.is_reimbursement) ||
-      (t.type === "expense" && t.is_refund && !t.is_corporate_expense)
-    )
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-  
-  // Calcular despesas normais (excluindo estornos e pagamentos de fatura)
-  const normalExpenses = filteredTransactions
-    .filter((t) => t.type === "expense" && !t.is_refund && !t.is_card_payment)
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+  // Totais desta tela.
+  //
+  // Regra ÚNICA do app: sempre via `@/lib/transactionFilters`, nunca filtro
+  // inline. Antes daqui saíam números que não fechavam com Dashboard,
+  // Planejamento e Relatórios, porque este arquivo tinha a sua própria versão
+  // da regra e ela divergia em três pontos (auditoria C3):
+  //
+  //   1. estorno era somado como RECEITA e subtraído da despesa (contava duas
+  //      vezes, movendo o par em 2x o valor);
+  //   2. despesas provisórias/pendentes/corporativas/reembolsáveis entravam
+  //      aqui e não entravam no Dashboard;
+  //   3. o rótulo dizia "Despesas (Conta)" somando só a página carregada.
+  //
+  // Agora: pagas = isMonthlyExpense − isMonthlyExpenseRefund (idêntico a
+  // Planning.tsx e BalanceChart.tsx). O que ficou de fora do headline aparece
+  // como "previstas", em vez de sumir da tela.
+  const sum = (rows: Transaction[]) =>
+    rows.reduce((total, t) => total + Number(t.amount), 0);
 
-  // Calcular estornos de despesas (devem ser subtraídos)
-  const expenseRefunds = filteredTransactions
-    .filter((t) => t.type === "expense" && t.is_refund)
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const tabTotalIncome = sum(filteredTransactions.filter(isMonthlyIncome));
 
-  // Total = Despesas - Estornos (mesma lógica do useCreditCardReconciliation)
-  const tabTotalExpense = normalExpenses - expenseRefunds;
+  const tabTotalExpense =
+    sum(filteredTransactions.filter(isMonthlyExpense)) -
+    sum(filteredTransactions.filter(isMonthlyExpenseRefund));
+
+  // Provisórias + pendentes: não entram no total pago, mas continuam visíveis.
+  const tabForecastExpense = sum(filteredTransactions.filter(isForecastExpense));
+
+  // Os totais cobrem apenas o que está carregado. Enquanto houver mais páginas,
+  // o rótulo precisa dizer isso — senão o número parece ser o do mês inteiro.
+  const totalsScopeLabel =
+    activeFiltersCount > 0 || searchQuery
+      ? "filtradas"
+      : hasMore
+        ? "página carregada"
+        : activeTab === "credit"
+          ? "cartão"
+          : "conta";
 
   const toggleTransaction = (id: string) => {
     setSelectedTransactions((prev) =>
@@ -1245,13 +1306,7 @@ export default function Transactions() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  {activeFiltersCount > 0 || searchQuery
-                    ? "Receitas (filtradas)"
-                    : showAll 
-                      ? "Receitas (Página)" 
-                      : activeTab === "credit" 
-                        ? "Receitas (Cartão)" 
-                        : "Receitas (Conta)"}
+                  Receitas ({totalsScopeLabel})
                 </p>
                 <p className="text-lg font-bold text-income">
                   <Currency value={tabTotalIncome} />
@@ -1268,17 +1323,16 @@ export default function Transactions() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  {activeFiltersCount > 0 || searchQuery
-                    ? "Despesas (filtradas)"
-                    : showAll 
-                      ? "Despesas (Página)" 
-                      : activeTab === "credit" 
-                        ? "Despesas (Cartão)" 
-                        : "Despesas (Conta)"}
+                  Despesas ({totalsScopeLabel})
                 </p>
                 <p className="text-lg font-bold text-expense">
                   <Currency value={tabTotalExpense} />
                 </p>
+                {tabForecastExpense > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    + <Currency value={tabForecastExpense} /> previstas
+                  </p>
+                )}
               </div>
             </div>
           </div>

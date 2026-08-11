@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback } from "react";
 import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
 import { isMonthlyExpense, isMonthlyExpenseRefund, isMonthlyIncome } from "@/lib/transactionFilters";
+import { endOfMonthYmd, invoicePeriodFromDueDate, startOfMonthYmd } from "@/lib/dateUtils";
 
 // Utility to check if invoice is closed for a given card/month/year
 async function checkInvoiceClosed(creditCardId: string | null | undefined, dueDate: string | null | undefined): Promise<{ isClosed: boolean; message?: string }> {
@@ -13,9 +14,13 @@ async function checkInvoiceClosed(creditCardId: string | null | undefined, dueDa
     return { isClosed: false };
   }
 
-  const [yearStr, monthStr] = dueDate.split("-");
-  const year = Number(yearStr);
-  const month = Number(monthStr);
+  // Este caminho já fazia o parsing correto por string; agora usa o helper
+  // compartilhado para não existirem duas implementações da mesma conta.
+  const period = invoicePeriodFromDueDate(dueDate);
+  if (!period) {
+    return { isClosed: false };
+  }
+  const { month, year } = period;
 
   const { data, error } = await supabase
     .from("credit_card_invoices")
@@ -103,8 +108,11 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const month = overrideMonth ?? contextMonth;
   const year = overrideYear ?? contextYear;
 
-  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-  const endDate = new Date(year, month, 0).toISOString().split("T")[0];
+  // endOfMonthYmd em vez de `new Date(year, month, 0).toISOString()`: o
+  // toISOString converte para UTC e, em fusos a leste de Greenwich, devolvia o
+  // penúltimo dia do mês — cortando os lançamentos do último dia do filtro.
+  const startDate = startOfMonthYmd(year, month);
+  const endDate = endOfMonthYmd(year, month);
 
   // Query for transactions with "load more" support
   const { data: paginatedData, isLoading } = useQuery({
