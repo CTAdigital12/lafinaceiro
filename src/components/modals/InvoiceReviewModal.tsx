@@ -55,6 +55,10 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ImportedItem, ImportCompleteData } from "./InvoiceImportModal";
 import { format, addMonths, parse } from "date-fns";
+import {
+  buildInstallmentDescription,
+  stripInstallmentMarkers,
+} from "@/lib/installmentDescription";
 
 // Duplicate status for imported items
 type DuplicateStatus = 'new' | 'duplicate' | 'rejected';
@@ -379,19 +383,19 @@ export function InvoiceReviewModal({
     const baseDueDate = item.due_date ? parse(item.due_date, "yyyy-MM-dd", new Date()) : new Date();
     const remaining = item.installment_total - item.installment_current;
     
-    const baseDescription = item.description
-      .replace(/\s*\d+\/\d+\s*/g, " ")
-      .replace(/\s*PARC\s*\d+\s*\/\s*\d+\s*/gi, " ")
-      .replace(/\s*\(\d+\/\d+\)\s*/g, " ")
-      .trim();
-    
+    const baseDescription = stripInstallmentMarkers(item.description);
+
     for (let i = 1; i <= remaining; i++) {
       const installmentNumber = item.installment_current + i;
       // Progressive due date: base due date + i months
       const futureDueDate = addMonths(baseDueDate, i);
       
       futureInstallments.push({
-        description: `${baseDescription} ${installmentNumber}/${item.installment_total}`,
+        description: buildInstallmentDescription(
+          baseDescription,
+          installmentNumber,
+          item.installment_total,
+        ),
         amount: item.amount,
         date: item.date, // purchase_date stays the same (original purchase date)
         due_date: format(futureDueDate, "yyyy-MM-dd"), // progressive due date

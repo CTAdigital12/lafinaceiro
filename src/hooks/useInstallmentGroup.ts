@@ -5,6 +5,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Transaction } from "./useTransactions";
 import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
 import { affectedCardIds, findClosedInvoiceBlock } from "@/lib/invoiceGuard";
+import {
+  buildInstallmentDescription,
+  stripInstallmentMarkers,
+} from "@/lib/installmentDescription";
 import { addMonths, format, parseISO } from "date-fns";
 
 export function useInstallmentGroup(groupId: string | null) {
@@ -49,14 +53,8 @@ export function useInstallmentGroup(groupId: string | null) {
   const installmentValue = installments.length > 0 ? Number(installments[0].amount) : 0;
   
   // Get base description (cleaned from installment pattern)
-  const baseDescription = installments.length > 0 
-    ? installments[0].description
-        .replace(/\s*\d+\/\d+\s*$/g, '')
-        .replace(/\s*\d+\s+de\s+\d+\s*$/gi, '')
-        .replace(/\s*PARC(?:ELA)?\s*\d+\/\d+/gi, '')
-        .replace(/\s*\(\d+\/\d+\)\s*$/g, '')
-        .replace(/\s+-\s+.*$/, '')
-        .trim()
+  const baseDescription = installments.length > 0
+    ? stripInstallmentMarkers(installments[0].description)
     : "";
 
   const { syncInvoiceForCard } = useCreditCardInvoiceSync();
@@ -208,7 +206,11 @@ export function useInstallmentGroup(groupId: string | null) {
         // Update all with new base description + installment number
         const updates = installments.map(inst => ({
           id: inst.id,
-          description: `${data.description} ${inst.installment_number}/${inst.total_installments}`,
+          description: buildInstallmentDescription(
+            data.description,
+            inst.installment_number,
+            inst.total_installments,
+          ),
           amount: data.amount ?? inst.amount,
           category_id: data.category_id ?? inst.category_id,
         }));
@@ -284,7 +286,7 @@ export function useInstallmentGroup(groupId: string | null) {
         
         newInstallments.push({
           user_id: user.id,
-          description: `${baseDescription} ${installmentNumber}/${newTotal}`,
+          description: buildInstallmentDescription(baseDescription, installmentNumber, newTotal),
           amount: lastInstallment.amount,
           type: lastInstallment.type,
           category_id: lastInstallment.category_id,
@@ -314,7 +316,7 @@ export function useInstallmentGroup(groupId: string | null) {
         const { error } = await supabase
           .from("transactions")
           .update({ 
-            description: `${baseDescription} ${inst.installment_number}/${newTotal}`,
+            description: buildInstallmentDescription(baseDescription, inst.installment_number, newTotal),
             total_installments: newTotal,
           })
           .eq("id", inst.id);
