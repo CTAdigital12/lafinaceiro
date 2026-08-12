@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Transaction } from "./useTransactions";
+import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
+import { affectedCardIds, findClosedInvoiceBlock } from "@/lib/invoiceGuard";
 import { addMonths, format, parseISO } from "date-fns";
 
 export function useInstallmentGroup(groupId: string | null) {
@@ -57,9 +59,34 @@ export function useInstallmentGroup(groupId: string | null) {
         .trim()
     : "";
 
+  const { syncInvoiceForCard } = useCreditCardInvoiceSync();
+
+  // As mutações deste hook escrevem DIRETO na tabela, sem passar por
+  // useTransactions — então precisam repetir aqui as duas coisas que o caminho
+  // normal faz e que faltavam (auditoria A3):
+  //
+  //   1. recusar alteração em fatura já fechada;
+  //   2. recalcular current_invoice depois de mexer no valor/status.
+  //
+  // Sem (2), marcar uma parcela como paga mudava o total da fatura no banco
+  // mas não em `credit_cards.current_invoice`, e o cartão ficava divergente até
+  // alguma outra ação disparar o recálculo.
+  const guardClosedInvoice = async () => {
+    const message = await findClosedInvoiceBlock(installments);
+    if (message) throw new Error(message);
+  };
+
+  const syncAffectedCards = async () => {
+    for (const cardId of affectedCardIds(installments)) {
+      await syncInvoiceForCard(cardId);
+    }
+  };
+
   const invalidateQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["installment-group", groupId] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    queryClient.invalidateQueries({ queryKey: ["credit_cards"] });
   };
 
   // Mutation to update category for all installments in group
@@ -90,15 +117,18 @@ export function useInstallmentGroup(groupId: string | null) {
   // Mutation to toggle installment status (paid/pending)
   const toggleInstallmentStatus = useMutation({
     mutationFn: async ({ id, newStatus }: { id: string; newStatus: "completed" | "pending" }) => {
+      await guardClosedInvoice();
+
       const { error } = await supabase
         .from("transactions")
         .update({ status: newStatus })
         .eq("id", id);
-      
+
       if (error) throw error;
     },
-    onSuccess: (_, { newStatus }) => {
+    onSuccess: async (_, { newStatus }) => {
       invalidateQueries();
+      await syncAffectedCards();
       toast({ title: newStatus === "completed" ? "Parcela marcada como paga!" : "Parcela marcada como pendente!" });
     },
     onError: (error: Error) => {
@@ -113,15 +143,18 @@ export function useInstallmentGroup(groupId: string | null) {
   // Mutation to delete a single installment
   const deleteSingleInstallment = useMutation({
     mutationFn: async (id: string) => {
+      await guardClosedInvoice();
+
       const { error } = await supabase
         .from("transactions")
         .delete()
         .eq("id", id);
-      
+
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       invalidateQueries();
+      await syncAffectedCards();
       toast({ title: "Parcela excluída!" });
     },
     onError: (error: Error) => {
@@ -137,17 +170,19 @@ export function useInstallmentGroup(groupId: string | null) {
   const deletePendingInstallments = useMutation({
     mutationFn: async () => {
       if (!groupId) throw new Error("No group ID");
-      
+      await guardClosedInvoice();
+
       const { error } = await supabase
         .from("transactions")
         .delete()
         .eq("installment_group_id", groupId)
         .eq("status", "pending");
-      
+
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       invalidateQueries();
+      await syncAffectedCards();
       toast({ title: "Parcelas pendentes excluídas!" });
     },
     onError: (error: Error) => {
@@ -164,7 +199,8 @@ export function useInstallmentGroup(groupId: string | null) {
     mutationFn: async (data: { description?: string; amount?: number; category_id?: string }) => {
       if (!groupId) throw new Error("No group ID");
       if (!user) throw new Error("User not authenticated");
-      
+      await guardClosedInvoice();
+
       // Build update object with only provided fields
       const updateData: Record<string, unknown> = {};
       
@@ -205,8 +241,9 @@ export function useInstallmentGroup(groupId: string | null) {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       invalidateQueries();
+      await syncAffectedCards();
       toast({ title: "Todas as parcelas atualizadas!" });
     },
     onError: (error: Error) => {
@@ -285,8 +322,9 @@ export function useInstallmentGroup(groupId: string | null) {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       invalidateQueries();
+      await syncAffectedCards();
       toast({ title: "Parcelas adicionadas com sucesso!" });
     },
     onError: (error: Error) => {

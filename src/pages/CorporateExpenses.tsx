@@ -118,9 +118,17 @@ export default function CorporateExpenses() {
         // não uma despesa. Sem isto, ele dobra o total e vira um "Pendente" fantasma
         // (o espelho não define reimbursement_status, caindo no default 'pending').
         .eq("is_card_payment", false)
+        // Competência: conta usa `date`, cartão usa `due_date`.
+        //
+        // O terceiro ramo é obrigatório. Sem ele, um lançamento de cartão com
+        // due_date NULO não satisfaz nenhuma das duas primeiras condições e
+        // fica invisível nesta tela em TODOS os meses — não existe período em
+        // que ele apareça. É o mesmo fallback que useInvoiceTransactions já
+        // fazia; aqui tinha ficado de fora.
         .or(
           `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate}),` +
-          `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`
+          `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate}),` +
+          `and(credit_card_id.not.is.null,due_date.is.null,date.gte.${startDate},date.lte.${endDate})`
         )
         .order("date", { ascending: false });
 

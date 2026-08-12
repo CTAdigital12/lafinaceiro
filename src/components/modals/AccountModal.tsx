@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useAccounts, Account } from "@/hooks/useAccounts";
 import { detectBankFromName } from "@/lib/bankConfig";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchRealizedNetForAccount } from "@/lib/accountBalance";
 
 interface AccountModalProps {
   open: boolean;
@@ -98,21 +98,14 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
     };
 
     if (isEditing && account) {
-      // Compute initial_balance = desired_balance - sum(realized transactions)
-      // so that computed_balance = initial_balance + sum(realized) = desired_balance
-      const today = new Date().toISOString().split("T")[0];
-      const { data: txData } = await supabase
-        .from("transactions")
-        .select("type, amount, status, is_provisional, date")
-        .eq("account_id", account.id)
-        .eq("status", "completed")
-        .eq("is_provisional", false)
-        .lte("date", today);
-
-      const txNet = (txData || []).reduce((sum, tx) => {
-        const sign = tx.type === "income" ? 1 : -1;
-        return sum + sign * Number(tx.amount);
-      }, 0);
+      // initial_balance = saldo desejado − soma realizada, para que
+      // computed_balance volte a bater com o valor digitado.
+      //
+      // A soma vem de fetchRealizedNetForAccount, que pagina (auditoria C2).
+      // Antes era uma consulta única, cortada em silêncio pelo teto de linhas
+      // do PostgREST — e como o resultado é GRAVADO, um corte aqui deixava o
+      // initial_balance permanentemente errado.
+      const txNet = await fetchRealizedNetForAccount(account.id);
 
       const newInitialBalance = balanceValue - txNet;
       await updateAccount.mutateAsync({ id: account.id, ...accountData, initial_balance: newInitialBalance });

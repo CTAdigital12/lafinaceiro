@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useCallback } from "react";
+import { invoicePeriodFromDueDate } from "@/lib/dateUtils";
 
 export type InvoiceStatus = "open" | "closed" | "paid";
 
@@ -271,9 +272,14 @@ export function useInvoiceCycles(options: UseInvoiceCyclesOptions = {}) {
         return { allowed: true };
       }
 
-      const dateObj = new Date(dueDate);
-      const m = dateObj.getMonth() + 1;
-      const y = dateObj.getFullYear();
+      // parseYmd, não `new Date(dueDate)`: para vencimento no dia 1 o parsing
+      // via Date resolvia o mês ANTERIOR em UTC-3 e a trava caía no ciclo
+      // errado (auditoria A2).
+      const period = invoicePeriodFromDueDate(dueDate);
+      if (!period) {
+        return { allowed: true };
+      }
+      const { month: m, year: y } = period;
 
       // Check local state first
       const status = getInvoiceStatus(creditCardId, m, y);
@@ -297,9 +303,12 @@ export function useInvoiceCycles(options: UseInvoiceCyclesOptions = {}) {
       cardId: string,
       dueDate: string
     ): Promise<{ status: InvoiceStatus; needsReopen: boolean }> => {
-      const dateObj = new Date(dueDate);
-      const m = dateObj.getMonth() + 1;
-      const y = dateObj.getFullYear();
+      // Mesmo motivo do validateTransactionModification (auditoria A2).
+      const period = invoicePeriodFromDueDate(dueDate);
+      if (!period) {
+        return { status: "open", needsReopen: false };
+      }
+      const { month: m, year: y } = period;
 
       const { data, error } = await supabase
         .from("credit_card_invoices")

@@ -62,6 +62,7 @@ import {
   type ReconciliationResult,
 } from "@/lib/spreadsheetReconciliation";
 import { parseOFXWithBalance, type OFXTransaction } from "@/lib/ofxParser";
+import { fetchRealizedNetForAccount } from "@/lib/accountBalance";
 
 interface AccountReconciliationModalProps {
   open: boolean;
@@ -102,7 +103,13 @@ export function AccountReconciliationModal({
   const fetchSystemTransactions = useCallback(async (minDate: string, maxDate: string): Promise<SystemTransaction[]> => {
     const { data, error } = await supabase
       .from("transactions")
-      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status, is_provisional, recurring_rule_id")
+      // split_group_id/split_parent_id são OBRIGATÓRIOS aqui: reconcileSpreadsheet
+      // chama collapseSplitGroups, que junta as partes de uma transação dividida
+      // numa linha só com o valor somado — que é como o extrato do banco traz.
+      // Sem estas duas colunas o collapse vira no-op silencioso (todo row cai no
+      // ramo `!groupId`), e cada transação dividida aparece como uma divergência
+      // de valor + uma sobra "apenas no sistema".
+      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status, is_provisional, recurring_rule_id, split_group_id, split_parent_id")
       .eq("account_id", accountId)
       .gte("date", minDate)
       .lte("date", maxDate);
@@ -291,23 +298,11 @@ export function AccountReconciliationModal({
     if (bankBalance === null) return;
     setSyncingBalance(true);
     try {
-      // Calculate realized_net for this account
-      const today = new Date().toISOString().split("T")[0];
-      const { data: txData, error: txError } = await supabase
-        .from("transactions")
-        .select("type, amount, status, is_provisional, date")
-        .eq("account_id", accountId)
-        .eq("status", "completed")
-        .eq("is_provisional", false)
-        .lte("date", today);
-
-      if (txError) throw txError;
-
-      let realizedNet = 0;
-      for (const tx of txData || []) {
-        const sign = tx.type === "income" ? 1 : -1;
-        realizedNet += sign * Number(tx.amount);
-      }
+      // Soma paginada (auditoria C2). Este era o caminho mais perigoso do app:
+      // o resultado é GRAVADO em accounts.initial_balance, então uma soma
+      // truncada pelo teto de linhas do PostgREST corrompia o saldo de forma
+      // permanente — e de um jeito que nem corrigir o bug depois desfazia.
+      const realizedNet = await fetchRealizedNetForAccount(accountId);
 
       const newInitialBalance = bankBalance - realizedNet;
 

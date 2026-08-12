@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { fetchRealizedNetByAccount } from "@/lib/accountBalance";
 
 export interface Account {
   id: string;
@@ -33,26 +34,10 @@ export function useAccounts() {
 
       if (error) throw error;
 
-      // Fetch realized transaction sums per account
-      const today = new Date().toISOString().split("T")[0];
-      const { data: txData, error: txError } = await supabase
-        .from("transactions")
-        .select("account_id, type, amount, status, is_provisional, date")
-        .not("account_id", "is", null);
-
-      if (txError) throw txError;
-
-      // Calculate net per account (only completed, non-provisional, date <= today)
-      const netByAccount: Record<string, number> = {};
-      for (const tx of txData || []) {
-        if (!tx.account_id) continue;
-        if (tx.status !== "completed") continue;
-        if (tx.is_provisional) continue;
-        if (tx.date > today) continue;
-
-        const sign = tx.type === "income" ? 1 : -1;
-        netByAccount[tx.account_id] = (netByAccount[tx.account_id] || 0) + sign * Number(tx.amount);
-      }
+      // Soma paginada e filtrada no banco (auditoria C2). Antes buscava todas
+      // as transações de uma vez e filtrava no cliente — o que estourava o
+      // teto de linhas do PostgREST em silêncio e truncava o saldo.
+      const netByAccount = await fetchRealizedNetByAccount();
 
       return (rawAccounts || []).map((acc) => {
         const initialBalance = Number((acc as any).initial_balance ?? 0);

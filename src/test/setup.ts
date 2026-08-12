@@ -96,6 +96,13 @@ if (typeof document.elementFromPoint !== "function") {
   document.elementFromPoint = () => null;
 }
 
+// O cmdk (usado pelo <Command>, base dos comboboxes de categoria, conta e
+// cartão) chama scrollIntoView ao montar a lista. jsdom não implementa, e sem
+// isso qualquer teste que abra um desses seletores quebra no mount.
+if (typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 afterEach(() => {
   cleanup();
 });

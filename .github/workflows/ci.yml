@@ -1,0 +1,139 @@
+name: CI
+
+# Portão de qualidade em PR. Dois jobs, com pesos diferentes de propósito:
+#
+#   testes     -> BLOQUEIA o merge. A suíte está 100% verde (18 arquivos, 220
+#                 testes), então qualquer vermelho aqui é regressão de verdade.
+#
+#   qualidade  -> INFORMATIVO por enquanto. typecheck e lint já nascem vermelhos
+#                 em main (dívida pré-existente, medida em 12/08/2026):
+#                     typecheck  39 erros
+#                     lint      101 erros + 17 warnings
+#                 Se bloqueassem, todo PR abriria vermelho e o portão viraria
+#                 ruído que se aprende a ignorar. Então eles medem e reportam no
+#                 resumo do job, sem derrubar o build. Quando a dívida cair,
+#                 troque `continue-on-error: true` por uma comparação contra a
+#                 baseline (ou por falha direta, se chegar a zero).
+#
+# Nota: `vite build` usa SWC e NÃO faz typecheck — o deploy da Vercel passa mesmo
+# com erro de tipo. O job de typecheck aqui é a única visibilidade que existe.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# PR com vários pushes seguidos: cancela a rodada anterior em vez de enfileirar.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Testes (bloqueia o merge)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Mesma major do ambiente de desenvolvimento (v20.20.2). O Vitest 4
+          # exige ^20.19 || ^22.13 || >=24.
+          node-version: "20"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar a suíte
+        run: npm test
+
+  qualidade:
+    name: Typecheck e Lint (informativo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # Baselines medidas em 12/08/2026 na branch fix/auditoria-criticos.
+      # Servem só de referência no resumo — nenhum passo abaixo falha o job.
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        env:
+          BASELINE: "39"
+        run: |
+          set -uo pipefail
+          npx tsc -p tsconfig.app.json --noEmit > tsc.log 2>&1 || true
+          total=$(grep -c "error TS" tsc.log || true)
+
+          {
+            echo "### Typecheck"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Erros agora | ${total} |"
+            echo "| Baseline (12/08/2026) | ${BASELINE} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${total}" -gt "${BASELINE}" ]; then
+            echo "::warning::Typecheck subiu de ${BASELINE} para ${total} erros."
+            echo "| Situação | ⚠️ subiu $(( total - BASELINE )) |" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${total}" -lt "${BASELINE}" ]; then
+            echo "::notice::Typecheck caiu de ${BASELINE} para ${total} erros."
+            echo "| Situação | ✅ caiu $(( BASELINE - total )) |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Situação | = inalterado |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          {
+            echo ""
+            echo "<details><summary>Saída completa do tsc</summary>"
+            echo ""
+            echo '```'
+            cat tsc.log
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        env:
+          BASELINE_ERROS: "101"
+          BASELINE_WARNINGS: "17"
+        run: |
+          set -uo pipefail
+          npx eslint . -f json -o eslint.json > /dev/null 2>&1 || true
+
+          # Conta pelo JSON em vez da linha de resumo do eslint: o formato de
+          # texto muda entre versões e depende de locale.
+          read -r erros warnings < <(node -e '
+            const r = require("./eslint.json");
+            const e = r.reduce((a, f) => a + f.errorCount, 0);
+            const w = r.reduce((a, f) => a + f.warningCount, 0);
+            console.log(e, w);
+          ')
+
+          {
+            echo "### Lint"
+            echo ""
+            echo "| | Agora | Baseline (12/08/2026) |"
+            echo "|---|---|---|"
+            echo "| Erros | ${erros} | ${BASELINE_ERROS} |"
+            echo "| Warnings | ${warnings} | ${BASELINE_WARNINGS} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${erros}" -gt "${BASELINE_ERROS}" ]; then
+            echo "::warning::Lint subiu de ${BASELINE_ERROS} para ${erros} erros."
+          elif [ "${erros}" -lt "${BASELINE_ERROS}" ]; then
+            echo "::notice::Lint caiu de ${BASELINE_ERROS} para ${erros} erros."
+          fi

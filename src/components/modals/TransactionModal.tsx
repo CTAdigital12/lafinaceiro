@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, addMonths } from "date-fns";
+import { calculateCardDueDate } from "@/lib/creditCardCycle";
 import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -227,11 +228,33 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
     if (isInstallment && !isEditing) {
       const groupId = crypto.randomUUID();
       const baseDate = (paymentMethod === "account" && dueDate) ? dueDate : date;
-      
+
+      const selectedCard = paymentMethod === "credit_card" && creditCardId
+        ? creditCards.find(c => c.id === creditCardId)
+        : undefined;
+
+      /**
+       * Vencimento da parcela `offset` (0 = primeira).
+       *
+       * Antes, toda parcela recebia como due_date a própria data da parcela —
+       * o parcelamento ignorava fechamento e vencimento do cartão, e a mesma
+       * compra caía em faturas diferentes conforme fosse parcelada ou avulsa.
+       * Agora o cartão passa pela mesma regra da compra avulsa, uma fatura
+       * por parcela.
+       */
+      const installmentDueDate = (offset: number): Date => {
+        // Data manual informada pelo usuário manda, como na compra avulsa.
+        if (dueDate) return addMonths(dueDate, offset);
+        if (selectedCard) return calculateCardDueDate(date, selectedCard, offset);
+        // Conta sem data manual: vence na própria data da parcela.
+        return addMonths(baseDate, offset);
+      };
+
       // Create all installments from current number to total
       for (let i = installmentNumber; i <= totalInstallments; i++) {
-        const installmentDate = addMonths(baseDate, i - installmentNumber);
-        
+        const offset = i - installmentNumber;
+        const installmentDate = addMonths(baseDate, offset);
+
         const installmentData = {
           description: `${description} ${i}/${totalInstallments}`,
           amount: amount ?? 0,
@@ -240,7 +263,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           account_id: paymentMethod === "account" ? (accountId || null) : null,
           credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
           date: format(installmentDate, "yyyy-MM-dd"),
-          due_date: format(installmentDate, "yyyy-MM-dd"),
+          due_date: format(installmentDueDate(offset), "yyyy-MM-dd"),
           status: i === installmentNumber ? status : "pending",
           is_corporate_expense: isCorporateExpense,
           is_reimbursable: isReimbursable,
@@ -278,22 +301,8 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         
         const selectedCard = creditCards.find(c => c.id === creditCardId);
         if (!selectedCard) return null;
-        
-        const purchaseDay = date.getDate();
-        let dueMonth = date.getMonth();
-        let dueYear = date.getFullYear();
-        
-        // If purchase was after closing date, it goes to next month's invoice
-        if (purchaseDay > selectedCard.closing_date) {
-          dueMonth += 1;
-          if (dueMonth > 11) {
-            dueMonth = 0;
-            dueYear += 1;
-          }
-        }
-        
-        const calculatedDueDate = new Date(dueYear, dueMonth, selectedCard.due_date);
-        return format(calculatedDueDate, "yyyy-MM-dd");
+
+        return format(calculateCardDueDate(date, selectedCard), "yyyy-MM-dd");
       };
 
       const transactionData = {
