@@ -59,7 +59,12 @@ export function useInvoiceTransactions({
         `
         )
         .eq("credit_card_id", creditCardId)
-        .eq("type", "expense")
+        // Estorno também entra, mesmo lançado como receita: a conciliação por
+        // planilha grava todo estorno com `type='income'`, e filtrar só por
+        // despesa fazia a fatura do ciclo ignorá-lo (A10). Pagamento de fatura
+        // continua fora — não é conteúdo da fatura. A matemática abaixo já
+        // separa `is_refund` e subtrai.
+        .or("type.eq.expense,is_refund.eq.true")
         .eq("status", "completed")
         .or(
           `and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`
