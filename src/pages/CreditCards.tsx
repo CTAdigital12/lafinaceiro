@@ -215,7 +215,7 @@ export default function CreditCards() {
     setReconciliationYear(globalYear);
   }, [globalMonth, globalYear]);
   
-  const { creditCards, isLoading, totalInvoice, totalAvailable, totalPendingInstallments, pendingByCard, deleteCreditCard } = useCreditCards();
+  const { creditCards, isLoading, totalAvailable, totalPendingInstallments, pendingByCard, deleteCreditCard } = useCreditCards();
   const { query: cardQuery, setQuery: setCardQuery, sort: cardSort, toggleSort: toggleCardSort, items: displayCards } = useListSearchSort(creditCards, {
     searchAccessors: [(c) => c.name, (c) => c.brand, (c) => c.last_digits],
     sortAccessors: {

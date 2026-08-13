@@ -175,7 +175,9 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
             </div>
             {isEditing && (
               <div className="space-y-2">
-                <Label htmlFor="invoice">Fatura Atual</Label>
+                {/* Edita `current_invoice`: o saldo devedor acumulado do
+                    cartão, não a fatura do ciclo corrente. */}
+                <Label htmlFor="invoice">Saldo em aberto</Label>
                 <CurrencyInput
                   id="invoice"
                   value={currentInvoice}
