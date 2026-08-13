@@ -7,7 +7,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
-import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useListSearchSort } from "@/hooks/useListSearchSort";
 import { ListSearchInput } from "@/components/ui/list-search-input";
@@ -15,6 +14,7 @@ import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import { SplitTransactionModal } from "@/components/modals/SplitTransactionModal";
 import { cn } from "@/lib/utils";
 import type { InvoiceTransaction } from "@/hooks/useInvoiceTransactions";
+import { formatYmd } from "@/lib/dateUtils";
 
 interface InvoiceItemsModalProps {
   open: boolean;
@@ -305,7 +305,7 @@ function TransactionItem({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{transaction.description}</p>
         <p className="text-xs text-muted-foreground">
-          {format(new Date(transaction.date), "dd/MM", { locale: ptBR })}
+          {formatYmd(transaction.date, "dd/MM", { locale: ptBR })}
           {transaction.category_icon && ` • ${transaction.category_icon}`}
           {transaction.category_name && ` ${transaction.category_name}`}
         </p>

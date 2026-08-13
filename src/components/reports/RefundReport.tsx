@@ -20,6 +20,7 @@ import { useListSearchSort } from "@/hooks/useListSearchSort";
 import { ListSearchInput } from "@/components/ui/list-search-input";
 import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { formatDateBR } from "@/lib/dateUtils";
 
 interface RefundSummary {
   categoryId: string;
@@ -131,7 +132,7 @@ export function RefundReport() {
     const headers = ["Data", "Descrição", "Categoria", "Tipo", "Valor"];
     const rows = refundData.flatMap(s => 
       s.transactions.map(t => [
-        format(new Date(t.date), "dd/MM/yyyy"),
+        formatDateBR(t.date),
         t.description,
         s.categoryName,
         t.isRefund ? "Reembolso" : "Despesa",
@@ -357,7 +358,7 @@ export function RefundReport() {
                         {category.transactions.map(t => (
                           <TableRow key={t.id}>
                             <TableCell className="text-sm text-muted-foreground">
-                              {format(new Date(t.date), "dd/MM/yyyy")}
+                              {formatDateBR(t.date)}
                             </TableCell>
                             <TableCell className="font-medium">
                               {t.description}
@@ -393,7 +394,7 @@ export function RefundReport() {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs text-muted-foreground">
-                          {format(new Date(t.date), "dd/MM/yyyy")}
+                          {formatDateBR(t.date)}
                         </span>
                         {t.isRefund ? (
                           <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800 text-xs">

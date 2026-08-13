@@ -1,5 +1,4 @@
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Link as LinkIcon, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -31,6 +30,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useListSearchSort } from "@/hooks/useListSearchSort";
 import { SortableHead } from "@/components/ui/sortable-header";
 import { ListSearchInput } from "@/components/ui/list-search-input";
+import { formatDateBR } from "@/lib/dateUtils";
 
 type InvestmentTx = InvestmentTransaction & { asset: InvestmentAsset };
 
@@ -188,7 +188,7 @@ export function TransactionHistory({ transactions, onEdit, onDelete }: Transacti
                   {visible.map((tx) => (
                     <TableRow key={tx.id}>
                       <TableCell>
-                        {format(new Date(tx.date), "dd/MM/yyyy", { locale: ptBR })}
+                        {formatDateBR(tx.date)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -234,7 +234,7 @@ export function TransactionHistory({ transactions, onEdit, onDelete }: Transacti
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {format(new Date(tx.date), "dd/MM/yyyy", { locale: ptBR })}
+                        {formatDateBR(tx.date)}
                       </span>
                       <RowActionsMenu tx={tx} onEdit={onEdit} onDelete={onDelete} size="sm" />
                     </div>

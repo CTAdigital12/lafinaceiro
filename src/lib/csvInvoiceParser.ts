@@ -1,6 +1,8 @@
 // CSV Invoice Parser for credit card invoices
 // Separate from csvParser.ts which handles account statements
 
+import { todayYmd } from "@/lib/dateUtils";
+
 export interface CSVInvoiceTransaction {
   date: string; // YYYY-MM-DD
   description: string;
@@ -343,19 +345,26 @@ export function convertToImportedItems(
   }>;
   post_closing_count: number;
 } {
-  const today = new Date().toISOString().split("T")[0];
-  
+  // todayYmd() e não `new Date().toISOString()`: o segundo devolve o dia em
+  // UTC, então a partir das 21h no Brasil a importação carimbava a data de
+  // lançamento como sendo a de amanhã.
+  const today = todayYmd();
+
   // Calculate due date (15th of invoice month by default)
   const dueDate = `${invoiceYear}-${String(invoiceMonth).padStart(2, "0")}-15`;
-  
+
   // Calculate closing date for this invoice
-  const closingDate = new Date(invoiceYear, invoiceMonth - 1, closingDay);
-  
+  const closingYmd = `${invoiceYear}-${String(invoiceMonth).padStart(2, "0")}-${String(closingDay).padStart(2, "0")}`;
+
   let postClosingCount = 0;
-  
+
   const items = transactions.map(tx => {
-    const purchaseDate = new Date(tx.date);
-    const isPostClosing = purchaseDate > closingDate;
+    // Comparação lexicográfica de "YYYY-MM-DD" é cronológica e não passa por
+    // fuso nenhum. A versão anterior comparava `new Date(tx.date)` (meia-noite
+    // UTC) com um Date local: funcionava no Brasil por coincidência — os -3h
+    // caem dentro do mesmo dia —, mas classificava errado a leste de
+    // Greenwich. Compra NO dia do fechamento não é pós-fechamento.
+    const isPostClosing = tx.date > closingYmd;
     
     if (isPostClosing) postClosingCount++;
     
