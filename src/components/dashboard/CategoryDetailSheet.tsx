@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Pencil, ChevronDown, Check } from "lucide-react";
 import {
@@ -28,6 +27,7 @@ import { TransactionModal } from "@/components/modals/TransactionModal";
 import { Transaction } from "@/hooks/useTransactions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Currency } from "@/components/ui/currency";
+import { formatYmd } from "@/lib/dateUtils";
 
 interface TransactionDisplay {
   id: string;
@@ -245,7 +245,7 @@ export function CategoryDetailSheet({
                   {transaction.description}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {format(new Date(transaction.date), "dd MMM yyyy", { locale: ptBR })}
+                  {formatYmd(transaction.date, "dd MMM yyyy", { locale: ptBR })}
                 </p>
               </div>
               

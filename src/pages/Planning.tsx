@@ -48,6 +48,7 @@ import {
   isMonthlyExpense,
   isMonthlyExpenseRefund,
 } from "@/lib/transactionFilters";
+import { formatDateBR } from "@/lib/dateUtils";
 
 // Despesa que consome orçamento: paga (efetivada) ou prevista (provisória/pendente).
 const isBudgetExpense = (t: Transaction) => isMonthlyExpense(t) || isForecastExpense(t);
@@ -409,7 +410,7 @@ export default function Planning() {
         onClick={() => { setEditingTransaction(t); setTransactionModalOpen(true); }}
       >
         <TableCell className="pl-12 text-sm text-muted-foreground">
-          {new Date(t.date).toLocaleDateString("pt-BR")}
+          {formatDateBR(t.date)}
         </TableCell>
         <TableCell colSpan={3} className="text-sm">
           {t.description}
@@ -772,7 +773,7 @@ export default function Planning() {
                                   </span>
                                 )}
                               </p>
-                              <p className="text-xs text-muted-foreground">{new Date(t.date).toLocaleDateString("pt-BR")}</p>
+                              <p className="text-xs text-muted-foreground">{formatDateBR(t.date)}</p>
                             </div>
                             <span className="text-sm font-medium text-expense shrink-0">
                               {fmt(Number(t.amount))}
@@ -878,7 +879,7 @@ export default function Planning() {
                                             </span>
                                           )}
                                         </p>
-                                        <p className="text-[10px] text-muted-foreground">{new Date(t.date).toLocaleDateString("pt-BR")}</p>
+                                        <p className="text-[10px] text-muted-foreground">{formatDateBR(t.date)}</p>
                                       </div>
                                       <span className="text-xs font-medium text-expense shrink-0">
                                         {fmt(Number(t.amount))}
@@ -945,7 +946,7 @@ export default function Planning() {
                 {uncategorizedTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
                     <TableCell className="text-muted-foreground">
-                      {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                      {formatDateBR(transaction.date)}
                     </TableCell>
                     <TableCell>{transaction.description}</TableCell>
                     <TableCell className="text-right font-medium text-expense">
@@ -978,7 +979,7 @@ export default function Planning() {
                   <p className="font-medium text-foreground truncate">{transaction.description}</p>
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-muted-foreground">
-                      {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                      {formatDateBR(transaction.date)}
                     </span>
                     <span className="font-medium text-expense">
                       {fmt(Number(transaction.amount))}

@@ -14,6 +14,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { RefundReport } from "./RefundReport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatYmd } from "@/lib/dateUtils";
 
 export function ExpenseXRayTab() {
   const formatCurrency = useFormatCurrency();
@@ -242,7 +243,7 @@ export function ExpenseXRayTab() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{e.description}</p>
                       <p className="text-xs text-muted-foreground">
-                        {e.category} • {format(new Date(e.date), "dd/MM")}
+                        {e.category} • {formatYmd(e.date, "dd/MM")}
                       </p>
                     </div>
                     <span className="text-sm font-semibold text-foreground whitespace-nowrap">

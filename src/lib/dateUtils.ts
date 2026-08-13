@@ -11,6 +11,8 @@
  * **nunca** passe uma string "YYYY-MM-DD" direto para `new Date()`.
  */
 
+import { format } from "date-fns";
+
 export interface YmdParts {
   year: number;
   month: number; // 1-12, como o usuário lê (NÃO o índice 0-11 do JS)
@@ -63,6 +65,23 @@ export function formatDateBR(dateString: string | null | undefined): string {
   const dd = String(parts.day).padStart(2, "0");
   const mm = String(parts.month).padStart(2, "0");
   return `${dd}/${mm}/${parts.year}`;
+}
+
+/**
+ * `format` do date-fns aplicado a uma data "YYYY-MM-DD", sem o desvio de fuso.
+ *
+ * Use quando o formato não for "dd/MM/yyyy" — "dd/MM", "dd MMM yyyy", com
+ * locale etc. Para o formato padrão, `formatDateBR` resolve sem passar por
+ * `Date`. Devolve "-" para nulo/inválido, como as tabelas do app já exibiam.
+ */
+export function formatYmd(
+  dateString: string | null | undefined,
+  pattern: string,
+  options?: Parameters<typeof format>[2],
+): string {
+  const date = ymdToLocalDate(dateString);
+  if (!date) return "-";
+  return format(date, pattern, options);
 }
 
 /**

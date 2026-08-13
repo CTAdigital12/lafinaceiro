@@ -30,6 +30,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useListSearchSort } from "@/hooks/useListSearchSort";
 import { ListSearchInput } from "@/components/ui/list-search-input";
 import { ListSortButtons } from "@/components/ui/list-sort-buttons";
+import { formatDateBR } from "@/lib/dateUtils";
 
 export default function Activities() {
   const formatCurrency = useFormatCurrency();
@@ -63,8 +64,8 @@ export default function Activities() {
   };
 
   const formatDateRange = (firstDate: string, lastDate: string) => {
-    const first = format(new Date(firstDate), "dd/MM/yyyy", { locale: ptBR });
-    const last = format(new Date(lastDate), "dd/MM/yyyy", { locale: ptBR });
+    const first = formatDateBR(firstDate);
+    const last = formatDateBR(lastDate);
     return first === last ? first : `${first} - ${last}`;
   };
 

@@ -1,6 +1,4 @@
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +70,7 @@ interface ReconciliationDetailModalProps {
 }
 
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { formatDateBR } from "@/lib/dateUtils";
 
 export function ReconciliationDetailModal({
   open,
@@ -135,7 +134,7 @@ export function ReconciliationDetailModal({
   const exportCSV = () => {
     const headers = ["Data", "Descrição", "Valor", "Status", "Tipo"];
     const rows = cardTransactions.map((t) => [
-      format(new Date(t.date), "dd/MM/yyyy"),
+      formatDateBR(t.date),
       t.description,
       t.is_refund ? `-${t.amount}` : t.amount.toString(),
       t.status === "completed" ? "Concluído" : "Pendente",
@@ -313,7 +312,7 @@ export function ReconciliationDetailModal({
                     cardTransactions.map((t) => (
                       <TableRow key={t.id}>
                         <TableCell className="whitespace-nowrap">
-                          {format(new Date(t.date), "dd/MM/yyyy")}
+                          {formatDateBR(t.date)}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">

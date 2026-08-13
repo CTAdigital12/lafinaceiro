@@ -16,6 +16,7 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useReimbursementIncomeCandidates } from "@/hooks/useReimbursementIncomeCandidates";
 import { useReimbursementPayment } from "@/hooks/useReimbursementPayment";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { formatYmd } from "@/lib/dateUtils";
 
 interface SettleReimbursementModalProps {
   open: boolean;
@@ -151,7 +152,7 @@ export function SettleReimbursementModal({
                 <SelectContent>
                   {candidates.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {format(new Date(c.date), "dd/MM")} • {c.description} •{" "}
+                      {formatYmd(c.date, "dd/MM")} • {c.description} •{" "}
                       {fmt(Number(c.amount))}
                       {c.accounts?.name ? ` • ${c.accounts.name}` : ""}
                     </SelectItem>

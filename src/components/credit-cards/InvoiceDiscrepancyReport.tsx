@@ -1,6 +1,4 @@
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import {
   Card,
   CardContent,
@@ -74,6 +72,7 @@ interface InvoiceDiscrepancyReportProps {
 }
 
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { formatDateBR } from "@/lib/dateUtils";
 
 export function InvoiceDiscrepancyReport({
   transactions,
@@ -201,14 +200,14 @@ export function InvoiceDiscrepancyReport({
     const headers = ["Data", "Descrição", "Valor", "Tipo", "Origem"];
     const rows = [
       ...analysis.expenses.map((t) => [
-        format(new Date(t.date), "dd/MM/yyyy"),
+        formatDateBR(t.date),
         t.description,
         t.amount.toString(),
         t.is_corporate_expense ? "Corporativo" : "Pessoal",
         t.imported_at ? "Importada" : "Manual",
       ]),
       ...analysis.refunds.map((t) => [
-        format(new Date(t.date), "dd/MM/yyyy"),
+        formatDateBR(t.date),
         `[ESTORNO] ${t.description}`,
         `-${t.amount}`,
         t.is_corporate_expense ? "Corporativo" : "Pessoal",
@@ -536,7 +535,7 @@ export function InvoiceDiscrepancyReport({
                       filteredExpenses.map((t) => (
                         <TableRow key={t.id}>
                           <TableCell className="whitespace-nowrap">
-                            {format(new Date(t.date), "dd/MM/yyyy")}
+                            {formatDateBR(t.date)}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -613,7 +612,7 @@ export function InvoiceDiscrepancyReport({
                       analysis.payments.map((t) => (
                         <TableRow key={t.id}>
                           <TableCell className="whitespace-nowrap">
-                            {format(new Date(t.date), "dd/MM/yyyy")}
+                            {formatDateBR(t.date)}
                           </TableCell>
                           <TableCell>{t.description}</TableCell>
                           <TableCell>
@@ -663,7 +662,7 @@ export function InvoiceDiscrepancyReport({
                   {analysis.refunds.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="whitespace-nowrap">
-                        {format(new Date(t.date), "dd/MM/yyyy")}
+                        {formatDateBR(t.date)}
                       </TableCell>
                       <TableCell>{t.description}</TableCell>
                       <TableCell>
