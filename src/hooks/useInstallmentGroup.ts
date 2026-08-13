@@ -91,12 +91,18 @@ export function useInstallmentGroup(groupId: string | null) {
   const updateCategoryForAll = useMutation({
     mutationFn: async (newCategoryId: string) => {
       if (!groupId) throw new Error("No group ID");
-      
+
+      // Categoria não altera valor de fatura, então não há o que
+      // ressincronizar — mas continua sendo edição de lançamento em fatura
+      // fechada, e a mesma ação em lote na tela de Transações já é barrada.
+      // Sem isto, a trava dependia de por qual tela a pessoa passou.
+      await guardClosedInvoice();
+
       const { error } = await supabase
         .from("transactions")
         .update({ category_id: newCategoryId })
         .eq("installment_group_id", groupId);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -267,15 +273,7 @@ export function useInstallmentGroup(groupId: string | null) {
       const lastInstallment = installments[installments.length - 1];
       const currentTotal = lastInstallment.total_installments || installments.length;
       const newTotal = currentTotal + count;
-      
-      // First, update total_installments for all existing
-      const { error: updateError } = await supabase
-        .from("transactions")
-        .update({ total_installments: newTotal })
-        .eq("installment_group_id", groupId);
-      
-      if (updateError) throw updateError;
-      
+
       // Create new installments
       const newInstallments = [];
       const lastDueDate = lastInstallment.due_date ? parseISO(lastInstallment.due_date) : new Date();
@@ -305,10 +303,35 @@ export function useInstallmentGroup(groupId: string | null) {
         });
       }
       
+      // Guard ANTES de qualquer escrita, e cobrindo as parcelas que vão NASCER
+      // — não só as existentes, como faz `guardClosedInvoice`.
+      //
+      // As novas herdam "último vencimento + N meses", então acrescentar
+      // parcelas a uma série antiga cria lançamentos dentro de faturas já
+      // fechadas. Era a última porta do A3 que continuava aberta: as outras
+      // mutações do grupo e as operações em lote da tela de Transações já
+      // passavam pela trava.
+      const closedInvoiceBlock = await findClosedInvoiceBlock([
+        ...installments,
+        ...newInstallments,
+      ]);
+      if (closedInvoiceBlock) throw new Error(closedInvoiceBlock);
+
+      // Só depois da trava é que se escreve. Antes, o total_installments das
+      // parcelas existentes era atualizado logo no início: se algo falhasse
+      // adiante, o grupo ficava com o total inflado e sem as parcelas
+      // correspondentes.
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({ total_installments: newTotal })
+        .eq("installment_group_id", groupId);
+
+      if (updateError) throw updateError;
+
       const { error: insertError } = await supabase
         .from("transactions")
         .insert(newInstallments);
-      
+
       if (insertError) throw insertError;
       
       // Also update descriptions of existing installments to reflect new total
