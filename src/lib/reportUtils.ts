@@ -43,6 +43,33 @@ export function getCompetenceDate(t: Transaction): string {
 }
 
 /**
+ * A MESMA regra de competência, escrita como filtro do PostgREST — para
+ * recortar o período no banco em vez de trazer tudo e filtrar depois.
+ *
+ * São três ramos, e o terceiro é o que costuma faltar:
+ *
+ *   1. sem cartão                    -> vale a data da compra
+ *   2. com cartão e com vencimento   -> vale o vencimento
+ *   3. com cartão e SEM vencimento   -> volta a valer a data da compra
+ *
+ * Sem o ramo 3, uma transação de cartão com `due_date` nulo não satisfaz
+ * nenhuma condição e desaparece de TODOS os meses — não existe período em que
+ * ela apareça, e nada na interface indica que ela existe. Foi o defeito
+ * corrigido em Despesas da Empresa e Reembolsos (be32a51), que continuava no
+ * filtro do Dashboard.
+ *
+ * Mantenha as duas funções em sincronia: `getCompetenceDate` decide em JS o
+ * mesmo que este filtro decide em SQL.
+ */
+export function competenceRangeFilter(startDate: string, endDate: string): string {
+  return [
+    `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate})`,
+    `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`,
+    `and(credit_card_id.not.is.null,due_date.is.null,date.gte.${startDate},date.lte.${endDate})`,
+  ].join(",");
+}
+
+/**
  * Groups transactions by month (YYYY-MM) using competence date.
  */
 export function groupByMonth(transactions: Transaction[]): Record<string, Transaction[]> {
