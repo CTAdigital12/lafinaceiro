@@ -107,10 +107,20 @@ export function invoicePeriodFromDueDate(
  * indevidamente no saldo realizado.
  */
 export function todayYmd(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
+  return dateToYmd(new Date());
+}
+
+/**
+ * `Date` -> "YYYY-MM-DD" pelo calendário LOCAL.
+ *
+ * Use para levar uma data escolhida num date-picker até uma consulta ao banco:
+ * comparar strings "YYYY-MM-DD" é cronológico e não passa por fuso, enquanto
+ * `toISOString()` converteria para UTC e deslocaria o dia.
+ */
+export function dateToYmd(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 

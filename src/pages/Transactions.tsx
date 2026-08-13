@@ -143,7 +143,17 @@ export default function Transactions() {
     corporateFilter: "all",
     cardPaymentFilter: "all",
   });
-  
+
+  // Filtro mudou: volta a paginação ao início e limpa a seleção. Agora que os
+  // filtros vão na consulta, mantê-los faria a nova busca já vir com o
+  // loadedCount inflado da anterior — e os IDs selecionados podem nem estar
+  // mais no resultado.
+  useEffect(() => {
+    setLoadedCount(20);
+    setSelectedTransactions([]);
+  }, [filters]);
+
+
   // Sorting state
   type SortField = "date" | "amount" | "description" | null;
   type SortDirection = "asc" | "desc";
@@ -170,12 +180,13 @@ export default function Transactions() {
     hasMore,
     deleteTransaction,
     updateTransaction,
-  } = useTransactions(undefined, undefined, { 
-    showAll, 
+  } = useTransactions(undefined, undefined, {
+    showAll,
     loadedCount,
     filterByDueDate,
     creditCardFilter: activeTab === "credit" ? "only" : "exclude",
     searchQuery: debouncedSearchQuery,
+    advancedFilters: filters,
   });
   const { totalBalance } = useAccounts();
   const { syncInvoiceForCard } = useCreditCardInvoiceSync();
@@ -348,70 +359,10 @@ export default function Transactions() {
     setSelectedTransactions([]);
   };
 
-  // Apply advanced filters (no need for tab filtering since query already filters by credit_card_id)
-  const filteredByAdvanced = transactions.filter((t) => {
-    // Filter by category
-    if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(t.category_id || "")) {
-      return false;
-    }
-    // Filter by type
-    if (filters.type !== "all" && t.type !== filters.type) {
-      return false;
-    }
-    // Filter by account
-    if (filters.accountId && t.account_id !== filters.accountId) {
-      return false;
-    }
-    // Filter by credit card
-    if (filters.creditCardId && t.credit_card_id !== filters.creditCardId) {
-      return false;
-    }
-    // Filter by status
-    if (filters.status !== "all" && t.status !== filters.status) {
-      return false;
-    }
-    // Filter by date range
-    if (filters.dateRange) {
-      const transactionDate = new Date(t.date);
-      if (filters.dateRange.from && transactionDate < filters.dateRange.from) {
-        return false;
-      }
-      if (filters.dateRange.to && transactionDate > filters.dateRange.to) {
-        return false;
-      }
-    }
-    // Filter by installments
-    if (filters.installmentFilter === "only_installments") {
-      if (!t.total_installments || t.total_installments <= 1) {
-        return false;
-      }
-    } else if (filters.installmentFilter === "no_installments") {
-      if (t.total_installments && t.total_installments > 1) {
-        return false;
-      }
-    }
-    // Filter by corporate expenses
-    if (filters.corporateFilter === "only_corporate") {
-      if (!t.is_corporate_expense) {
-        return false;
-      }
-    } else if (filters.corporateFilter === "no_corporate") {
-      if (t.is_corporate_expense) {
-        return false;
-      }
-    }
-    // Filter by card payment
-    if (filters.cardPaymentFilter === "only_card_payment") {
-      if (!t.is_card_payment) {
-        return false;
-      }
-    } else if (filters.cardPaymentFilter === "no_card_payment") {
-      if (t.is_card_payment) {
-        return false;
-      }
-    }
-    return true;
-  });
+  // Os filtros avançados agora são aplicados na consulta (useTransactions),
+  // não aqui. Antes este bloco filtrava o resultado JÁ paginado: com 20 linhas
+  // carregadas, filtrar por uma categoria que só aparecia mais adiante devolvia
+  // lista vazia, e a tela dizia "nenhuma transação" com o dado existindo.
 
   // Handle sorting toggle
   const handleSort = (field: SortField) => {
@@ -440,7 +391,7 @@ export default function Transactions() {
   };
 
   // Apply sorting to filtered transactions
-  const sortedTransactions = [...filteredByAdvanced].sort((a, b) => {
+  const sortedTransactions = [...transactions].sort((a, b) => {
     if (!sortField) return 0;
     
     let comparison = 0;

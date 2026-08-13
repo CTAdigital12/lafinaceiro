@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback } from "react";
 import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
 import { isMonthlyExpense, isMonthlyExpenseRefund, isMonthlyIncome } from "@/lib/transactionFilters";
-import { endOfMonthYmd, invoicePeriodFromDueDate, startOfMonthYmd } from "@/lib/dateUtils";
+import { dateToYmd, endOfMonthYmd, invoicePeriodFromDueDate, startOfMonthYmd } from "@/lib/dateUtils";
 
 // Utility to check if invoice is closed for a given card/month/year
 async function checkInvoiceClosed(creditCardId: string | null | undefined, dueDate: string | null | undefined): Promise<{ isClosed: boolean; message?: string }> {
@@ -86,6 +86,24 @@ export interface Transaction {
   projects?: { id: string; name: string; icon: string | null; color: string | null } | null;
 }
 
+/**
+ * Filtros avançados da tela de Transações.
+ *
+ * Declarados aqui, e não importados do modal, para o hook não depender de um
+ * componente. `TransactionFilters` é estruturalmente compatível.
+ */
+export interface TransactionQueryFilters {
+  categoryIds?: string[];
+  type?: "all" | "income" | "expense";
+  accountId?: string | null;
+  creditCardId?: string | null;
+  status?: "all" | "completed" | "pending";
+  dateRange?: { from: Date | null; to: Date | null } | null;
+  installmentFilter?: "all" | "only_installments" | "no_installments";
+  corporateFilter?: "all" | "only_corporate" | "no_corporate";
+  cardPaymentFilter?: "all" | "only_card_payment" | "no_card_payment";
+}
+
 interface UseTransactionsOptions {
   showAll?: boolean;
   loadedCount?: number;
@@ -93,6 +111,7 @@ interface UseTransactionsOptions {
   creditCardFilter?: "only" | "exclude" | null;
   searchQuery?: string;
   useHybridDateFilter?: boolean; // For Dashboard: date for regular transactions, due_date for credit card
+  advancedFilters?: TransactionQueryFilters;
 }
 
 export function useTransactions(overrideMonth?: number, overrideYear?: number, options: UseTransactionsOptions = {}) {
@@ -102,7 +121,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const queryClient = useQueryClient();
   const { syncInvoiceForCard } = useCreditCardInvoiceSync();
 
-  const { showAll = false, loadedCount = 20, filterByDueDate = false, creditCardFilter = null, searchQuery = "", useHybridDateFilter = false } = options;
+  const { showAll = false, loadedCount = 20, filterByDueDate = false, creditCardFilter = null, searchQuery = "", useHybridDateFilter = false, advancedFilters } = options;
 
   // Use override values if provided, otherwise use context
   const month = overrideMonth ?? contextMonth;
@@ -116,7 +135,10 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   // Query for transactions with "load more" support
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, loadedCount, filterByDueDate, creditCardFilter, searchQuery, useHybridDateFilter],
+    // advancedFilters entra na chave para a query refazer quando o usuário
+    // mexe nos filtros. Serializado porque o objeto é remontado a cada render
+    // e a identidade não serve de chave.
+    queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, loadedCount, filterByDueDate, creditCardFilter, searchQuery, useHybridDateFilter, JSON.stringify(advancedFilters ?? null)],
     queryFn: async () => {
       let query = supabase
         .from("transactions")
@@ -160,6 +182,66 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
       // Apply search filter on database level
       if (searchQuery && searchQuery.trim() !== "") {
         query = query.ilike("description", `%${searchQuery}%`);
+      }
+
+      // Filtros avançados no BANCO, não no cliente.
+      //
+      // Antes eles eram aplicados em `transactions.filter(...)`, sobre o
+      // resultado já paginado: com 20 linhas carregadas, filtrar por uma
+      // categoria que só aparece na linha 300 devolvia lista vazia — a tela
+      // dizia "nenhuma transação" com o dado existindo. Filtrando aqui, o
+      // `.range()` recorta o conjunto JÁ filtrado, e o `count` passa a ser o
+      // total de verdade.
+      if (advancedFilters) {
+        const f = advancedFilters;
+
+        if (f.categoryIds && f.categoryIds.length > 0) {
+          query = query.in("category_id", f.categoryIds);
+        }
+        if (f.type && f.type !== "all") {
+          query = query.eq("type", f.type);
+        }
+        if (f.accountId) {
+          query = query.eq("account_id", f.accountId);
+        }
+        if (f.creditCardId) {
+          query = query.eq("credit_card_id", f.creditCardId);
+        }
+        if (f.status && f.status !== "all") {
+          query = query.eq("status", f.status);
+        }
+
+        // dateToYmd e não toISOString: a data vem de um date-picker (meia-noite
+        // LOCAL) e a coluna é `date` puro. Convertida para UTC, a data inicial
+        // virava o dia anterior e a transação do primeiro dia do intervalo
+        // ficava de fora.
+        if (f.dateRange?.from) {
+          query = query.gte("date", dateToYmd(f.dateRange.from));
+        }
+        if (f.dateRange?.to) {
+          query = query.lte("date", dateToYmd(f.dateRange.to));
+        }
+
+        if (f.installmentFilter === "only_installments") {
+          query = query.gt("total_installments", 1);
+        } else if (f.installmentFilter === "no_installments") {
+          // Avulsas: sem parcelamento (null) ou com uma parcela só.
+          query = query.or("total_installments.is.null,total_installments.lte.1");
+        }
+
+        // Nos dois abaixo o "no_*" precisa incluir NULL: a coluna é opcional, e
+        // `not.eq.true` descartaria as linhas nulas junto (NULL <> true é NULL).
+        if (f.corporateFilter === "only_corporate") {
+          query = query.eq("is_corporate_expense", true);
+        } else if (f.corporateFilter === "no_corporate") {
+          query = query.or("is_corporate_expense.is.null,is_corporate_expense.eq.false");
+        }
+
+        if (f.cardPaymentFilter === "only_card_payment") {
+          query = query.eq("is_card_payment", true);
+        } else if (f.cardPaymentFilter === "no_card_payment") {
+          query = query.or("is_card_payment.is.null,is_card_payment.eq.false");
+        }
       }
 
       // Use loadedCount to limit results (for "load more" functionality)
