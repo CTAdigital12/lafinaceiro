@@ -439,6 +439,11 @@ export function useCreditCards() {
   const pendingByCard = pendingByCardRaw as unknown as Record<string, number>;
   const totalPendingInstallments = Object.values(pendingByCard).reduce((sum, v) => sum + v, 0);
 
+  // Saldo devedor em aberto somado de todos os cartões: `current_invoice` é o
+  // acumulado de TODO o histórico não pago do cartão, não o ciclo do mês. Serve
+  // para limite disponível e para passivo — quem precisa da fatura de um ciclo
+  // usa `useInvoiceTransactions({ creditCardId, month, year })`, como faz a
+  // página de Cartões. Rotular isto de "fatura atual" na UI é enganoso (A11).
   const totalInvoice = creditCards.reduce((sum, card) => sum + Number(card.current_invoice), 0);
   const totalLimit = creditCards.reduce((sum, card) => sum + Number(card.credit_limit), 0);
   const totalAvailable = totalLimit - totalInvoice - totalPendingInstallments;

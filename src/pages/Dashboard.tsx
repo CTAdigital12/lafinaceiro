@@ -418,10 +418,13 @@ export default function Dashboard() {
               icon={TrendingDown}
               variant="expense"
             />
+            {/* `totalInvoice` é o saldo devedor acumulado de TODOS os cartões,
+                somando todo o histórico não pago — NÃO a fatura do mês
+                selecionado. A fatura por ciclo fica na página de Cartões. */}
             <SummaryCard
               title="Cartão de Crédito"
               value={fmt(totalInvoice)}
-              subtitle="Fatura atual"
+              subtitle="Saldo em aberto"
               icon={CreditCard}
               variant="card"
             />
