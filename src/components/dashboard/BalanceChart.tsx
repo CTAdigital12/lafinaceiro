@@ -16,6 +16,9 @@ import { Loader2 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { usePrivacyMode } from "@/contexts/PrivacyContext";
 import { isMonthlyIncome, isMonthlyExpense, isMonthlyExpenseRefund } from "@/lib/transactionFilters";
+import { competenceRangeFilter, getCompetenceDate } from "@/lib/reportUtils";
+import { endOfMonthYmd, startOfMonthYmd } from "@/lib/dateUtils";
+import type { Transaction } from "@/hooks/useTransactions";
 
 interface MonthData {
   month: string;
@@ -44,22 +47,27 @@ export function BalanceChart() {
       }
 
       // Fetch all transactions for the 6-month period
-      const startDate = `${months[0].year}-${String(months[0].month).padStart(2, "0")}-01`;
       const lastMonth = months[months.length - 1];
-      const endDate = new Date(lastMonth.year, lastMonth.month, 0).toISOString().split("T")[0];
+      const startDate = startOfMonthYmd(months[0].year, months[0].month);
+      const endDate = endOfMonthYmd(lastMonth.year, lastMonth.month);
 
+      // Competência, não data da compra: o mesmo recorte que os cards de
+      // resumo logo acima usam. Antes o gráfico buscava e agrupava por `date`
+      // bruto, então uma compra de cartão de 25/08 que vence em 15/09 entrava
+      // na barra de agosto e no card de setembro — o painel discordava de si
+      // mesmo, e não havia como explicar a diferença (auditoria A12).
       const { data, error } = await supabase
         .from("transactions")
-        .select("amount, type, date, status, is_corporate_expense, is_refund, is_reimbursable, is_reimbursement, is_card_payment, is_provisional")
-        .gte("date", startDate)
-        .lte("date", endDate);
+        .select("amount, type, date, due_date, credit_card_id, status, is_corporate_expense, is_refund, is_reimbursable, is_reimbursement, is_card_payment, is_provisional")
+        .or(competenceRangeFilter(startDate, endDate));
 
       if (error) throw error;
 
       // Aggregate by month
       const result: MonthData[] = months.map((m) => {
         const key = `${m.year}-${String(m.month).padStart(2, "0")}`; // "YYYY-MM"
-        const monthTransactions = data?.filter((t) => t.date.substring(0, 7) === key) || [];
+        const monthTransactions =
+          data?.filter((t) => getCompetenceDate(t as Transaction).substring(0, 7) === key) || [];
 
         const receitas = monthTransactions
           .filter(isMonthlyIncome)

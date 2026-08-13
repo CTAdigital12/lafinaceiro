@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback } from "react";
 import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
 import { isMonthlyExpense, isMonthlyExpenseRefund, isMonthlyIncome } from "@/lib/transactionFilters";
+import { competenceRangeFilter } from "@/lib/reportUtils";
 import { dateToYmd, endOfMonthYmd, invoicePeriodFromDueDate, startOfMonthYmd } from "@/lib/dateUtils";
 
 // Utility to check if invoice is closed for a given card/month/year
@@ -153,13 +154,13 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
       // Apply date filter only if not showing all
       if (!showAll) {
         if (useHybridDateFilter) {
-          // Hybrid filter for Dashboard:
-          // - Transactions WITHOUT credit card: filter by date
-          // - Transactions WITH credit card: filter by due_date
-          query = query.or(
-            `and(credit_card_id.is.null,date.gte.${startDate},date.lte.${endDate}),` +
-            `and(credit_card_id.not.is.null,due_date.gte.${startDate},due_date.lte.${endDate})`
-          );
+          // Competência do Dashboard: conta pela data, cartão pelo vencimento,
+          // e cartão sem vencimento volta a valer pela data.
+          //
+          // Faltava esse terceiro caso aqui: uma transação de cartão com
+          // due_date nulo não satisfazia nenhum ramo e sumia do Dashboard em
+          // todos os meses. A regra agora é única — ver competenceRangeFilter.
+          query = query.or(competenceRangeFilter(startDate, endDate));
         } else if (filterByDueDate) {
           // Filter by due_date for credit card invoices
           // Include transactions where:
