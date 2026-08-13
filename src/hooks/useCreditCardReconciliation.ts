@@ -91,12 +91,16 @@ export function useCreditCardReconciliation(options?: UseCreditCardReconciliatio
       // 1. due_date is within the period, OR
       // 2. due_date is NULL and date is within the period (for refunds/adjustments without due_date)
       // Include expenses OR payment transactions (is_card_payment = true, which may be type = 'income')
+      // Estorno entra pelo `is_refund`, não pelo `type`: a conciliação por
+      // planilha grava estorno como `type='income'`, e sem esta cláusula a
+      // conciliação comparava a fatura do banco contra um total que não tinha
+      // descontado o estorno (A10). O split normal/refund abaixo já o subtrai.
       const { data, error } = await supabase
         .from("transactions")
         .select("*, categories(name, icon)")
         .not("credit_card_id", "is", null)
         .eq("is_provisional", false)
-        .or(`type.eq.expense,is_card_payment.eq.true`)
+        .or(`type.eq.expense,is_card_payment.eq.true,is_refund.eq.true`)
         .or(`and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`);
 
       if (error) throw error;

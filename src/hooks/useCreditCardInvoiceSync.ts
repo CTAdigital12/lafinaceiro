@@ -3,14 +3,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { logError } from "@/lib/errorHandler";
+import { sumInvoice } from "@/lib/invoiceTotal";
 
 /**
  * Hook to sync credit card current_invoice based on transactions
- * 
- * The current_invoice is calculated as:
- * - Sum of all completed expense transactions for the card
- * - MINUS sum of all refund transactions (is_refund = true)
- * - Pending transactions are NOT included in current_invoice
+ *
+ * A regra do total vive em `@/lib/invoiceTotal` e é a mesma do SQL:
+ * pagamento e estorno abatem, despesa soma, o resto é zero — e `is_refund`
+ * vale para qualquer `type`. Pendentes e provisórias ficam de fora.
  */
 export function useCreditCardInvoiceSync() {
   const queryClient = useQueryClient();
@@ -27,32 +27,12 @@ export function useCreditCardInvoiceSync() {
 
       if (txError) throw txError;
 
-      // Calculate net invoice:
-      // + Completed expenses (non-refund, non-payment)
-      // - Refund transactions
-      // - Card payments (is_card_payment = true)
-      let invoiceTotal = 0;
-
-      for (const tx of transactions || []) {
-        // Only count completed transactions
-        if (tx.status !== "completed") continue;
-
-        if (tx.is_card_payment) {
-          // Payments REDUCE the invoice balance
-          invoiceTotal -= Number(tx.amount);
-        } else if (tx.type === "expense") {
-          if (tx.is_refund) {
-            // Refunds reduce the invoice
-            invoiceTotal -= Number(tx.amount);
-          } else {
-            // Regular expenses increase the invoice
-            invoiceTotal += Number(tx.amount);
-          }
-        }
-      }
-
-      // Ensure invoice is not negative
-      invoiceTotal = Math.max(0, invoiceTotal);
+      // Regra única, compartilhada com o CASE dos RPCs SQL. Antes esta soma
+      // era escrita à mão aqui e só reconhecia estorno dentro de
+      // `type === 'expense'`, divergindo do SQL para estorno lançado como
+      // receita (A10). `sumInvoice` já aplica o filtro de completed/provisória
+      // e o piso em zero.
+      const invoiceTotal = sumInvoice(transactions || []);
 
       // Update the credit card.
       // `status` é um flag GLOBAL do cartão. Quando entram novas despesas (ex.:
