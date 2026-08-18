@@ -849,10 +849,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      add_shared_access_by_email: {
-        Args: { target_email: string }
-        Returns: string
-      }
       mark_reimbursed: {
         Args: { p_transaction_id: string }
         Returns: string

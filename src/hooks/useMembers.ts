@@ -44,26 +44,12 @@ export function useMembers() {
     enabled: !!user,
   });
 
-  const addMember = useMutation({
-    mutationFn: async (email: string) => {
-      const { data, error } = await supabase.rpc("add_shared_access_by_email", {
-        target_email: email,
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shared_access"] });
-      toast({ title: "Membro adicionado!" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Erro ao adicionar membro",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  // `addMember` foi removido junto com a RPC `add_shared_access_by_email`
+  // (migration 20260818140000): ela era SECURITY DEFINER com EXECUTE para
+  // PUBLIC, ignorava RLS e permitia conceder acesso permanente aos próprios
+  // dados com um token AAL1 — anulando o portão de aal2 do A1. Nenhum
+  // componente chamava isto; quem adiciona membro é a edge function
+  // `add-member`, via MembersSection.
 
   const revokeAccess = useMutation({
     mutationFn: async (accessId: string) => {
@@ -88,5 +74,5 @@ export function useMembers() {
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["shared_access"] });
 
-  return { members, isLoading, addMember, revokeAccess, refetch };
+  return { members, isLoading, revokeAccess, refetch };
 }
