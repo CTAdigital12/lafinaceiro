@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { useDate } from "@/contexts/DateContext";
 import { parseInvoiceRows, convertToImportedItems } from "@/lib/csvInvoiceParser";
 import { fileToRows } from "@/lib/fileToRows";
+import { edgeFunctionAuthHeaders } from "@/lib/edgeFunctionAuth";
 
 interface InvoiceImportModalProps {
   open: boolean;
@@ -240,9 +241,7 @@ export function InvoiceImportModal({
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-invoice`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
+          headers: await edgeFunctionAuthHeaders(),
           body: formData,
           signal: controller.signal,
         }
