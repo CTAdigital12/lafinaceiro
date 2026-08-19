@@ -199,4 +199,242 @@ describe("buildHierarchicalBudgets", () => {
 
     expect(result.map((b) => b.categories?.name)).toEqual(["Alfa", "Zebra"]);
   });
+
+  // Bug (2026-08-18): categoria com gasto e sem meta nenhuma no mês não gerava
+  // linha, mas continuava somando no card "Total Gasto" — o usuário via a
+  // diferença sem conseguir achar a origem.
+  describe("categorias sem meta mas com gasto", () => {
+    it("cria linha para categoria de topo com gasto e sem meta", () => {
+      const categories = [
+        cat({ id: "food", name: "Alimentação" }),
+        cat({ id: "ipva", name: "IPVA", icon: "🚗", color: "#f00" }),
+      ];
+      const budgets = [
+        budget({
+          id: "b-food",
+          category_id: "food",
+          planned_amount: 500,
+          categories: { id: "food", name: "Alimentação", icon: "🍔", color: "#f00", parent_id: null },
+        }),
+      ];
+
+      const result = buildHierarchicalBudgets(budgets, { food: 400, ipva: 405.71 }, categories);
+
+      expect(result).toHaveLength(2);
+      const ipva = result.find((b) => b.categories?.id === "ipva")!;
+      expect(ipva.id).toBe("unbudgeted-ipva");
+      expect(ipva.isUnbudgeted).toBe(true);
+      expect(ipva.isParent).toBe(true);
+      expect(ipva.totalPlanned).toBe(0);
+      expect(ipva.totalSpent).toBe(405.71);
+      expect(ipva.categories?.icon).toBe("🚗");
+    });
+
+    it("cria linha-filha para subcategoria com gasto e sem meta", () => {
+      const categories = [
+        cat({ id: "pet", name: "Pet" }),
+        cat({ id: "phoibe", name: "Phoibe", parent_id: "pet" }),
+      ];
+      const budgets = [
+        budget({
+          id: "b-pet",
+          category_id: "pet",
+          planned_amount: 200,
+          categories: { id: "pet", name: "Pet", icon: "🐾", color: "#0f0", parent_id: null },
+        }),
+      ];
+
+      const result = buildHierarchicalBudgets(budgets, { pet: 130, phoibe: 130 }, categories);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].children).toHaveLength(1);
+      expect(result[0].children[0].id).toBe("unbudgeted-phoibe");
+      expect(result[0].children[0].isUnbudgeted).toBe(true);
+    });
+
+    // Regressão: filho sintético tem planned_amount 0 e não pode zerar a meta
+    // própria do pai (a regra "soma dos filhos" só vale para filhos orçados).
+    it("mantém a meta do pai quando o único filho é sintético", () => {
+      const categories = [
+        cat({ id: "pet", name: "Pet" }),
+        cat({ id: "phoibe", name: "Phoibe", parent_id: "pet" }),
+      ];
+      const budgets = [
+        budget({
+          id: "b-pet",
+          category_id: "pet",
+          planned_amount: 200,
+          categories: { id: "pet", name: "Pet", icon: "🐾", color: "#0f0", parent_id: null },
+        }),
+      ];
+
+      const result = buildHierarchicalBudgets(budgets, { pet: 130, phoibe: 130 }, categories);
+
+      expect(result[0].totalPlanned).toBe(200);
+    });
+
+    it("filho orçado continua definindo a meta do pai mesmo com irmão sintético", () => {
+      const categories = [
+        cat({ id: "pet", name: "Pet" }),
+        cat({ id: "phoibe", name: "Phoibe", parent_id: "pet" }),
+        cat({ id: "luna", name: "Luna", parent_id: "pet" }),
+      ];
+      const budgets = [
+        budget({
+          id: "b-pet",
+          category_id: "pet",
+          planned_amount: 200,
+          categories: { id: "pet", name: "Pet", icon: "🐾", color: "#0f0", parent_id: null },
+        }),
+        budget({
+          id: "b-luna",
+          category_id: "luna",
+          planned_amount: 97,
+          categories: { id: "luna", name: "Luna", icon: "🐈", color: "#0ff", parent_id: "pet" },
+        }),
+      ];
+
+      const result = buildHierarchicalBudgets(budgets, { pet: 130, phoibe: 130 }, categories);
+
+      expect(result[0].children.map((c) => c.id)).toEqual(["b-luna", "unbudgeted-phoibe"]);
+      expect(result[0].totalPlanned).toBe(97);
+    });
+
+    it("cria linha para gasto que ficou negativo (categoria só com estorno)", () => {
+      const categories = [cat({ id: "juros", name: "Juros" })];
+
+      const result = buildHierarchicalBudgets([], { juros: -3.47 }, categories);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].totalSpent).toBe(-3.47);
+    });
+
+    it("não cria linha para categoria sem gasto e sem meta", () => {
+      const categories = [
+        cat({ id: "food", name: "Alimentação" }),
+        cat({ id: "ipva", name: "IPVA" }),
+      ];
+      const budgets = [
+        budget({
+          id: "b-food",
+          category_id: "food",
+          categories: { id: "food", name: "Alimentação", icon: "🍔", color: "#f00", parent_id: null },
+        }),
+      ];
+
+      const result = buildHierarchicalBudgets(budgets, { food: 400 }, categories);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].categories?.id).toBe("food");
+    });
+
+    it("marca metas reais como isUnbudgeted false", () => {
+      const categories = [cat({ id: "food", name: "Alimentação" })];
+      const budgets = [
+        budget({
+          id: "b-food",
+          category_id: "food",
+          categories: { id: "food", name: "Alimentação", icon: "🍔", color: "#f00", parent_id: null },
+        }),
+      ];
+
+      const result = buildHierarchicalBudgets(budgets, { food: 400 }, categories);
+
+      expect(result[0].isUnbudgeted).toBe(false);
+    });
+
+    // A promessa do conserto: a soma das linhas de topo tem que fechar com o
+    // total gasto do mês (descontado o que não tem categoria, que vai para a
+    // seção própria). Era exatamente essa diferença que o usuário via.
+    it("soma das linhas de topo fecha com o total gasto do mês", () => {
+      const categories = [
+        cat({ id: "food", name: "Alimentação" }),
+        cat({ id: "pet", name: "Pet" }),
+        cat({ id: "phoibe", name: "Phoibe", parent_id: "pet" }),
+        cat({ id: "ipva", name: "IPVA" }),
+        cat({ id: "estetica", name: "Estética", parent_id: "vest" }),
+        cat({ id: "vest", name: "Vestuário/Estética" }),
+      ];
+      const budgets = [
+        budget({
+          id: "b-food",
+          category_id: "food",
+          planned_amount: 500,
+          categories: { id: "food", name: "Alimentação", icon: "🍔", color: "#f00", parent_id: null },
+        }),
+        budget({
+          id: "b-pet",
+          category_id: "pet",
+          planned_amount: 200,
+          categories: { id: "pet", name: "Pet", icon: "🐾", color: "#0f0", parent_id: null },
+        }),
+      ];
+
+      // Réplica do spentByCategory do Planning: o gasto do filho sobe para o pai.
+      const lancamentos: Array<[string, number]> = [
+        ["food", 400],
+        ["phoibe", 130],
+        ["ipva", 405.71],
+        ["estetica", 94.9],
+      ];
+      const spentByCategory: Record<string, number> = {};
+      let totalGasto = 0;
+      for (const [catId, valor] of lancamentos) {
+        totalGasto += valor;
+        spentByCategory[catId] = (spentByCategory[catId] || 0) + valor;
+        const parentId = categories.find((c) => c.id === catId)?.parent_id;
+        if (parentId) spentByCategory[parentId] = (spentByCategory[parentId] || 0) + valor;
+      }
+
+      const result = buildHierarchicalBudgets(budgets, spentByCategory, categories);
+      const somaDasLinhas = result.reduce((sum, row) => sum + row.totalSpent, 0);
+
+      expect(somaDasLinhas).toBeCloseTo(totalGasto, 2);
+      expect(result.map((r) => r.categories?.name).sort()).toEqual([
+        "Alimentação",
+        "IPVA",
+        "Pet",
+        "Vestuário/Estética",
+      ]);
+    });
+
+    // Reportado em 18/08/2026: a linha "Estética" (sub sem meta) sob
+    // "Vestuário/ Estética" (pai COM meta de R$ 100) dizia "Gasto fora do
+    // orçamento", mas os R$ 94,90 já estavam na barra do pai — a linha do pai
+    // mostrava "Restam R$ 5,10". Só é "fora do orçamento" quando nenhuma meta
+    // do ramo mede aquele gasto.
+    it("marca subcategoria sem meta como coberta quando o pai tem meta", () => {
+      const categories = [
+        cat({ id: "vest", name: "Vestuário/ Estética" }),
+        cat({ id: "estetica", name: "Estética", parent_id: "vest" }),
+      ];
+      const budgets = [
+        budget({
+          id: "b-vest",
+          category_id: "vest",
+          planned_amount: 100,
+          categories: { id: "vest", name: "Vestuário/ Estética", icon: "👕", color: "#f0f", parent_id: null },
+        }),
+      ];
+
+      const result = buildHierarchicalBudgets(budgets, { vest: 94.9, estetica: 94.9 }, categories);
+
+      const estetica = result[0].children[0];
+      expect(estetica.isUnbudgeted).toBe(true);
+      expect(estetica.isCoveredByParentBudget).toBe(true);
+    });
+
+    it("não marca como coberta quando nem o pai tem meta", () => {
+      const categories = [
+        cat({ id: "vest", name: "Vestuário/ Estética" }),
+        cat({ id: "estetica", name: "Estética", parent_id: "vest" }),
+      ];
+
+      const result = buildHierarchicalBudgets([], { vest: 94.9, estetica: 94.9 }, categories);
+
+      const estetica = result[0].children[0];
+      expect(estetica.isUnbudgeted).toBe(true);
+      expect(estetica.isCoveredByParentBudget).toBe(false);
+    });
+  });
 });

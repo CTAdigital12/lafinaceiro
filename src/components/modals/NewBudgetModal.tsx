@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
@@ -16,6 +16,8 @@ interface NewBudgetModalProps {
   year: number;
   /** Categories that already have a budget this period; disabled in the picker. */
   existingBudgetCategoryIds?: string[];
+  /** Pré-seleciona a categoria ao abrir (usado pelo "criar meta" das linhas sem meta). */
+  defaultCategoryId?: string;
 }
 
 export function NewBudgetModal({
@@ -24,11 +26,17 @@ export function NewBudgetModal({
   month,
   year,
   existingBudgetCategoryIds = [],
+  defaultCategoryId,
 }: NewBudgetModalProps) {
   const { createBudget } = useBudgets(month, year);
   const { categories } = useCategories();
   const [categoryId, setCategoryId] = useState("");
   const [plannedAmount, setPlannedAmount] = useState<number | undefined>(undefined);
+
+  // Ao abrir vindo de uma linha "sem meta", já entra com aquela categoria.
+  useEffect(() => {
+    if (open) setCategoryId(defaultCategoryId ?? "");
+  }, [open, defaultCategoryId]);
 
   const expenseCategories = categories.filter((c) => c.type === "expense");
   const disabledIds = new Set(existingBudgetCategoryIds);
