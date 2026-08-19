@@ -139,6 +139,10 @@ export function AccountReconciliationModal({
           date: tx.date,
           description: tx.description,
           amount: tx.amount,
+          // Extrato de conta não tem "crédito de fatura": o parser OFX já
+          // devolve o valor em módulo e a direção em `tx.type`. A conciliação
+          // de conta não liga `matchCreditSign`, então isto nunca é lido.
+          isCredit: false,
           rowIndex: i,
         }));
       } else {

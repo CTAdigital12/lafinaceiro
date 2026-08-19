@@ -10,6 +10,12 @@ export interface CSVInvoiceTransaction {
   installment_current?: number;
   installment_total?: number;
   card_last_digits?: string; // 4 dígitos, capturados da fatura quando disponível
+  /**
+   * Linha de CRÉDITO: veio negativa no arquivo (estorno, devolução, ajuste de
+   * arredondamento de parcelamento). `amount` é sempre POSITIVO; o sinal fica
+   * aqui e vira `is_refund` na hora de gravar.
+   */
+  is_credit?: boolean;
 }
 
 interface CSVInvoiceParseOptions {
@@ -266,10 +272,18 @@ function tryParseTransaction(
 
   const installments = detectInstallments(description);
 
+  // Valor negativo = crédito na fatura. O sinal não pode chegar ao banco: o
+  // resto do app assume `amount` positivo (`Math.abs` no conciliador, somas por
+  // tipo, exibição). Guardamos a informação em `is_credit` e normalizamos o
+  // valor; quem grava traduz para `type='income' + is_refund=true`, que é a
+  // forma canônica de estorno (ver invoiceTotal.ts).
+  const isCredit = amount < 0;
+
   return {
     date: parsedDate,
     description,
-    amount,
+    amount: Math.abs(amount),
+    ...(isCredit && { is_credit: true }),
     ...(installments && {
       installment_current: installments.current,
       installment_total: installments.total,
@@ -342,6 +356,7 @@ export function convertToImportedItems(
     installment_total?: number;
     is_post_closing?: boolean;
     card_last_digits?: string;
+    is_credit?: boolean;
   }>;
   post_closing_count: number;
 } {
@@ -377,6 +392,7 @@ export function convertToImportedItems(
       ...(tx.installment_current && { installment_current: tx.installment_current }),
       ...(tx.installment_total && { installment_total: tx.installment_total }),
       ...(tx.card_last_digits && { card_last_digits: tx.card_last_digits }),
+      ...(tx.is_credit && { is_credit: true }),
       is_post_closing: isPostClosing,
     };
   });

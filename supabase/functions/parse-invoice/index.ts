@@ -57,6 +57,12 @@ interface ProcessedInvoiceItem {
   installment_total?: number;
   is_post_closing?: boolean;
   installment_group_id?: string;
+  /**
+   * Linha de CRÉDITO da fatura (estorno, devolução, ajuste de arredondamento de
+   * parcelamento). `transaction_value` fica POSITIVO; o sinal vive aqui e vira
+   * `is_refund` na gravação.
+   */
+  is_credit?: boolean;
 }
 
 interface InvoiceMetadata {
@@ -319,7 +325,7 @@ INSTRUÇÕES CRÍTICAS:
    - A tabela "Compras parceladas - próximas faturas"
    - "Total para próximas faturas"
    - Qualquer coisa após "Total dos lançamentos atuais"
-   - Taxas, juros, IOF, multas, pagamentos anteriores, créditos
+   - A seção "Pagamentos efetuados" (pagamento da fatura anterior)
 
 4. Para cada linha de transação:
    - date: Data da coluna "DATA" no formato "DD/MM" (apenas dia e mês)
@@ -329,6 +335,17 @@ INSTRUÇÕES CRÍTICAS:
 EXEMPLO: "ELECTROLUX electro03/10" com valor "56,99"
 -> Grave: description="ELECTROLUX electro03/10", amount=56.99
 
+5. CRÉDITOS E ESTORNOS — NÃO PULE ESTAS LINHAS:
+   Dentro de "Lançamentos: compras e saques" existem linhas de valor NEGATIVO,
+   impressas como "- 0,16" ou "-0,16". São estornos, devoluções e ajustes de
+   arredondamento de parcelamento. Elas aparecem logo abaixo da compra
+   correspondente, muitas vezes com descrição quase idêntica.
+   - Extraia TODAS elas, com amount NEGATIVO.
+   - Elas contam no total da fatura, subtraindo.
+
+EXEMPLO: "17/06  AIRBNB * HM9PXFFNRR   - 0,09"
+-> Grave: description="AIRBNB * HM9PXFFNRR", amount=-0.09
+
 Retorne APENAS JSON válido:
 {
   "metadata": {
@@ -337,7 +354,8 @@ Retorne APENAS JSON válido:
   },
   "items": [
     {"date": "06/10", "description": "Porta3Acessorios 04/10", "amount": 151.30},
-    {"date": "15/12", "description": "UBER *TRIP", "amount": 25.50}
+    {"date": "15/12", "description": "UBER *TRIP", "amount": 25.50},
+    {"date": "17/06", "description": "AIRBNB * HM9PXFFNRR", "amount": -0.09}
   ]
 }`;
 
@@ -504,8 +522,15 @@ IMPORTANTE:
 
       const installmentInfo = detectInstallmentPattern(rawItem.description);
 
+      // O sinal não vai para o banco (`amount` é sempre positivo lá), mas não
+      // pode ser jogado fora: vira `is_credit`, que o InvoiceReviewModal
+      // traduz para `type='income' + is_refund=true`. E o total precisa
+      // SUBTRAIR o crédito, senão a validação contra "Total desta fatura"
+      // acusa divergência do dobro do crédito e o usuário caça um erro que
+      // não existe.
+      const isCredit = rawItem.amount < 0;
       const transactionValue = Math.abs(rawItem.amount);
-      calculatedTotal += transactionValue;
+      calculatedTotal += isCredit ? -transactionValue : transactionValue;
 
       // Generate installment_group_id for installments
       const hasInstallments = installmentInfo && installmentInfo.total > 1;
@@ -521,6 +546,7 @@ IMPORTANTE:
         installment_total: installmentInfo?.total,
         is_post_closing: !isAccountMode && isPostClosing,
         installment_group_id: installmentGroupId,
+        ...(isCredit && { is_credit: true }),
       };
 
       if (isPostClosing && !isAccountMode) {

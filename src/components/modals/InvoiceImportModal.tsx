@@ -40,6 +40,12 @@ export interface ImportedItem {
   installment_total?: number;
   is_post_closing?: boolean;
   card_last_digits?: string;   // 4 últimos dígitos do cartão virtual (quando a fatura informa)
+  /**
+   * Linha de CRÉDITO da fatura (valor negativo no arquivo): estorno, ajuste de
+   * arredondamento de parcelamento, devolução. `transaction_value` continua
+   * POSITIVO — o sinal vive aqui, e vira `is_refund` na gravação.
+   */
+  is_credit?: boolean;
 }
 
 export interface ImportCompleteData {

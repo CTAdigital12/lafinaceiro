@@ -13,6 +13,7 @@ export interface ExistingInstallment {
   total_installments: number | null;
   split_group_id: string | null;
   split_parent_id: string | null;
+  is_refund: boolean | null;
 }
 
 interface UseExistingInstallmentsParams {
@@ -44,9 +45,13 @@ export function useExistingInstallments({
         .from("transactions")
         // split_group_id/split_parent_id: detectDuplicates colapsa as partes de
         // uma transação dividida para casar com a linha única da fatura.
-        .select("id, description, original_description, amount, date, installment_number, total_installments, split_group_id, split_parent_id")
+        .select("id, description, original_description, amount, date, installment_number, total_installments, split_group_id, split_parent_id, is_refund")
         .eq("credit_card_id", creditCardId)
-        .eq("type", "expense")
+        // Estorno entra, mesmo gravado como receita: um crédito da fatura é
+        // `type='income' + is_refund=true`, e filtrar só por despesa fazia o
+        // dedup nunca enxergá-lo — reimportar a fatura duplicava todo estorno.
+        // Mesmo defeito do A10, aqui no caminho da importação.
+        .or("type.eq.expense,is_refund.eq.true")
         .or(
           `and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`
         );
