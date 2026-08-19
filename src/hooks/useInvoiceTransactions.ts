@@ -12,6 +12,7 @@ export interface InvoiceTransaction {
   is_corporate_expense: boolean;
   is_reimbursable: boolean;
   is_refund: boolean;
+  is_card_payment: boolean | null;
   status: string;
   reimbursement_status: string | null;
   split_group_id: string | null;
@@ -52,6 +53,7 @@ export function useInvoiceTransactions({
           is_corporate_expense,
           is_reimbursable,
           is_refund,
+          is_card_payment,
           status,
           reimbursement_status,
           split_group_id,
@@ -61,10 +63,20 @@ export function useInvoiceTransactions({
         .eq("credit_card_id", creditCardId)
         // Estorno também entra, mesmo lançado como receita: a conciliação por
         // planilha grava todo estorno com `type='income'`, e filtrar só por
-        // despesa fazia a fatura do ciclo ignorá-lo (A10). Pagamento de fatura
-        // continua fora — não é conteúdo da fatura. A matemática abaixo já
-        // separa `is_refund` e subtrai.
+        // despesa fazia a fatura do ciclo ignorá-lo (A10). A matemática abaixo
+        // já separa `is_refund` e subtrai.
         .or("type.eq.expense,is_refund.eq.true")
+        // Pagamento de fatura fora — não é conteúdo da fatura. O comentário
+        // acima afirmava isso, mas nada implementava: `paySplitInvoice` grava o
+        // débito bancário como `type='expense'` COM `credit_card_id`
+        // preenchido, então ele passava pelo filtro de despesa e era somado em
+        // `personalTotal` como se fosse compra. Efeito medido no ciclo de
+        // 07/2026: 25.317,06 no app contra 17.705,70 na fatura do Itaú —
+        // exatamente o pagamento de 7.611,36 contado duas vezes. O
+        // `useCreditCardReconciliation` já filtrava certo, por isso a tela de
+        // Conciliação nunca acusou. `not.is.true` e não `eq.false`: a coluna é
+        // anulável e lançamento antigo tem NULL.
+        .not("is_card_payment", "is", true)
         .eq("status", "completed")
         .or(
           `and(due_date.gte.${periodStart},due_date.lte.${periodEnd}),and(due_date.is.null,date.gte.${periodStart},date.lte.${periodEnd})`
@@ -82,6 +94,7 @@ export function useInvoiceTransactions({
         is_corporate_expense: t.is_corporate_expense,
         is_reimbursable: t.is_reimbursable,
         is_refund: t.is_refund,
+        is_card_payment: t.is_card_payment ?? null,
         status: t.status,
         reimbursement_status: t.reimbursement_status ?? null,
         split_group_id: t.split_group_id ?? null,
@@ -92,9 +105,15 @@ export function useInvoiceTransactions({
     enabled: !!user && !!creditCardId && enabled,
   });
 
-  // Calculate totals with 3 categories
-  const normalTransactions = transactions.filter((t) => !t.is_refund);
-  const refundTransactions = transactions.filter((t) => t.is_refund);
+  // Calculate totals with 3 categories.
+  //
+  // O pagamento já é excluído na consulta; repetir aqui é deliberado. A soma
+  // não pode depender de um filtro remoto para estar certa: qualquer mudança
+  // na query (ou um chamador que passe outra lista) voltaria a contar o débito
+  // bancário como compra pessoal, que foi exatamente o defeito.
+  const invoiceContent = transactions.filter((t) => !t.is_card_payment);
+  const normalTransactions = invoiceContent.filter((t) => !t.is_refund);
+  const refundTransactions = invoiceContent.filter((t) => t.is_refund);
 
   // Already-reimbursed expenses no longer represent a debt to settle on the
   // invoice modal: a mirror payment was created by mark_reimbursed and is
