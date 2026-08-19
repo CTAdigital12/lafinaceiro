@@ -68,6 +68,7 @@ export default function Planning() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [deleteBudgetId, setDeleteBudgetId] = useState<string | null>(null);
+  const [newBudgetCategoryId, setNewBudgetCategoryId] = useState<string | undefined>(undefined);
 
   const { categories } = useCategories();
 
@@ -229,6 +230,12 @@ export default function Planning() {
     }
   };
 
+  // Linhas "sem meta" abrem o modal já apontando para a própria categoria.
+  const openNewBudget = (categoryId?: string) => {
+    setNewBudgetCategoryId(categoryId);
+    setIsModalOpen(true);
+  };
+
   const handleEditBudget = (budget: Budget) => {
     setEditingBudget(budget);
     setEditModalOpen(true);
@@ -258,7 +265,6 @@ export default function Planning() {
     const categoryId = budget.categories?.id || "";
     const isCollapsed = collapsedCategories.has(categoryId);
     const hasChildren = budget.children.length > 0;
-    const hasUnbudgetedSubcategories = budget.unbudgetedSubcategorySpent > 0;
 
     return (
       <TableRow key={budget.id} className={cn(isChild && "bg-muted/30")}>
@@ -294,19 +300,29 @@ export default function Planning() {
               <span className={cn("font-medium", isChild && "text-sm")}>
                 {budget.categories?.name || "Categoria"}
               </span>
-              {hasUnbudgetedSubcategories && (
-                <div className="flex items-center gap-1 text-xs text-chart-4">
-                  <Info className="h-3 w-3" />
-                  <span>
-                    {fmt(budget.unbudgetedSubcategorySpent)} em: {budget.subcategoriesWithoutBudget.join(", ")}
+              {budget.isUnbudgeted && (
+                budget.isCoveredByParentBudget ? (
+                  <span className="text-xs text-muted-foreground">
+                    Sem meta própria · entra na meta do pai
                   </span>
-                </div>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs text-chart-4">
+                    <Info className="h-3 w-3" />
+                    Gasto fora do orçamento
+                  </span>
+                )
               )}
             </div>
           </div>
         </TableCell>
         <TableCell className="text-right font-medium">
-          {fmt(planned)}
+          {budget.isUnbudgeted ? (
+            <span className="inline-flex items-center rounded-md bg-chart-4/10 px-2 py-0.5 text-xs font-medium text-chart-4">
+              sem meta
+            </span>
+          ) : (
+            fmt(planned)
+          )}
         </TableCell>
         <TableCell className="text-right text-muted-foreground">
           {fmt(paid)}
@@ -318,7 +334,18 @@ export default function Planning() {
           {fmt(spent)}
         </TableCell>
         <TableCell>
-          <div className="space-y-1 min-w-[180px]">
+          {budget.isUnbudgeted ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => openNewBudget(categoryId)}
+            >
+              <Target className="h-3.5 w-3.5" />
+              Criar meta
+            </Button>
+          ) : (
+            <div className="space-y-1 min-w-[180px]">
             <div className="flex items-center justify-between">
               {isOverBudget ? (
                 <span className="text-expense text-sm font-medium">
@@ -346,6 +373,7 @@ export default function Planning() {
               </span>
             </div>
           </div>
+          )}
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-1">
@@ -369,22 +397,36 @@ export default function Planning() {
                 <Plus className="h-4 w-4" />
               </Button>
             )}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={() => handleEditBudget(budget)}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 text-muted-foreground hover:text-expense"
-              onClick={() => setDeleteBudgetId(budget.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {budget.isUnbudgeted ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-chart-4 hover:text-primary"
+                onClick={() => openNewBudget(categoryId)}
+                title="Criar meta para esta categoria"
+              >
+                <Target className="h-4 w-4" />
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={() => handleEditBudget(budget)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-expense"
+                  onClick={() => setDeleteBudgetId(budget.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
         </TableCell>
       </TableRow>
@@ -450,7 +492,7 @@ export default function Planning() {
             {copyFromPreviousMonth.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
             Copiar do Mês Anterior
           </Button>
-          <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={() => setIsModalOpen(true)}>
+          <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={() => openNewBudget()}>
             <Plus className="h-4 w-4" />
             Nova Meta
           </Button>
@@ -467,7 +509,7 @@ export default function Planning() {
           <Button variant="outline" size="icon" onClick={() => copyFromPreviousMonth.mutate()} disabled={copyFromPreviousMonth.isPending}>
             {copyFromPreviousMonth.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
           </Button>
-          <Button size="icon" className="bg-primary hover:bg-primary/90" onClick={() => setIsModalOpen(true)}>
+          <Button size="icon" className="bg-primary hover:bg-primary/90" onClick={() => openNewBudget()}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -538,14 +580,14 @@ export default function Planning() {
       {/* Budget Section */}
       {isLoading ? (
         <div className="flex items-center justify-center h-32"><Loader2 className="h-8 w-8 animate-spin text-balance" /></div>
-      ) : budgets.length === 0 ? (
+      ) : hierarchicalBudgets.length === 0 ? (
         <div className="bg-card rounded-xl border border-border p-12 text-center shadow-card">
           <Target className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma meta para {months[month - 1]}</h3>
           <p className="text-muted-foreground mb-4">Crie metas ou copie do mês anterior</p>
           <div className="flex gap-2 justify-center flex-wrap">
             <Button variant="outline" onClick={() => copyFromPreviousMonth.mutate()} disabled={copyFromPreviousMonth.isPending}><Copy className="h-4 w-4 mr-2" />Copiar do Mês Anterior</Button>
-            <Button onClick={() => setIsModalOpen(true)}><Plus className="h-4 w-4 mr-2" />Nova Meta</Button>
+            <Button onClick={() => openNewBudget()}><Plus className="h-4 w-4 mr-2" />Nova Meta</Button>
           </div>
         </div>
       ) : (
@@ -557,7 +599,7 @@ export default function Planning() {
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => openNewBudget()}
               >
                 <Plus className="h-4 w-4" />
                 Adicionar categoria
@@ -594,7 +636,7 @@ export default function Planning() {
                   return (
                     <React.Fragment key={parentBudget.id}>
                       {renderBudgetRow(parentBudget, false)}
-                      {renderTransactionRows(categoryId, parentBudget.children.length > 0)}
+                      {renderTransactionRows(categoryId, true)}
                       {!isCollapsed && parentBudget.children.map((childBudget) => {
                         const childCatId = childBudget.categories?.id || "";
                         return (
@@ -636,7 +678,6 @@ export default function Planning() {
               const percentage = planned > 0 ? (spent / planned) * 100 : 0;
               const isOverBudget = spent > planned;
               const hasChildren = parentBudget.children.length > 0;
-              const hasUnbudgetedSubcategories = parentBudget.unbudgetedSubcategorySpent > 0;
 
               return (
                 <div key={parentBudget.id} className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
@@ -683,34 +724,49 @@ export default function Planning() {
                             <Plus className="h-4 w-4 mr-2" />
                             Adicionar subcategoria
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEditBudget(parentBudget)}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Editar meta
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => setDeleteBudgetId(parentBudget.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Excluir
-                          </DropdownMenuItem>
+                          {parentBudget.isUnbudgeted ? (
+                            <DropdownMenuItem onClick={() => openNewBudget(categoryId)}>
+                              <Target className="h-4 w-4 mr-2" />
+                              Criar meta
+                            </DropdownMenuItem>
+                          ) : (
+                            <>
+                              <DropdownMenuItem onClick={() => handleEditBudget(parentBudget)}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Editar meta
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setDeleteBudgetId(parentBudget.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
 
-                    {hasUnbudgetedSubcategories && (
+                    {parentBudget.isUnbudgeted && (
                       <div className="flex items-center gap-1 text-xs text-chart-4 mb-3 ml-11">
                         <Info className="h-3 w-3 shrink-0" />
-                        <span className="truncate">
-                          {fmt(parentBudget.unbudgetedSubcategorySpent)} em: {parentBudget.subcategoriesWithoutBudget.join(", ")}
-                        </span>
+                        <span className="truncate">Gasto fora do orçamento</span>
                       </div>
                     )}
 
                     <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
                       <div>
                         <p className="text-muted-foreground text-xs">Planejado</p>
-                        <p className="font-semibold">{fmt(planned)}</p>
+                        <p className="font-semibold">
+                          {parentBudget.isUnbudgeted ? (
+                            <span className="inline-flex items-center rounded-md bg-chart-4/10 px-2 py-0.5 text-xs font-medium text-chart-4">
+                              sem meta
+                            </span>
+                          ) : (
+                            fmt(planned)
+                          )}
+                        </p>
                       </div>
                       <div>
                         <p className="text-muted-foreground text-xs">Gasto</p>
@@ -724,6 +780,18 @@ export default function Planning() {
                     </div>
 
                     <div className="space-y-2">
+                      {parentBudget.isUnbudgeted ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-1.5 text-xs"
+                          onClick={() => openNewBudget(categoryId)}
+                        >
+                          <Target className="h-3.5 w-3.5" />
+                          Criar meta
+                        </Button>
+                      ) : (
+                        <>
                       <div className="flex items-center gap-2">
                         <Progress
                           value={Math.min(percentage, 100)}
@@ -747,13 +815,14 @@ export default function Planning() {
                           ? `Excederam ${fmt(Math.abs(remaining))}`
                           : `Restam ${fmt(remaining)}`
                         }
-                      </p>
+                      </p></>
+                      )}
                     </div>
                   </div>
 
                   {/* Expanded Transactions for Parent */}
                   {expandedTransactions.has(categoryId) && (() => {
-                    const txns = getTransactionsForCategory(categoryId, hasChildren);
+                    const txns = getTransactionsForCategory(categoryId, true);
                     return (
                       <div className="border-t border-border bg-muted/20 divide-y divide-border">
                         {txns.length === 0 ? (
@@ -812,27 +881,43 @@ export default function Planning() {
                                 >
                                   <List className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-7 w-7"
-                                  onClick={() => handleEditBudget(childBudget)}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-7 w-7 text-muted-foreground hover:text-expense"
-                                  onClick={() => setDeleteBudgetId(childBudget.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                {childBudget.isUnbudgeted ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-chart-4"
+                                    onClick={() => openNewBudget(childBudget.categories?.id)}
+                                    title="Criar meta para esta subcategoria"
+                                  >
+                                    <Target className="h-3.5 w-3.5" />
+                                  </Button>
+                                ) : (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={() => handleEditBudget(childBudget)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-muted-foreground hover:text-expense"
+                                      onClick={() => setDeleteBudgetId(childBudget.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center justify-between text-xs mb-2">
                               <span className="text-muted-foreground">
-                                {fmt(childSpent)} / {fmt(childPlanned)}
+                                {childBudget.isUnbudgeted
+                                  ? `${fmt(childSpent)} · sem meta`
+                                  : `${fmt(childSpent)} / ${fmt(childPlanned)}`}
                               </span>
                               <span className={cn(
                                 "font-medium",
@@ -906,7 +991,7 @@ export default function Planning() {
             type="button"
             variant="outline"
             className="md:hidden w-full mt-3 border-dashed h-12 text-muted-foreground hover:text-foreground hover:border-solid"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => openNewBudget()}
           >
             <Plus className="h-4 w-4 mr-2" />
             Adicionar nova categoria ao plano
@@ -1009,6 +1094,7 @@ export default function Planning() {
         month={month}
         year={year}
         existingBudgetCategoryIds={existingBudgetCategoryIds}
+        defaultCategoryId={newBudgetCategoryId}
       />
       <EditBudgetModal
         open={editModalOpen}
