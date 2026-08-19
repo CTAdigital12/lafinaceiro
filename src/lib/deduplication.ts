@@ -46,6 +46,8 @@ export interface ExistingTransaction {
   original_description: string | null;
   amount: number;
   date: string;
+  /** Estorno já gravado. Só casa com linha de crédito da fatura. */
+  is_refund?: boolean | null;
   installment_number: number | null;
   total_installments: number | null;
   /** Divisão por categoria: as partes são colapsadas antes da comparação. */
@@ -55,6 +57,8 @@ export interface ExistingTransaction {
 
 export interface ImportedItem {
   transaction_value: number;
+  /** Linha de crédito da fatura (valor negativo no arquivo). */
+  is_credit?: boolean;
   installment_current?: number | null;
   installment_total?: number | null;
   purchase_date?: string;
@@ -71,6 +75,9 @@ export interface ImportedItem {
  * 4. Parcela: se importado tem installment_current, exige match de installment_number + total_installments
  * 5. Divisão: as partes de uma transação dividida contam como UMA linha, com o
  *    valor somado — é assim que o gasto aparece na fatura importada.
+ * 6. Sinal: crédito só casa com estorno e compra só casa com compra. Sem isso,
+ *    um estorno de R$ 0,16 seria dado como duplicata da compra de R$ 0,16 no
+ *    mesmo dia (a tolerância de valor compara módulos) e nunca seria importado.
  */
 export function detectDuplicates(
   importedItems: ImportedItem[],
@@ -87,6 +94,9 @@ export function detectDuplicates(
 
     const match = collapsed.find((existing) => {
       if (usedExistingIds.has(existing.id)) return false;
+
+      // Rule 6: Sinal (crédito x compra)
+      if (!!existing.is_refund !== !!item.is_credit) return false;
 
       // Rule 2: Amount tolerance
       const amountMatch = Math.abs(Number(existing.amount) - item.transaction_value) <= TOLERANCE;

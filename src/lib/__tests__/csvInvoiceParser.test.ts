@@ -44,7 +44,9 @@ describe("parseInvoiceRows — section-aware", () => {
     ];
     const result = parseInvoiceRows(rows, opts);
     expect(result).toHaveLength(3);
-    expect(result.map(t => t.amount)).toEqual([299.99, 93.9, -0.02]);
+    // `amount` é sempre positivo; o sinal do arquivo vira `is_credit`.
+    expect(result.map(t => t.amount)).toEqual([299.99, 93.9, 0.02]);
+    expect(result.map(t => !!t.is_credit)).toEqual([false, false, true]);
     expect(result.every(t => t.card_last_digits === "5391")).toBe(true);
   });
 
@@ -60,14 +62,18 @@ describe("parseInvoiceRows — section-aware", () => {
     expect(result[0].card_last_digits).toBe("5391");
   });
 
-  it("preserva valores negativos (estornos/créditos)", () => {
+  it("marca estorno/crédito em is_credit, com o valor em módulo", () => {
+    // Contrato mudou: antes o valor negativo chegava negativo ao resto do app
+    // e era gravado como despesa de valor negativo. Agora o sinal vira
+    // `is_credit`, que o InvoiceReviewModal traduz para is_refund.
     const rows = [
       ["ANDRE - final 5391 (titular)"],
       ["20/05/2026", "Google Ads2070259911", "-R$ 0,02"],
     ];
     const result = parseInvoiceRows(rows, opts);
     expect(result).toHaveLength(1);
-    expect(result[0].amount).toBe(-0.02);
+    expect(result[0].amount).toBe(0.02);
+    expect(result[0].is_credit).toBe(true);
   });
 
   it("extrai parcela da descrição sem confundir com a data", () => {

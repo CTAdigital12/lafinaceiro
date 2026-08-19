@@ -5,7 +5,13 @@ import * as XLSX from "xlsx";
 export interface SpreadsheetItem {
   date: string; // YYYY-MM-DD
   description: string;
+  /** Sempre POSITIVO. O sinal do arquivo vive em `isCredit`. */
   amount: number;
+  /**
+   * Linha de CRÉDITO da fatura: veio negativa no arquivo (estorno, devolução,
+   * ajuste de arredondamento de parcelamento).
+   */
+  isCredit: boolean;
   rowIndex: number;
 }
 
@@ -69,12 +75,23 @@ function descriptionSimilarity(a: string, b: string): number {
   return intersection / (wordsA.size + wordsB.size - intersection);
 }
 
+export interface ReconcileOptions {
+  /**
+   * Só para FATURA DE CARTÃO: exige que crédito case com estorno e compra com
+   * compra. Fica desligado por padrão porque em EXTRATO DE CONTA o negativo é
+   * um débito qualquer, não um estorno — ligar lá faria toda despesa de um CSV
+   * deixar de casar com a despesa do sistema.
+   */
+  matchCreditSign?: boolean;
+}
+
 /**
  * Compare spreadsheet items against system transactions using 2-pass matching.
  */
 export function reconcileSpreadsheet(
   spreadsheetItems: SpreadsheetItem[],
-  systemTransactions: SystemTransaction[]
+  systemTransactions: SystemTransaction[],
+  { matchCreditSign = false }: ReconcileOptions = {}
 ): ReconciliationResult {
   // Uma transação dividida vira uma linha só, com o valor somado — é assim que
   // ela aparece na planilha/fatura do banco.
@@ -96,6 +113,7 @@ export function reconcileSpreadsheet(
     for (const tx of systemRows) {
       if (usedSystemIds.has(tx.id)) continue;
       const normalizedTxDate = normalizeDate(tx.date);
+      if (matchCreditSign && item.isCredit !== !!tx.is_refund) continue;
       if (normalizedItemDate === normalizedTxDate && Math.abs(item.amount - Number(tx.amount)) <= TOLERANCE) {
         candidates.push(tx);
       }
@@ -133,6 +151,8 @@ export function reconcileSpreadsheet(
 
     for (const tx of systemRows) {
       if (usedSystemIds.has(tx.id)) continue;
+
+      if (matchCreditSign && item.isCredit !== !!tx.is_refund) continue;
 
       const normalizedTxDate = normalizeDate(tx.date);
 
@@ -280,7 +300,11 @@ function rowsToItems(rows: string[][], startRow: number, cols: { dateCol: number
     const description = String(row[cols.descCol] || "").trim();
     const amount = parseAmount(row[cols.amountCol]);
     if (!date || !description || amount === 0) continue;
-    items.push({ date, description, amount: Math.abs(amount), rowIndex: i });
+    // O módulo é proposital — no sistema um estorno é gravado com `amount`
+    // positivo e `is_refund=true`, então comparar módulo com módulo é o certo.
+    // O que faltava era guardar o SINAL: sem ele um crédito de R$ 0,16 era
+    // oferecido como despesa a criar, e criar somava em vez de abater.
+    items.push({ date, description, amount: Math.abs(amount), isCredit: amount < 0, rowIndex: i });
   }
   return items;
 }

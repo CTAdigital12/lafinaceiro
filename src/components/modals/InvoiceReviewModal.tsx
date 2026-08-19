@@ -142,7 +142,7 @@ export function InvoiceReviewModal({
       const itemsWithCategories = items.map((item, index) => {
         const suggestedCategoryId = findCategoryForDescription(item.description);
         const suggestedCorporate = findCorporateForDescription(item.description);
-        const isInstallment = !!(item.installment_current && item.installment_total && item.installment_current < item.installment_total);
+        const isInstallment = !!(item.installment_current && item.installment_total && item.installment_current < item.installment_total) && !item.is_credit;
         
         // Check if this item is a duplicate
         const matchedTransaction = duplicateMap.get(index);
@@ -474,6 +474,13 @@ export function InvoiceReviewModal({
         const hasInstallments = item.installment_current && item.installment_total && item.installment_total > 1;
         const installmentGroupId = hasInstallments ? crypto.randomUUID() : null;
         
+        // Crédito da fatura (linha negativa no arquivo) grava na forma canônica
+        // de estorno: valor positivo, `type='income'`, `is_refund=true`. É o
+        // mesmo formato que a conciliação por planilha usa, e o `CASE` de
+        // invoiceTotal.ts/dos RPCs subtrai por `is_refund` ANTES de olhar
+        // `type` — então o crédito abate a fatura por um caminho só.
+        const isCredit = !!item.is_credit;
+
         allTransactions.push({
           description: item.notes ? `${item.description} - ${item.notes}` : item.description,
           original_description: item.original_description,
@@ -481,14 +488,14 @@ export function InvoiceReviewModal({
           date: item.date,
           due_date: item.due_date || null,
           imported_at: importedAt,
-          type: "expense",
+          type: isCredit ? "income" : "expense",
           category_id: categoryId,
           credit_card_id: creditCardId,
           account_id: null,
           status: "completed",
           is_corporate_expense: item.is_corporate,
           is_reimbursable: false,
-          is_refund: false,
+          is_refund: isCredit,
           is_card_payment: false,
           refunded_transaction_id: null,
           installment_group_id: installmentGroupId,
@@ -497,8 +504,10 @@ export function InvoiceReviewModal({
           card_last_digits: item.card_last_digits || null,
         });
 
-        // Add future installments if requested
-        if (item.add_future_installments && item.installment_current && item.installment_total) {
+        // Add future installments if requested. Crédito nunca projeta parcela
+        // futura: um ajuste de arredondamento é lançamento único, e um "2/5"
+        // capturado por acidente da descrição criaria estornos inexistentes.
+        if (!isCredit && item.add_future_installments && item.installment_current && item.installment_total) {
           const futureItems = generateFutureInstallments(item);
           futureInstallmentsCount += futureItems.length;
           
@@ -852,16 +861,22 @@ export function InvoiceReviewModal({
                               {item.installment_current}/{item.installment_total}
                             </Badge>
                           )}
+                          {item.is_credit && (
+                            <Badge className="bg-income/10 text-income border-income/20 text-xs flex-shrink-0">
+                              Estorno
+                            </Badge>
+                          )}
                         </div>
                         <p className={cn("text-xs text-muted-foreground", isRejected && "line-through")}>{item.date}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <p className={cn(
-                        "text-sm font-semibold text-expense whitespace-nowrap",
+                        "text-sm font-semibold whitespace-nowrap",
+                        item.is_credit ? "text-income" : "text-expense",
                         isRejected && "line-through text-muted-foreground"
                       )}>
-                        R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        {item.is_credit ? "− " : ""}R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </p>
                       
                       {/* Action buttons */}

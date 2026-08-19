@@ -125,7 +125,11 @@ export function SpreadsheetReconciliationModal({
         return;
       }
 
-      const reconciliation = reconcileSpreadsheet(spreadsheetItems, systemTx);
+      const reconciliation = reconcileSpreadsheet(spreadsheetItems, systemTx, { matchCreditSign: true });
+      // Linha negativa no arquivo já chega marcada como estorno. Antes o sinal
+      // era descartado na leitura e só restava marcar na mão, item a item —
+      // quem não marcasse criava o crédito como despesa, somando na fatura.
+      setRefundItems(new Set(spreadsheetItems.filter((i) => i.isCredit).map((i) => i.rowIndex)));
       setResult(reconciliation);
     } catch (err: any) {
       toast({ title: "Erro ao processar arquivo", description: err.message, variant: "destructive" });
@@ -177,7 +181,8 @@ export function SpreadsheetReconciliationModal({
           result?.valueDiscrepancies.map((d) => d.spreadsheet) || [],
           [item] // include the item we just added to re-match
         ) || [],
-        systemTx
+        systemTx,
+        { matchCreditSign: true }
       );
       setResult(newResult);
     } catch (err: any) {
@@ -213,7 +218,7 @@ export function SpreadsheetReconciliationModal({
         ...(result?.valueDiscrepancies.map((d) => d.spreadsheet) || []),
         ...(result?.onlyInSpreadsheet || []),
       ];
-      setResult(reconcileSpreadsheet(allSpreadsheetItems, systemTx));
+      setResult(reconcileSpreadsheet(allSpreadsheetItems, systemTx, { matchCreditSign: true }));
     } catch (err: any) {
       toast({ title: "Erro ao excluir", description: err.message, variant: "destructive" });
     } finally {
@@ -244,7 +249,7 @@ export function SpreadsheetReconciliationModal({
         ...(result?.valueDiscrepancies.map((d) => d.spreadsheet) || []),
         ...(result?.onlyInSpreadsheet || []),
       ];
-      setResult(reconcileSpreadsheet(allSpreadsheetItems, systemTx));
+      setResult(reconcileSpreadsheet(allSpreadsheetItems, systemTx, { matchCreditSign: true }));
     } catch (err: any) {
       toast({ title: "Erro ao corrigir", description: err.message, variant: "destructive" });
     } finally {
