@@ -35,6 +35,18 @@ const CARD = vi.hoisted(() => ({
   updated_at: "",
 }));
 
+/**
+ * O relógio só fica congelado durante o render (com fake timers o userEvent não
+ * dirige os componentes do Radix), então no submit `todayYmd()` devolveria a
+ * data real da máquina enquanto o campo `date` guarda 25/08/2026. As duas
+ * noções de "hoje" precisam concordar, senão a compra do dia parece futura e a
+ * primeira parcela nasce pendente — falha do harness, não do componente.
+ */
+vi.mock("@/lib/dateUtils", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/dateUtils")>("@/lib/dateUtils")),
+  todayYmd: () => "2026-08-25",
+}));
+
 const createTransactionMock = vi.hoisted(() => vi.fn());
 const updateTransactionMock = vi.hoisted(() => vi.fn());
 const createRuleMock = vi.hoisted(() => vi.fn());
@@ -161,5 +173,23 @@ describe("TransactionModal — vencimento de parcelas no cartão (A5)", () => {
 
     const grupos = new Set(parcelas.map((p) => p.installment_group_id));
     expect(grupos.size).toBe(1);
+  });
+
+  /**
+   * Guarda de regressão da correção do status: a regra "data futura nasce
+   * pendente" NÃO pode alcançar a compra no cartão feita hoje. A primeira
+   * parcela precisa continuar `completed`, senão ela deixa de contar na fatura
+   * atual (`countsTowardInvoice` exige `status === "completed"`).
+   *
+   * A regra isolada está em `transactionStatus.test.ts`; aqui é a fiação.
+   */
+  it("primeira parcela do cartão comprada hoje continua concluída; as demais pendentes", async () => {
+    const parcelas = await lancarCompra(3);
+
+    expect(parcelas.map((p) => p.status)).toEqual([
+      "completed",
+      "pending",
+      "pending",
+    ]);
   });
 });

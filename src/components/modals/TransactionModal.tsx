@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, addMonths } from "date-fns";
+import { todayYmd } from "@/lib/dateUtils";
+import { installmentStatus, isFutureYmd } from "@/lib/transactionStatus";
 import { calculateCardDueDate } from "@/lib/creditCardCycle";
 import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -205,12 +207,30 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
     }
   }, [sourceData, open, isDuplicating, refundFrom]);
 
-  // Auto-suggest pending status when due_date is future and payment is via account
+  // Auto-suggest pending status when the transaction lands in the future.
+  //
+  // A versão anterior só olhava `dueDate` — o campo OPCIONAL de vencimento
+  // manual. Quem deixava ele em branco e escolhia uma DATA futura (o caminho
+  // normal) não era coberto, apesar de a própria tela prometer "Se a data for
+  // futura, a transação será marcada como pendente". A promessa existia no
+  // rótulo e não existia no código.
+  //
+  // O efeito prático era silencioso e tardio: a transação nascia "Concluída",
+  // ficava fora do saldo enquanto a data era futura (`fetchRealizedNetByAccount`
+  // corta em `date <= hoje`) e passava a pesar sozinha no dia em que a data
+  // chegava — semanas depois, sem nada ter mudado na tela. Foi assim que uma
+  // parcela de empréstimo não paga derrubou o saldo em R$ 1.500,00.
+  //
+  // Comparação em `yyyy-MM-dd` e não `Date > Date`: `date` é meia-noite local e
+  // `new Date()` é agora, então escolher HOJE parecia passado por algumas horas
+  // e futuro por nenhuma — a granularidade certa aqui é o dia.
   useEffect(() => {
-    if (paymentMethod === "account" && dueDate && dueDate > new Date()) {
+    if (paymentMethod !== "account") return;
+    const effective = dueDate ?? date;
+    if (isFutureYmd(format(effective, "yyyy-MM-dd"), todayYmd())) {
       setStatus("pending");
     }
-  }, [dueDate, paymentMethod]);
+  }, [date, dueDate, paymentMethod]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,6 +275,18 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         const offset = i - installmentNumber;
         const installmentDate = addMonths(baseDate, offset);
 
+        // Só a primeira parcela herda o status escolhido; as demais nascem
+        // pendentes. E nem a primeira pode nascer "Concluída" com data futura:
+        // dizer que já foi paga uma parcela que ainda não venceu é o defeito
+        // que este PR fecha, e a guarda aqui vale mesmo para cartão, onde o
+        // efeito acima (restrito a `account`) não roda.
+        const parcelaStatus = installmentStatus({
+          isFirst: i === installmentNumber,
+          dateYmd: format(installmentDate, "yyyy-MM-dd"),
+          chosen: status,
+          todayYmd: todayYmd(),
+        });
+
         const installmentData = {
           description: `${description} ${i}/${totalInstallments}`,
           amount: amount ?? 0,
@@ -264,7 +296,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
           date: format(installmentDate, "yyyy-MM-dd"),
           due_date: format(installmentDueDate(offset), "yyyy-MM-dd"),
-          status: i === installmentNumber ? status : "pending",
+          status: parcelaStatus,
           is_corporate_expense: isCorporateExpense,
           is_reimbursable: isReimbursable,
           is_refund: false,
@@ -807,6 +839,12 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                 <SelectItem value="pending">Pendente</SelectItem>
               </SelectContent>
             </Select>
+            {isInstallment && (
+              <p className="text-xs text-muted-foreground">
+                Vale para a {installmentNumber}ª parcela; as seguintes são criadas como
+                pendentes. Parcela com data futura nasce pendente de qualquer forma.
+              </p>
+            )}
           </div>
 
           {/* Refund Toggle */}
