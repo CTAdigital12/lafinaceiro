@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { edgeFunctionAuthHeaders } from "@/lib/edgeFunctionAuth";
 import { Upload, FileText, Loader2, X, Check, AlertCircle } from "lucide-react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
@@ -131,9 +132,7 @@ export function AccountImportModal({
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-invoice`,
           {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
+            headers: await edgeFunctionAuthHeaders(),
             body: formData,
           }
         );
