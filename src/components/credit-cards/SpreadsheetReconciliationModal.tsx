@@ -360,7 +360,8 @@ export function SpreadsheetReconciliationModal({
                         refundItems={refundItems}
                         onToggleRefund={(rowIndex) => setRefundItems((prev) => {
                           const s = new Set(prev);
-                          s.has(rowIndex) ? s.delete(rowIndex) : s.add(rowIndex);
+                          if (s.has(rowIndex)) s.delete(rowIndex);
+                          else s.add(rowIndex);
                           return s;
                         })}
                         ignoredKeys={ignoredKeys}

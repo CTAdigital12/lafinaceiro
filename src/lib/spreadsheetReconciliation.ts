@@ -210,7 +210,7 @@ function parseDate(value: string | number | undefined): string | null {
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
 
   // DD/MM/YYYY or DD-MM-YYYY
-  const match = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  const match = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (match) {
     const day = match[1].padStart(2, "0");
     const month = match[2].padStart(2, "0");

@@ -102,7 +102,7 @@ function detectInstallments(description: string): { current: number; total: numb
   const patterns = [
     /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/,                        // 04/10 no final da string
     /(\d{1,2})\s*\/\s*(\d{1,2})(?=\s|\)|$)/,                  // 04/10 seguido de espaço, ) ou fim
-    /(?:^|[^\/\d])(\d{1,2})\s*\/\s*(\d{1,2})(?:[^\/\d]|$)/,   // DD/DD não precedido/seguido por / ou dígito
+    /(?:^|[^/\d])(\d{1,2})\s*\/\s*(\d{1,2})(?:[^/\d]|$)/,   // DD/DD não precedido/seguido por / ou dígito
     /\bPARC(?:ELA)?\s*(\d{1,2})\s*\/\s*(\d{1,2})\b/i,         // PARC 3/10 or PARCELA 3/10
     /\((\d{1,2})\s*\/\s*(\d{1,2})\)/,                         // (3/10)
     /\b(\d{1,2})\s*DE\s*(\d{1,2})\b/i,                        // 3 DE 10
@@ -130,7 +130,7 @@ function parseDate(value: string, options: CSVInvoiceParseOptions): string | nul
   const cleaned = value.replace(/["']/g, "").trim();
   
   // Try DD/MM or DD/MM/YY or DD/MM/YYYY
-  const match = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);
+  const match = cleaned.match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$/);
   if (match) {
     const day = parseInt(match[1], 10);
     const month = parseInt(match[2], 10);
@@ -159,7 +159,7 @@ function parseDate(value: string, options: CSVInvoiceParseOptions): string | nul
   }
   
   // Try YYYY-MM-DD
-  const isoMatch = cleaned.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  const isoMatch = cleaned.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (isoMatch) {
     const [, year, month, day] = isoMatch;
     return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
