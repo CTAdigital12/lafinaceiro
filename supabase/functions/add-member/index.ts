@@ -1,5 +1,23 @@
+// supabase/functions/add-member/index.ts
+//
+// Concede a outra conta acesso de leitura aos dados de quem chama.
+//
+// EXIGE AAL2. Sem isso esta função é um bypass completo do MFA: ela usa o
+// cliente service-role, que ignora RLS — inclusive as 16 policies RESTRICTIVE
+// de `aal2` criadas em 20260817120000_require_aal2_on_all_data.sql. Como o
+// cadastro é aberto, quem tivesse apenas a SENHA do titular (sessão AAL1, que
+// depois do A1 não lê uma única linha) podia chamar este endpoint com o e-mail
+// de uma conta própria, ganhar `shared_access` permanente e depois ler tudo
+// autenticado como si mesmo, em AAL2. O acesso sobrevive à troca de senha.
+//
+// É a mesma forma do bypass fechado no PR #65 (`add_shared_access_by_email`):
+// service-role + ausência de FORCE RLS + nenhuma checagem de `aal`.
+//
+// Ao mexer aqui, lembre: `getUser()` NÃO valida `aal`. Ele aceita AAL1.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+import { readAal } from "../_shared/jwt.ts";
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
@@ -10,12 +28,13 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const jwt = authHeader.slice("Bearer ".length).trim();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -31,6 +50,22 @@ Deno.serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ---- AAL2 obrigatório -------------------------------------------------
+    // Só depois de `getUser()`, que é quem confere a assinatura. Antes disso o
+    // payload não vale nada. Ausência de claim reprova (fail-closed).
+    const aal = readAal(jwt);
+    if (aal !== "aal2") {
+      console.warn(
+        `[add-member] tentativa de conceder acesso com aal=${aal ?? "desconhecido"} user=${caller.id}`,
+      );
+      return new Response(
+        JSON.stringify({
+          error: "Esta operação exige autenticação em dois fatores. Saia e entre novamente informando o código do aplicativo.",
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const { email, password } = await req.json();

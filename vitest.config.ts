@@ -16,6 +16,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // As edge functions rodam em Deno, mas os helpers puros de `_shared`
+    // (sem API do Deno) são testáveis aqui — e a checagem de `aal` do
+    // add-member depende de um deles ser fail-closed.
+    include: [
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "supabase/functions/**/*.{test,spec}.ts",
+    ],
   },
 });
