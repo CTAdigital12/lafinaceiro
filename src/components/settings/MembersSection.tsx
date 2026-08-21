@@ -30,10 +30,18 @@ export function MembersSection() {
   const [error, setError] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [revokeAccessId, setRevokeAccessId] = useState<string | null>(null);
+  // E-mail já validado, aguardando confirmação. Enquanto não for null, o
+  // diálogo está aberto e a edge function ainda NÃO foi chamada.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const { members, isLoading, revokeAccess, refetch } = useMembers();
 
-  const handleAddMember = async (e: React.FormEvent) => {
+  // Só valida e abre a confirmação. Conceder acesso é irreversível do ponto de
+  // vista de quem recebe — a pessoa vê os dados até alguém revogar —, e um
+  // e-mail digitado errado que pertença a uma conta real concede o acesso a
+  // essa pessoa sem aviso para ninguém. Por isso o e-mail é mostrado de volta
+  // antes de qualquer chamada.
+  const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -49,6 +57,11 @@ export function MembersSection() {
       return;
     }
 
+    setPendingEmail(email);
+  };
+
+  const confirmAddMember = async () => {
+    setPendingEmail(null);
     setIsAdding(true);
     try {
       const res = await supabase.functions.invoke("add-member", {
@@ -177,6 +190,38 @@ export function MembersSection() {
           login. Ninguém pode trocar a senha de outra pessoa por aqui.
         </p>
       </div>
+
+      {/* Confirmação de concessão — mostra o e-mail de volta antes de chamar
+          a edge function, para que um erro de digitação apareça aqui e não
+          vire acesso concedido a um estranho. */}
+      <AlertDialog open={!!pendingEmail} onOpenChange={(open) => !open && setPendingEmail(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Conferir o e-mail antes de conceder</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Quem tiver acesso a este e-mail vai poder ver todas as suas finanças — contas, lançamentos, cartões, categorias e orçamentos.</p>
+                <p className="font-mono text-sm break-all bg-muted rounded-md px-3 py-2 text-foreground">
+                  {pendingEmail}
+                </p>
+                <p>
+                  Confira caractere por caractere. Se este e-mail pertencer a outra pessoa, ela passa a ver seus dados{" "}
+                  <strong className="text-foreground">sem ser avisada</strong>, e o acesso só termina quando você revogar aqui.
+                </p>
+                {memberPassword ? (
+                  <p>Como você preencheu uma senha, uma conta nova será criada caso este e-mail ainda não exista.</p>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAddMember}>
+              Conceder acesso
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Revoke Access Confirmation */}
       <AlertDialog open={!!revokeAccessId} onOpenChange={(open) => !open && setRevokeAccessId(null)}>
