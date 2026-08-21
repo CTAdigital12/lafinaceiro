@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { planBudgetCopy } from "@/lib/budgetsToCopy";
 
 export interface Budget {
   id: string;
@@ -128,8 +129,30 @@ export function useBudgets(month: number, year: number) {
         throw new Error("Nenhuma meta encontrada no mês anterior");
       }
 
-      // Create new budgets for current month
-      const newBudgets = prevBudgets.map(({ id, created_at, ...budget }) => ({
+      // Categorias que JÁ têm meta no mês de destino. Sem esse filtro o INSERT
+      // inteiro é rejeitado pela unique (user_id, category_id, month, year)
+      // assim que uma única categoria já existe — e nada é copiado.
+      const { data: currentBudgets, error: currentError } = await supabase
+        .from("budgets")
+        .select("category_id")
+        .eq("month", month)
+        .eq("year", year)
+        .eq("user_id", user?.id);
+
+      if (currentError) throw currentError;
+
+      const { toInsert, skipped } = planBudgetCopy(
+        prevBudgets,
+        (currentBudgets ?? []).map((b) => b.category_id),
+      );
+
+      if (toInsert.length === 0) {
+        throw new Error(
+          "Todas as metas do mês anterior já existem neste mês. Nada a copiar.",
+        );
+      }
+
+      const newBudgets = toInsert.map(({ id, created_at, ...budget }) => ({
         ...budget,
         month,
         year,
@@ -141,11 +164,17 @@ export function useBudgets(month: number, year: number) {
 
       if (insertError) throw insertError;
 
-      return newBudgets;
+      return { copied: newBudgets.length, skipped };
     },
-    onSuccess: () => {
+    onSuccess: ({ copied, skipped }) => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
-      toast({ title: "Metas copiadas do mês anterior!" });
+      toast({
+        title: `${copied} ${copied === 1 ? "meta copiada" : "metas copiadas"} do mês anterior`,
+        description:
+          skipped > 0
+            ? `${skipped} já existiam neste mês e foram mantidas como estavam.`
+            : undefined,
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao copiar metas", description: error.message, variant: "destructive" });
