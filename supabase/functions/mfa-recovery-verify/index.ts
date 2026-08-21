@@ -28,6 +28,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import bcrypt from "https://esm.sh/bcryptjs@2.4.3";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+import { decodeJwtPayload } from "../_shared/jwt.ts";
 
 const RATE_LIMIT_WINDOW_MIN = 15;
 const RATE_LIMIT_MAX = 5;
@@ -41,23 +42,6 @@ const InputSchema = z
       .transform((s) => s.trim().toUpperCase()),
   })
   .strict();
-
-// TODO(post-MVP): replace with `supabase.auth.getClaims()` when Supabase Edge
-// Runtime exposes it natively. Manual decode is fail-closed: parse error →
-// null → AAL check fails → 400 invalid_session_state.
-function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
-  try {
-    const [, payload] = jwt.split(".");
-    if (!payload) return null;
-    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(
-      payload.length + ((4 - (payload.length % 4)) % 4),
-      "=",
-    );
-    return JSON.parse(atob(b64)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
 
 // Best-effort IP from common reverse-proxy headers. Stored as inet (string).
 function extractClientIp(req: Request): string | null {

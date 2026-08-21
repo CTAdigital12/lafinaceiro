@@ -24,6 +24,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // which is acceptable for this rare-call endpoint (8 hashes per regen).
 import bcrypt from "https://esm.sh/bcryptjs@2.4.3";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+import { decodeJwtPayload } from "../_shared/jwt.ts";
 
 const RECOVERY_CODE_COUNT = 8;
 const BCRYPT_COST = 10;
@@ -35,27 +36,6 @@ function generateRecoveryCode(): string {
   crypto.getRandomValues(bytes);
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
   return `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}`;
-}
-
-// Decode JWT payload WITHOUT verifying (already verified by getUser/getClaims).
-// Used only to extract the `aal` claim, which is not surfaced by getUser().
-// TODO(post-MVP): replace with `supabase.auth.getClaims()` when Supabase Edge
-// Runtime exposes it natively (currently only in client SDK). Manual decode is
-// fail-closed (returns null on parse error → AAL2 check fails → 403).
-function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
-  try {
-    const [, payload] = jwt.split(".");
-    if (!payload) return null;
-    // base64url -> base64
-    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(
-      payload.length + ((4 - (payload.length % 4)) % 4),
-      "=",
-    );
-    const json = atob(b64);
-    return JSON.parse(json) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 Deno.serve(async (req) => {
