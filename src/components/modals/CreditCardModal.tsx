@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+
+// `credit_cards.color` é nullable; o estado do formulário não é.
+const COR_PADRAO = "from-purple-500 via-purple-600 to-purple-700";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +45,7 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
   const [currentInvoice, setCurrentInvoice] = useState<number | undefined>(undefined);
   const [dueDate, setDueDate] = useState("10");
   const [closingDate, setClosingDate] = useState("3");
-  const [color, setColor] = useState("from-purple-500 via-purple-600 to-purple-700");
+  const [color, setColor] = useState(COR_PADRAO);
   const [detectedBank, setDetectedBank] = useState<string | null>(null);
 
   const isEditing = !!creditCard;
@@ -57,7 +60,7 @@ export function CreditCardModal({ open, onOpenChange, creditCard }: CreditCardMo
       setCurrentInvoice(Number(creditCard.current_invoice));
       setDueDate(String(creditCard.due_date));
       setClosingDate(String(creditCard.closing_date));
-      setColor(creditCard.color);
+      setColor(creditCard.color ?? COR_PADRAO);
     } else {
       setName("");
       setLastDigits("");

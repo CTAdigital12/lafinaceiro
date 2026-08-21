@@ -5,15 +5,18 @@ name: CI
 #   testes     -> BLOQUEIA o merge. A suíte está 100% verde (18 arquivos, 220
 #                 testes), então qualquer vermelho aqui é regressão de verdade.
 #
-#   qualidade  -> INFORMATIVO por enquanto. typecheck e lint já nascem vermelhos
-#                 em main (dívida pré-existente, medida em 12/08/2026):
-#                     typecheck  39 erros
-#                     lint      101 erros + 17 warnings
-#                 Se bloqueassem, todo PR abriria vermelho e o portão viraria
-#                 ruído que se aprende a ignorar. Então eles medem e reportam no
-#                 resumo do job, sem derrubar o build. Quando a dívida cair,
-#                 troque `continue-on-error: true` por uma comparação contra a
-#                 baseline (ou por falha direta, se chegar a zero).
+#   qualidade  -> typecheck BLOQUEIA; lint ainda é informativo.
+#
+#                 O typecheck estava em 39 erros e foi ZERADO em 21/08/2026,
+#                 na mesma passada em que `strict` foi ligado (A13). Como a
+#                 dívida acabou, ele deixou de ser informativo e passou a
+#                 falhar: com baseline zero não existe "subiu um pouco", todo
+#                 erro é novo. Era o que este comentário mandava fazer quando
+#                 chegasse a zero.
+#
+#                 O lint segue informativo — 100 erros + 17 warnings, quase
+#                 todos `no-explicit-any`. Se bloqueasse hoje, todo PR abriria
+#                 vermelho e o portão viraria ruído que se aprende a ignorar.
 #
 # Nota: `vite build` usa SWC e NÃO faz typecheck — o deploy da Vercel passa mesmo
 # com erro de tipo. O job de typecheck aqui é a única visibilidade que existe.
@@ -49,7 +52,7 @@ jobs:
         run: npm test
 
   qualidade:
-    name: Typecheck e Lint (informativo)
+    name: Typecheck (bloqueia) e Lint (informativo)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,13 +65,9 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      # Baselines medidas em 12/08/2026 na branch fix/auditoria-criticos.
-      # Servem só de referência no resumo — nenhum passo abaixo falha o job.
+      # Zerado em 21/08/2026 (A13). Sem baseline: qualquer erro derruba o job.
       - name: Typecheck
         id: typecheck
-        continue-on-error: true
-        env:
-          BASELINE: "39"
         run: |
           set -uo pipefail
           npx tsc -p tsconfig.app.json --noEmit > tsc.log 2>&1 || true
@@ -79,18 +78,15 @@ jobs:
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| Erros agora | ${total} |"
-            echo "| Baseline (12/08/2026) | ${BASELINE} |"
+            echo "| Erros | ${total} |"
+            echo "| Permitido | 0 |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${total}" -gt "${BASELINE}" ]; then
-            echo "::warning::Typecheck subiu de ${BASELINE} para ${total} erros."
-            echo "| Situação | ⚠️ subiu $(( total - BASELINE )) |" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${total}" -lt "${BASELINE}" ]; then
-            echo "::notice::Typecheck caiu de ${BASELINE} para ${total} erros."
-            echo "| Situação | ✅ caiu $(( BASELINE - total )) |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${total}" -gt 0 ]; then
+            echo "| Situação | ❌ ${total} erro(s) de tipo |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Typecheck falhou com ${total} erro(s). O projeto está em strict e a baseline é zero."
           else
-            echo "| Situação | = inalterado |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Situação | ✅ limpo |" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           {
@@ -104,11 +100,15 @@ jobs:
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # Falha por último, para o resumo com a saída completa já estar
+          # publicado quando o job ficar vermelho.
+          [ "${total}" -eq 0 ]
+
       - name: Lint
         id: lint
         continue-on-error: true
         env:
-          BASELINE_ERROS: "101"
+          BASELINE_ERROS: "100"
           BASELINE_WARNINGS: "17"
         run: |
           set -uo pipefail
@@ -126,7 +126,7 @@ jobs:
           {
             echo "### Lint"
             echo ""
-            echo "| | Agora | Baseline (12/08/2026) |"
+            echo "| | Agora | Baseline (21/08/2026) |"
             echo "|---|---|---|"
             echo "| Erros | ${erros} | ${BASELINE_ERROS} |"
             echo "| Warnings | ${warnings} | ${BASELINE_WARNINGS} |"

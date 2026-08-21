@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Transaction } from "./useTransactions";
@@ -206,14 +207,22 @@ export function useInstallmentGroup(groupId: string | null) {
       await guardClosedInvoice();
 
       // Build update object with only provided fields
-      const updateData: Record<string, unknown> = {};
+      // Tipado pelo schema em vez de `Record<string, unknown>`: o cliente do
+      // Supabase não consegue validar um record aberto contra as colunas da
+      // tabela, então qualquer chave errada só apareceria como erro do
+      // PostgREST em runtime.
+      const updateData: TablesUpdate<"transactions"> = {};
       
       if (data.description !== undefined) {
+        // Capturado numa const: o TS perde o narrowing de `data.description`
+        // dentro do callback do `map`, porque não consegue provar que `data`
+        // não foi reatribuído no meio do caminho.
+        const novaDescricao = data.description;
         // Update all with new base description + installment number
         const updates = installments.map(inst => ({
           id: inst.id,
           description: buildInstallmentDescription(
-            data.description,
+            novaDescricao,
             inst.installment_number,
             inst.total_installments,
           ),

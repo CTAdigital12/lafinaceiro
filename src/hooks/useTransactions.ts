@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +87,62 @@ export interface Transaction {
   credit_cards?: { id: string; name: string; last_digits: string; color: string | null } | null;
   projects?: { id: string; name: string; icon: string | null; color: string | null } | null;
 }
+
+/**
+ * O que `addTransaction` aceita.
+ *
+ * Tudo que o banco preenche sozinho sai do obrigatório: chaves e carimbos
+ * (`id`, `user_id`, `created_at`, `updated_at`), as relações do join, e os
+ * campos com DEFAULT ou nulos por natureza, que voltam como opcionais.
+ *
+ * `is_reimbursement`, `reimbursement_payment_id`, `reimbursement_income_id` e
+ * `card_last_digits` entraram no `Transaction` junto com reembolso e dígitos
+ * do cartão, mas nenhum ponto de criação os informa — conciliação, importação
+ * de fatura e recorrência criavam lançamento sem eles e viravam erro de tsc.
+ * Eles pertencem a este bloco, não ao obrigatório.
+ *
+ * Os três `skip*`/`silent` não são colunas: controlam efeitos colaterais da
+ * própria mutation (toast, checagem de fatura fechada, sync) e são retirados
+ * do objeto antes do insert.
+ */
+export type NewTransaction = Omit<
+  Transaction,
+  | "id"
+  | "user_id"
+  | "created_at"
+  | "updated_at"
+  | "categories"
+  | "accounts"
+  | "credit_cards"
+  | "projects"
+  | "due_date"
+  | "imported_at"
+  | "reimbursement_status"
+  | "is_provisional"
+  | "recurring_rule_id"
+  | "project_id"
+  | "split_group_id"
+  | "split_parent_id"
+  | "is_reimbursement"
+  | "reimbursement_payment_id"
+  | "reimbursement_income_id"
+  | "card_last_digits"
+> & {
+  due_date?: string | null;
+  imported_at?: string | null;
+  reimbursement_status?: string | null;
+  is_provisional?: boolean;
+  recurring_rule_id?: string | null;
+  project_id?: string | null;
+  is_reimbursement?: boolean;
+  reimbursement_payment_id?: string | null;
+  reimbursement_income_id?: string | null;
+  card_last_digits?: string | null;
+  original_description?: string | null;
+  silent?: boolean;
+  skipInvoiceCheck?: boolean;
+  skipSync?: boolean;
+};
 
 /**
  * Filtros avançados da tela de Transações.
@@ -263,7 +320,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   const createTransaction = useMutation({
     // split_group_id/split_parent_id ficam fora: uma transação nunca nasce
     // dividida — o rateio é feito depois, pela RPC split_transaction.
-    mutationFn: async (transaction: Omit<Transaction, "id" | "user_id" | "created_at" | "updated_at" | "categories" | "accounts" | "credit_cards" | "projects" | "due_date" | "imported_at" | "reimbursement_status" | "is_provisional" | "recurring_rule_id" | "project_id" | "split_group_id" | "split_parent_id"> & { due_date?: string | null; imported_at?: string | null; reimbursement_status?: string | null; is_provisional?: boolean; recurring_rule_id?: string | null; project_id?: string | null; original_description?: string | null; silent?: boolean; skipInvoiceCheck?: boolean; skipSync?: boolean }) => {
+    mutationFn: async (transaction: NewTransaction) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
@@ -344,7 +401,12 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
   });
 
   const updateTransaction = useMutation({
-    mutationFn: async ({ id, ...transaction }: Partial<Transaction> & { id: string }) => {
+    // `TablesUpdate<>` vem do schema gerado, então só aceita COLUNAS reais.
+      // `Partial<Transaction>` aceitava também as relações do join e os campos
+      // calculados no cliente, que iriam parar no `.update()` e o PostgREST
+      // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
+      // folga de tipo —, mas agora o compilador impede que passe a fazer.
+      mutationFn: async ({ id, ...transaction }: TablesUpdate<"transactions"> & { id: string }) => {
       // First, get the original transaction to check for credit card changes and invoice status
       const { data: original } = await supabase
         .from("transactions")
@@ -387,7 +449,7 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
       return {
         data,
         oldCreditCardId: original?.credit_card_id,
-        newCreditCardId: transaction.credit_card_id ?? data.credit_card_id,
+        newCreditCardId: transaction.credit_card_id ?? data?.credit_card_id,
       };
     },
     onSuccess: async (result) => {

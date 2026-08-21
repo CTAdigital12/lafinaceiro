@@ -12,8 +12,19 @@ export interface UseListSearchSortOptions<T, K extends string> {
   searchAccessors?: Array<(item: T) => string | null | undefined>;
   /** Map of sort key -> value accessor (string | number | Date). */
   sortAccessors?: Partial<Record<K, (item: T) => string | number | Date | null | undefined>>;
-  /** Initial sort. Default: no sort, direction "desc". */
-  initialSort?: SortConfig<K>;
+  /**
+   * Initial sort. Default: no sort, direction "desc".
+   *
+   * `NoInfer` é obrigatório aqui. Sem ele, `K` era inferido do literal em
+   * `initialSort.field` (quase sempre a primeira propriedade que o TS
+   * encontra), colapsando `K` numa chave só — e então `sortAccessors`
+   * rejeitava todas as outras com "does not exist in type
+   * Partial<Record<'<a chave>', ...>>". Eram 8 dos 39 erros da baseline do
+   * tsc. Agora `K` sai apenas das chaves de `sortAccessors`, que é a fonte
+   * correta, e `initialSort.field` passa a ser CONFERIDO contra elas em vez
+   * de defini-las.
+   */
+  initialSort?: SortConfig<NoInfer<K>>;
 }
 
 /**

@@ -15,7 +15,13 @@
 export interface LinkCandidate {
   id: string;
   user_id: string;
-  type: "income" | "expense";
+  /**
+   * `string`, não a união, de propósito: o valor chega cru de um `select` da
+   * tabela `transactions`, onde a coluna é `text`. Estreitar aqui obrigaria um
+   * cast no chamador, que é exatamente o que esta validação existe para evitar
+   * — a função compara com "income" e rejeita todo o resto.
+   */
+  type: string;
   account_id: string | null;
 }
 

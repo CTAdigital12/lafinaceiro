@@ -119,6 +119,16 @@ export function CategoryDetailSheet({
       is_provisional: false,
       recurring_rule_id: null,
       project_id: null,
+      // Campos que entraram depois (reembolso, divisão, dígitos do cartão).
+      // Este objeto é um `Transaction` sintético montado só para abrir o
+      // modal de edição — os valores neutros abaixo refletem "não se aplica",
+      // e o modal recarrega o lançamento real pelo id.
+      is_reimbursement: false,
+      reimbursement_payment_id: null,
+      reimbursement_income_id: null,
+      split_group_id: null,
+      split_parent_id: null,
+      card_last_digits: null,
     });
     setIsModalOpen(true);
   };

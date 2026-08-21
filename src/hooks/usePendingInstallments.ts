@@ -86,14 +86,14 @@ export function usePendingInstallments() {
           date: transaction.date,
           credit_card_id: transaction.credit_card_id!,
           credit_card_name: creditCard?.name || "Cartão",
-          due_date: transaction.due_date,
+          due_date: transaction.due_date ?? undefined,
           credit_card_color: creditCard?.color || "from-gray-500 to-gray-600",
           closing_date: closingDate,
           days_until_closing: daysUntilClosing,
           is_near_closing: isNearClosing,
           is_past_closing: isPastClosing,
           category_name: transaction.categories?.name,
-          category_icon: transaction.categories?.icon,
+          category_icon: transaction.categories?.icon ?? undefined,
         };
       });
     },

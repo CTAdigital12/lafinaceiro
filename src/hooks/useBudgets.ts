@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { planBudgetCopy } from "@/lib/budgetsToCopy";
@@ -68,7 +69,12 @@ export function useBudgets(month: number, year: number) {
   });
 
   const updateBudget = useMutation({
-    mutationFn: async ({ id, ...budget }: Partial<Budget> & { id: string }) => {
+    // `TablesUpdate<>` vem do schema gerado, então só aceita COLUNAS reais.
+      // `Partial<Budget>` aceitava também as relações do join e os campos
+      // calculados no cliente, que iriam parar no `.update()` e o PostgREST
+      // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
+      // folga de tipo —, mas agora o compilador impede que passe a fazer.
+      mutationFn: async ({ id, ...budget }: TablesUpdate<"budgets"> & { id: string }) => {
       const { data, error } = await supabase
         .from("budgets")
         .update(budget)
@@ -107,6 +113,13 @@ export function useBudgets(month: number, year: number) {
 
   const copyFromPreviousMonth = useMutation({
     mutationFn: async () => {
+      // Sem isto, `.eq("user_id", undefined)` iria para o PostgREST como
+      // filtro inválido em vez de falhar aqui. Mesmo idioma de `addTransaction`.
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+      const userId = user.id;
+
       // Calculate previous month
       let prevMonth = month - 1;
       let prevYear = year;
@@ -121,7 +134,7 @@ export function useBudgets(month: number, year: number) {
         .select("*")
         .eq("month", prevMonth)
         .eq("year", prevYear)
-        .eq("user_id", user?.id);
+        .eq("user_id", userId);
 
       if (fetchError) throw fetchError;
 
@@ -137,7 +150,7 @@ export function useBudgets(month: number, year: number) {
         .select("category_id")
         .eq("month", month)
         .eq("year", year)
-        .eq("user_id", user?.id);
+        .eq("user_id", userId);
 
       if (currentError) throw currentError;
 

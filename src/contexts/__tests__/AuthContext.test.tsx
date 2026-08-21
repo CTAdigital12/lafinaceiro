@@ -170,7 +170,10 @@ describe("AuthContext — MFA surface", () => {
     const { result } = renderHook(() => useAuth(), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    let enrolled: Awaited<ReturnType<typeof result.current.enrollMfa>> | null = null;
+    // `!` (definite assignment): o tsc não enxerga a atribuição feita
+    // dentro do callback do `act`, e com `= null` estreitava o tipo para
+    // `null`, deixando `res.error` como acesso em `never`.
+    let enrolled!: Awaited<ReturnType<typeof result.current.enrollMfa>>;
     await act(async () => {
       enrolled = await result.current.enrollMfa();
     });
@@ -194,7 +197,10 @@ describe("AuthContext — MFA surface", () => {
     const { result } = renderHook(() => useAuth(), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    let enrolled: Awaited<ReturnType<typeof result.current.enrollMfa>> | null = null;
+    // `!` (definite assignment): o tsc não enxerga a atribuição feita
+    // dentro do callback do `act`, e com `= null` estreitava o tipo para
+    // `null`, deixando `res.error` como acesso em `never`.
+    let enrolled!: Awaited<ReturnType<typeof result.current.enrollMfa>>;
     await act(async () => {
       enrolled = await result.current.enrollMfa();
     });
@@ -218,7 +224,10 @@ describe("AuthContext — MFA surface", () => {
     const { result } = renderHook(() => useAuth(), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    let res: { error: Error | null } | null = null;
+    // `!` (definite assignment): o tsc não enxerga a atribuição feita
+    // dentro do callback do `act`, e com `= null` estreitava o tipo para
+    // `null`, deixando `res.error` como acesso em `never`.
+    let res!: { error: Error | null };
     await act(async () => {
       res = await result.current.confirmMfaEnroll("factor-1", "123456");
     });
@@ -241,7 +250,10 @@ describe("AuthContext — MFA surface", () => {
     const { result } = renderHook(() => useAuth(), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    let res: { error: Error | null } | null = null;
+    // `!` (definite assignment): o tsc não enxerga a atribuição feita
+    // dentro do callback do `act`, e com `= null` estreitava o tipo para
+    // `null`, deixando `res.error` como acesso em `never`.
+    let res!: { error: Error | null };
     await act(async () => {
       res = await result.current.confirmMfaEnroll("factor-1", "123456");
     });
@@ -269,7 +281,10 @@ describe("AuthContext — MFA surface", () => {
       error: null,
     });
 
-    let res: { error: Error | null } | null = null;
+    // `!` (definite assignment): o tsc não enxerga a atribuição feita
+    // dentro do callback do `act`, e com `= null` estreitava o tipo para
+    // `null`, deixando `res.error` como acesso em `never`.
+    let res!: { error: Error | null };
     await act(async () => {
       res = await result.current.verifyMfaChallenge("factor-9", "654321");
     });
@@ -288,7 +303,10 @@ describe("AuthContext — MFA surface", () => {
     const { result } = renderHook(() => useAuth(), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    let res: { error: Error | null } | null = null;
+    // `!` (definite assignment): o tsc não enxerga a atribuição feita
+    // dentro do callback do `act`, e com `= null` estreitava o tipo para
+    // `null`, deixando `res.error` como acesso em `never`.
+    let res!: { error: Error | null };
     await act(async () => {
       res = await result.current.unenrollMfa("factor-x");
     });

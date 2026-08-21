@@ -11,6 +11,7 @@ const cat = (overrides: Partial<Category>): Category => ({
   color: "#000000",
   type: "expense",
   parent_id: null,
+  is_reimbursable: false,
   created_at: "2026-05-01T00:00:00Z",
   ...overrides,
 });
