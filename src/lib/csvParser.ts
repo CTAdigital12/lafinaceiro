@@ -215,21 +215,21 @@ function parseDate(value: string): string | null {
   const cleaned = value.replace(/["']/g, "").trim();
   
   // Try DD/MM/YYYY or DD-MM-YYYY
-  const brMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  const brMatch = cleaned.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (brMatch) {
     const [, day, month, year] = brMatch;
     return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   }
   
   // Try YYYY-MM-DD or YYYY/MM/DD
-  const isoMatch = cleaned.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  const isoMatch = cleaned.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (isoMatch) {
     const [, year, month, day] = isoMatch;
     return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   }
   
   // Try MM/DD/YYYY
-  const usMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  const usMatch = cleaned.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (usMatch) {
     // Assume DD/MM/YYYY for Brazilian context
     const [, part1, part2, year] = usMatch;

@@ -25,7 +25,7 @@ function extractInstallmentInfo(description: string): { baseDescription: string;
   const patterns = [
     /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/,                        // 04/10 at end of string
     /(\d{1,2})\s*\/\s*(\d{1,2})(?=\s|\)|$)/,                  // 04/10 followed by space, ) or end
-    /(?:^|[^\/\d])(\d{1,2})\s*\/\s*(\d{1,2})(?:[^\/\d]|$)/,   // DD/DD not preceded/followed by / or digit
+    /(?:^|[^/\d])(\d{1,2})\s*\/\s*(\d{1,2})(?:[^/\d]|$)/,   // DD/DD not preceded/followed by / or digit
   ];
 
   for (const pattern of patterns) {
