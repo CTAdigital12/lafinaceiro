@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * parcelas) consulta esta função antes de gravar.
  */
 const respostaConsulta = vi.hoisted(() => ({
-  valor: { data: [] as unknown[], error: null as unknown },
+  valor: { data: [] as unknown[] | null, error: null as unknown },
 }));
 
 const consultasFeitas = vi.hoisted(() => [] as Array<unknown[]>);

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback } from "react";
@@ -66,7 +67,11 @@ export function useCategorizationRules() {
 
   const updateRule = useMutation({
     mutationFn: async ({ id, keyword, category_id, is_corporate }: { id: string; keyword?: string; category_id?: string | null; is_corporate?: boolean }) => {
-      const updateData: Record<string, unknown> = {};
+      // Tipado pelo schema em vez de `Record<string, unknown>`: o cliente do
+      // Supabase não consegue validar um record aberto contra as colunas da
+      // tabela, então qualquer chave errada só apareceria como erro do
+      // PostgREST em runtime.
+      const updateData: TablesUpdate<"categorization_rules"> = {};
       if (keyword !== undefined) updateData.keyword = keyword.toUpperCase();
       if (category_id !== undefined) updateData.category_id = category_id;
       if (is_corporate !== undefined) updateData.is_corporate = is_corporate;

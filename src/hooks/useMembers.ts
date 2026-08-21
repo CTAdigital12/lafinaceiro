@@ -19,10 +19,16 @@ export function useMembers() {
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["shared_access", user?.id],
     queryFn: async () => {
+      // `enabled: !!user` abaixo já impede rodar sem usuário, mas o tipo não
+      // enxerga isso — e um `.eq("owner_id", undefined)` viraria filtro
+      // inválido no PostgREST em vez de erro aqui.
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
       const { data: accessData, error: accessError } = await supabase
         .from("shared_access")
         .select("*")
-        .eq("owner_id", user?.id)
+        .eq("owner_id", user.id)
         .order("created_at", { ascending: false });
 
       if (accessError) throw accessError;

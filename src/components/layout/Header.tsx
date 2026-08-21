@@ -52,14 +52,22 @@ export function Header({ currentDate, onDateChange }: HeaderProps) {
     navigate("/auth");
   };
 
-  const userInitials = user?.user_metadata?.full_name
+  // `user_metadata` no supabase-js é um saco de chaves sem tipo; sob strict,
+  // `full_name` chega como `{}` e não dá para chamar `.split` nem renderizar.
+  // Estreitar uma vez aqui serve às duas leituras abaixo.
+  const fullName =
+    typeof user?.user_metadata?.full_name === "string"
+      ? user.user_metadata.full_name
+      : null;
+
+  const userInitials = fullName
     ?.split(" ")
     .map((n: string) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2) || user?.email?.slice(0, 2).toUpperCase() || "US";
 
-  const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuário";
+  const userName = fullName || user?.email?.split("@")[0] || "Usuário";
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-3 md:px-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)', minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))' }}>

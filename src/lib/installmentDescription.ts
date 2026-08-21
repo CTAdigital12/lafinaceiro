@@ -30,11 +30,20 @@ export function stripInstallmentMarkers(description: string): string {
   );
 }
 
-/** Descrição da parcela `numero` de `total`, sem duplicar marcador. */
+/**
+ * Descrição da parcela `numero` de `total`, sem duplicar marcador.
+ *
+ * `numero` e `total` aceitam `null` porque é isso que as colunas
+ * `installment_number` e `total_installments` devolvem — elas são nullable no
+ * schema, ainda que toda linha de um grupo de parcelamento as tenha na
+ * prática. O comportamento com `null` é o que sempre foi (o template literal
+ * imprime "null"); não é guardado aqui de propósito, para não trocar
+ * silenciosamente a descrição de uma linha malformada por uma inventada.
+ */
 export function buildInstallmentDescription(
   description: string,
-  numero: number,
-  total: number,
+  numero: number | null,
+  total: number | null,
 ): string {
   return `${stripInstallmentMarkers(description)} ${numero}/${total}`;
 }

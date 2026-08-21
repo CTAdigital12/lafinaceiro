@@ -210,7 +210,7 @@ describe("<MfaChallenge />", () => {
   });
 
   it("Auth-aware redirect: when no user, sends to '/auth'", async () => {
-    auth.user = null as unknown as { id: string; email?: string };
+    auth.user = null as unknown as typeof auth.user;
     renderPage();
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/auth", { replace: true });

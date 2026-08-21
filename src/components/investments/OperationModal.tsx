@@ -189,7 +189,7 @@ export function OperationModal({
     if (!open || !isEditing || !operation || !linkedTx) return;
 
     if (operation.type === "buy") {
-      form.setValue("accountId", linkedTx.account_id);
+      form.setValue("accountId", linkedTx.account_id ?? undefined);
       form.setValue("categoryId", linkedTx.category_id ?? undefined);
       form.setValue("createExpense", true);
     } else if (operation.type === "sell") {
@@ -197,7 +197,7 @@ export function OperationModal({
       // por nós em linkMode="new". Caso contrário é receita do usuário
       // referenciada em linkMode="existing".
       const isAutoCreated = linkedTx.description?.startsWith("Resgate:") ?? false;
-      form.setValue("accountId", linkedTx.account_id);
+      form.setValue("accountId", linkedTx.account_id ?? undefined);
       if (isAutoCreated) {
         form.setValue("linkMode", "new");
         form.setValue("categoryId", linkedTx.category_id ?? undefined);
