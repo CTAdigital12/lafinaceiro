@@ -109,7 +109,14 @@ export function TransactionFiltersModal({
   const [openCardPaymentPopover, setOpenCardPaymentPopover] = useState(false);
   const [categorySearch, setCategorySearch] = useState("");
 
-  const allCategories = [...incomeCategories, ...expenseCategories];
+  // Sem o useMemo este array nasce novo a cada render, e como ele é
+  // dependência do `filteredCategories` abaixo, aquele useMemo nunca
+  // memoizava nada — recalculava sempre, inclusive o `groupCategoriesByParent`
+  // encadeado nele.
+  const allCategories = useMemo(
+    () => [...incomeCategories, ...expenseCategories],
+    [incomeCategories, expenseCategories],
+  );
 
   // Filter categories by search text
   const filteredCategories = useMemo(() => {
