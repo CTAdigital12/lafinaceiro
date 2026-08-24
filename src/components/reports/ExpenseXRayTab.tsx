@@ -5,6 +5,7 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { useCategories } from "@/hooks/useCategories";
 import { useDate } from "@/contexts/DateContext";
 import { Treemap, ResponsiveContainer, Tooltip } from "recharts";
+import type { TooltipProps } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, TrendingDown, TrendingUp, AlertTriangle } from "lucide-react";
@@ -119,7 +120,7 @@ export function ExpenseXRayTab() {
     return <div className="h-[300px] flex items-center justify-center text-muted-foreground">Carregando...</div>;
   }
 
-  const TreemapTooltip = ({ active, payload }: any) => {
+  const TreemapTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) return null;
     const item = payload[0].payload;
     return (

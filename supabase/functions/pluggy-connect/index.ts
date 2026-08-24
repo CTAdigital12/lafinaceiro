@@ -122,7 +122,8 @@ Deno.serve(async (req) => {
       if (!accRes.ok) throw new Error("Failed to fetch accounts");
       const accData = await accRes.json();
 
-      const savedItems: any[] = [];
+      // O que é devolvido ao cliente ao fim da conexão.
+      const savedItems: Array<{ type: "credit_card" | "account"; id: string; name: string }> = [];
 
       for (const pluggyAccount of accData.results || []) {
         if (pluggyAccount.type === "CREDIT") {
@@ -252,7 +253,10 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error("pluggy-connect error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    // `err` num catch é `unknown`: nada garante que seja um Error. Antes disto
+    // um throw de string virava `{"error": undefined}` no corpo da resposta.
+    const mensagem = err instanceof Error ? err.message : "Erro interno do servidor";
+    return new Response(JSON.stringify({ error: mensagem }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

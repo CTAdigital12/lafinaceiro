@@ -36,7 +36,7 @@ export function useProjects() {
       if (!rawProjects || rawProjects.length === 0) return [];
 
       // Fetch all transactions linked to any project
-      const projectIds = rawProjects.map((p: any) => p.id);
+      const projectIds = rawProjects.map((p) => p.id);
       const { data: txData, error: txError } = await supabase
         .from("transactions")
         .select("project_id, type, amount, is_refund, is_card_payment, is_provisional")
@@ -60,7 +60,7 @@ export function useProjects() {
         }
       }
 
-      return rawProjects.map((p: any) => ({
+      return rawProjects.map((p) => ({
         ...p,
         spent_amount: Math.max(0, spentByProject[p.id] || 0),
       })) as Project[];

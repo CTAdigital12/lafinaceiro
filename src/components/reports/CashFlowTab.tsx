@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import type { TooltipProps } from "recharts";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { TrendingUp, TrendingDown, PiggyBank, Wallet } from "lucide-react";
@@ -104,18 +105,19 @@ export function CashFlowTab() {
     return <div className="h-[300px] flex items-center justify-center text-muted-foreground">Carregando...</div>;
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) return null;
     const entry = payload[0]?.payload;
     const monthlyBalance = entry?.saldoMensal ?? 0;
     return (
       <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-sm">
         <p className="font-medium text-foreground mb-1 capitalize">{label}</p>
-        {payload.map((p: any) => {
-          const isNegative = (p.dataKey === "saldo" || p.dataKey === "saldoMensal") && p.value < 0;
+        {payload.map((p) => {
+          const isNegative =
+            (p.dataKey === "saldo" || p.dataKey === "saldoMensal") && (p.value ?? 0) < 0;
           return (
             <p key={p.dataKey} style={{ color: isNegative ? "hsl(var(--destructive))" : p.color }}>
-              {p.name}: {formatCurrency(p.value)}
+              {p.name}: {formatCurrency(p.value ?? 0)}
             </p>
           );
         })}
