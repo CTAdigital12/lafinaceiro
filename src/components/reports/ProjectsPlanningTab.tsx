@@ -31,6 +31,16 @@ interface BudgetRow {
   planned_amount: number;
 }
 
+/** Linha de subcategoria agrupada sob a categoria pai, no quadro de metas. */
+interface CategoriaFilha {
+  id: string;
+  name: string;
+  icon: string;
+  planned: number;
+  spent: number;
+  pct: number;
+}
+
 export function ProjectsPlanningTab() {
   const formatCurrency = useFormatCurrency();
   const { month, year } = useDate();
@@ -123,7 +133,10 @@ export function ProjectsPlanningTab() {
     }
 
     // Group children under parents
-    const parentGroups: Record<string, { planned: number; spent: number; children: any[] }> = {};
+    const parentGroups: Record<
+      string,
+      { planned: number; spent: number; children: CategoriaFilha[] }
+    > = {};
 
     for (const b of currentBudgets) {
       const cat = catMap.get(b.category_id || "");
@@ -158,7 +171,7 @@ export function ProjectsPlanningTab() {
         spent: Math.round(g.spent),
         pct,
         overBudget: pct > 100,
-        children: g.children.sort((a: any, b: any) => b.pct - a.pct),
+        children: g.children.sort((a, b) => b.pct - a.pct),
       };
     }).sort((a, b) => b.pct - a.pct);
 

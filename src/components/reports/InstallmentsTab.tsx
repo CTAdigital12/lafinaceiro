@@ -12,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import type { TooltipProps } from "recharts";
 import { CalendarClock, CreditCard, Layers, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -236,7 +237,7 @@ export function InstallmentsTab() {
   const futurePoints = points.filter((p) => p.isFuture);
   const averageLine = overview.nextMonthsAverage;
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) return null;
     const point = payload[0]?.payload;
     if (!point) return null;

@@ -5,6 +5,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import type { TooltipProps } from "recharts";
 
 interface ChartDataItem {
   label: string;
@@ -13,12 +14,12 @@ interface ChartDataItem {
   variance: number;
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
   const fmt = useFormatCurrency();
   if (!active || !payload?.length) return null;
-  const planned = payload.find((p: any) => p.dataKey === "planned")?.value || 0;
-  const actual = payload.find((p: any) => p.dataKey === "actual")?.value || 0;
-  const variance = payload.find((p: any) => p.dataKey === "variance")?.value || 0;
+  const planned = payload.find((p) => p.dataKey === "planned")?.value || 0;
+  const actual = payload.find((p) => p.dataKey === "actual")?.value || 0;
+  const variance = payload.find((p) => p.dataKey === "variance")?.value || 0;
 
   return (
     <div className="bg-popover border border-border rounded-lg p-3 shadow-lg text-sm space-y-1">

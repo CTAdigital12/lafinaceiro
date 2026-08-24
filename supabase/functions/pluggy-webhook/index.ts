@@ -1,4 +1,30 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+/**
+ * Corpo do webhook da Pluggy. Todos os campos são opcionais de propósito: isto
+ * vem de `JSON.parse` de um corpo NÃO CONFIÁVEL, e o código já trata ausência
+ * de cada um. Tipar como obrigatório mentiria sobre a garantia que existe.
+ */
+interface PluggyWebhookPayload {
+  event?: string;
+  itemId?: string;
+  accountId?: string;
+  createdTransactionsLink?: string;
+}
+
+/** Subconjunto de `pluggy_items` que este arquivo lê. */
+interface PluggyItemRow {
+  id: string;
+  user_id: string;
+  account_id: string | null;
+  credit_card_id: string | null;
+}
+
+/** Subconjunto da conta devolvida pela API da Pluggy. */
+interface PluggyAccount {
+  id: string;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -260,7 +286,7 @@ Deno.serve(async (req) => {
     const authFailure = await authenticatePluggyWebhook(req, rawBody, requestId);
     if (authFailure) return authFailure;
 
-    let payload: any;
+    let payload: PluggyWebhookPayload;
     try {
       payload = JSON.parse(rawBody);
     } catch {
@@ -451,7 +477,7 @@ Deno.serve(async (req) => {
         }
 
         // Insert new transaction
-        const txRecord: Record<string, any> = {
+        const txRecord: Record<string, unknown> = {
           user_id: userId,
           description,
           original_description: description,
@@ -564,11 +590,11 @@ Deno.serve(async (req) => {
  * Process transactions for a single Pluggy account
  */
 async function processAccountTransactions(
-  supabase: any,
+  supabase: SupabaseClient,
   apiKey: string,
   userId: string,
-  pluggyAccount: any,
-  pluggyItem: any
+  pluggyAccount: PluggyAccount,
+  pluggyItem: PluggyItemRow
 ): Promise<{ inserted: number; skipped: number }> {
   const txRes = await fetch(
     `${PLUGGY_API}/transactions?accountId=${pluggyAccount.id}&pageSize=500`,
@@ -638,7 +664,7 @@ async function processAccountTransactions(
       continue;
     }
 
-    const txRecord: Record<string, any> = {
+    const txRecord: Record<string, unknown> = {
       user_id: userId,
       description,
       original_description: description,

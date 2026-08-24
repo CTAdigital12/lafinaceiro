@@ -6,6 +6,7 @@ import { useCreditCards } from "@/hooks/useCreditCards";
 import { usePendingInstallments } from "@/hooks/usePendingInstallments";
 import { useTransactions } from "@/hooks/useTransactions";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import type { TooltipProps } from "recharts";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Landmark, CreditCard, TrendingUp, Wallet } from "lucide-react";
@@ -82,12 +83,12 @@ export function NetWorthTab() {
     return <div className="h-[300px] flex items-center justify-center text-muted-foreground">Carregando...</div>;
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) return null;
     return (
       <div className="bg-card border border-border rounded-lg p-2 shadow-lg text-sm">
         <p className="font-medium capitalize">{label}</p>
-        <p className="text-foreground">{formatCurrency(payload[0].value)}</p>
+        <p className="text-foreground">{formatCurrency(payload[0].value ?? 0)}</p>
       </div>
     );
   };

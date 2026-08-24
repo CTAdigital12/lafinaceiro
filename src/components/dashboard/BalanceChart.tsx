@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import type { TooltipProps } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -95,17 +96,17 @@ export function BalanceChart() {
     enabled: !!user,
   });
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
-      const receitas = payload.find((p: any) => p.dataKey === "receitas")?.value || 0;
-      const despesas = payload.find((p: any) => p.dataKey === "despesas")?.value || 0;
+      const receitas = payload.find((p) => p.dataKey === "receitas")?.value || 0;
+      const despesas = payload.find((p) => p.dataKey === "despesas")?.value || 0;
       const resultado = receitas - despesas;
       return (
         <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
           <p className="font-medium text-foreground mb-2">{label}</p>
-          {payload.map((item: any, index: number) => (
+          {payload.map((item, index) => (
             <p key={index} className="text-sm" style={{ color: item.color }}>
-              {item.name}: {fmt(item.value)}
+              {item.name}: {fmt(item.value ?? 0)}
             </p>
           ))}
           <div className="border-t border-border mt-2 pt-2">

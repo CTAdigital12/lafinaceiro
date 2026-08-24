@@ -72,9 +72,15 @@ export function AllocationChart({ data }: AllocationChartProps) {
                 }}
               />
               <Legend
-                formatter={(value, entry: any) => (
+                formatter={(value, entry) => (
                   <span className="text-foreground text-sm">
-                    {value} ({entry.payload.percentage}%)
+                    {/* O recharts tipa `entry.payload` com os campos de estilo
+                        da legenda; em runtime ele é o item do `data`, que
+                        carrega `percentage` (string do toFixed, ou 0). */}
+                    {value} (
+                    {(entry?.payload as unknown as { percentage?: string | number } | undefined)
+                      ?.percentage}
+                    %)
                   </span>
                 )}
               />

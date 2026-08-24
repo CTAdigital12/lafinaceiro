@@ -40,7 +40,7 @@ export function useAccounts() {
       const netByAccount = await fetchRealizedNetByAccount();
 
       return (rawAccounts || []).map((acc) => {
-        const initialBalance = Number((acc as any).initial_balance ?? 0);
+        const initialBalance = Number(acc.initial_balance ?? 0);
         const txNet = netByAccount[acc.id] || 0;
         return {
           ...acc,
@@ -83,8 +83,9 @@ export function useAccounts() {
 
   const updateAccount = useMutation({
     mutationFn: async ({ id, ...account }: Partial<Account> & { id: string }) => {
-      // Remove computed field before sending to DB
-      const { computed_balance, ...dbFields } = account as any;
+      // `computed_balance` é calculado no cliente e não é coluna: fora antes
+      // do update. `Partial<Account>` já o declara, então não há cast aqui.
+      const { computed_balance: _computed, ...dbFields } = account;
       const { data, error } = await supabase
         .from("accounts")
         .update(dbFields)

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from "recharts";
+import type { TooltipProps } from "recharts";
+import type { PieSectorDataItem } from "recharts/types/polar/Pie";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -19,7 +21,10 @@ interface CategoryChartProps {
   onViewAllClick?: () => void;
 }
 
-const renderActiveShape = (props: any) => {
+// `PieSectorDataItem` é o que o recharts entrega ao `activeShape`. Os campos
+// vêm opcionais na tipagem da biblioteca, e o `Sector` abaixo aceita
+// undefined em todos eles, então não há default a inventar aqui.
+const renderActiveShape = (props: PieSectorDataItem) => {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
   return (
     <g>
@@ -27,7 +32,7 @@ const renderActiveShape = (props: any) => {
         cx={cx}
         cy={cy}
         innerRadius={innerRadius}
-        outerRadius={outerRadius + 6}
+        outerRadius={(outerRadius ?? 0) + 6}
         startAngle={startAngle}
         endAngle={endAngle}
         fill={fill}
@@ -47,9 +52,11 @@ export function CategoryChart({ title, data, onCategoryClick, onViewAllClick }: 
   const sortedData = [...data].sort((a, b) => b.value - a.value);
   const top4 = sortedData.slice(0, 4);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
-      const item = payload[0].payload;
+      // O recharts tipa `payload` interno como `any`; aqui ele é sempre um
+      // item do `data` que este componente recebe.
+      const item = payload[0].payload as CategoryData;
       const percentage = ((item.value / total) * 100).toFixed(1);
       const hasRefund = item.refundValue && item.refundValue > 0;
       
@@ -80,7 +87,7 @@ export function CategoryChart({ title, data, onCategoryClick, onViewAllClick }: 
     return null;
   };
 
-  const handlePieClick = (entry: any, index: number) => {
+  const handlePieClick = (entry: CategoryData, index: number) => {
     if (onCategoryClick && hasData) {
       // Use entry directly - Recharts passes the actual data item
       onCategoryClick(entry);
