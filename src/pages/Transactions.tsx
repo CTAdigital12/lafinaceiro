@@ -91,6 +91,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { mensagemDeErro } from "@/lib/mensagemDeErro";
 
 // Format date string (YYYY-MM-DD) to Brazilian format without timezone issues
 function formatDateBR(dateString: string | null): string {
@@ -243,8 +244,8 @@ export default function Transactions() {
       await syncBulkAffectedCards(rows);
       setSelectedTransactions([]);
       toast({ title: `${count} transações excluídas!` });
-    } catch (error: any) {
-      toast({ title: "Erro ao excluir transações", description: error.message, variant: "destructive" });
+    } catch (error) {
+      toast({ title: "Erro ao excluir transações", description: mensagemDeErro(error), variant: "destructive" });
     } finally {
       setShowDeleteDialog(false);
     }
@@ -265,8 +266,8 @@ export default function Transactions() {
       setSelectedTransactions([]);
       setShowBulkCategorySelector(false);
       toast({ title: `Categoria atualizada em ${count} transações!` });
-    } catch (error: any) {
-      toast({ title: "Erro ao atualizar categoria", description: error.message, variant: "destructive" });
+    } catch (error) {
+      toast({ title: "Erro ao atualizar categoria", description: mensagemDeErro(error), variant: "destructive" });
     }
   };
 
@@ -290,8 +291,8 @@ export default function Transactions() {
           ? `${count} transações marcadas como empresarial!` 
           : `${count} transações desmarcadas como empresarial!`
       });
-    } catch (error: any) {
-      toast({ title: "Erro ao atualizar transações", description: error.message, variant: "destructive" });
+    } catch (error) {
+      toast({ title: "Erro ao atualizar transações", description: mensagemDeErro(error), variant: "destructive" });
     }
   };
 

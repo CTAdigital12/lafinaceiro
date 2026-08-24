@@ -14,11 +14,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { InvestmentInstitution } from "@/hooks/useInstitutions";
 import { InstitutionModal } from "./InstitutionModal";
+import type { InstitutionFormData } from "./InstitutionModal";
 
 interface InstitutionsListProps {
   institutions: InvestmentInstitution[];
-  onCreateInstitution: (data: any) => void;
-  onUpdateInstitution: (data: any) => void;
+  onCreateInstitution: (data: InstitutionFormData) => void;
+  onUpdateInstitution: (data: InstitutionFormData & { id: string }) => void;
   onDeleteInstitution: (id: string) => void;
 }
 
@@ -37,7 +38,7 @@ export function InstitutionsList({
     setModalOpen(true);
   };
 
-  const handleSubmit = (data: any) => {
+  const handleSubmit = (data: InstitutionFormData) => {
     if (editingInstitution) {
       onUpdateInstitution({ id: editingInstitution.id, ...data });
     } else {

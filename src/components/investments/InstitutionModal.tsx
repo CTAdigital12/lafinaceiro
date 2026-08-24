@@ -26,7 +26,9 @@ const formSchema = z.object({
   color: z.string().default("#3B82F6"),
 });
 
-type FormValues = z.infer<typeof formSchema>;
+/** Exportado para os componentes que recebem este payload no `onSubmit`. */
+export type InstitutionFormData = z.infer<typeof formSchema>;
+type FormValues = InstitutionFormData;
 
 interface InstitutionModalProps {
   open: boolean;

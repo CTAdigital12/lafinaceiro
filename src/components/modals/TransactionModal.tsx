@@ -176,7 +176,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsRefund(sourceData.is_refund || false);
       setIsCardPayment(sourceData.is_card_payment || false);
       setRefundedTransactionId(sourceData.refunded_transaction_id || null);
-      setProjectId((sourceData as any).project_id || null);
+      setProjectId(sourceData.project_id || null);
       setSaveRule(false);
       setRuleKeyword("");
     } else {

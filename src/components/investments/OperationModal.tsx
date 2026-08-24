@@ -43,6 +43,8 @@ import {
   ASSET_TYPE_LABELS,
 } from "@/hooks/useInvestments";
 import { LinkToAccountSection } from "./LinkToAccountSection";
+import type { NovaOperacao, NovoAtivo } from "@/hooks/useInvestments";
+import type { AssetType } from "@/hooks/useInvestments";
 
 const formSchema = z
   .object({
@@ -108,8 +110,8 @@ interface OperationModalProps {
   onOpenChange: (open: boolean) => void;
   assets: InvestmentAsset[];
   operation?: InvestmentTransaction | null;
-  onSubmit: (data: any) => void;
-  onCreateAsset: (data: any) => Promise<any>;
+  onSubmit: (data: NovaOperacao) => void;
+  onCreateAsset: (data: NovoAtivo) => Promise<InvestmentAsset>;
 }
 
 export function OperationModal({
@@ -219,7 +221,10 @@ export function OperationModal({
         const newAsset = await onCreateAsset({
           name: values.assetName,
           ticker: values.assetTicker.toUpperCase(),
-          asset_type: values.assetType,
+          // O campo do formulário é `string` porque o select nasce vazio
+          // (""), o que não cabe no enum. A escolha vem de
+          // `ASSET_TYPE_LABELS`, então em runtime é sempre um `AssetType`.
+          asset_type: values.assetType as AssetType,
           quantity: 0,
           average_price: 0,
           current_price: values.unitPrice,
@@ -304,7 +309,7 @@ export function OperationModal({
             ) : (
               <Tabs
                 value={operationType}
-                onValueChange={(v) => form.setValue("operationType", v as any)}
+                onValueChange={(v) => form.setValue("operationType", v as FormValues["operationType"])}
               >
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="buy">Compra</TabsTrigger>

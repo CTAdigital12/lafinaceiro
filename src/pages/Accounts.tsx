@@ -29,6 +29,7 @@ import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCategories } from "@/hooks/useCategories";
+import { mensagemDeErro } from "@/lib/mensagemDeErro";
 
 const iconComponents = {
   bank: Building2,
@@ -217,8 +218,8 @@ export default function Accounts() {
       URL.revokeObjectURL(url);
 
       toast({ title: "Extrato exportado com sucesso!" });
-    } catch (err: any) {
-      toast({ title: "Erro ao exportar", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao exportar", description: mensagemDeErro(err), variant: "destructive" });
     }
   };
 
