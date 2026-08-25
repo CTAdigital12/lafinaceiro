@@ -5,7 +5,7 @@ name: CI
 #   testes     -> BLOQUEIA o merge. A suíte está 100% verde (18 arquivos, 220
 #                 testes), então qualquer vermelho aqui é regressão de verdade.
 #
-#   qualidade  -> typecheck BLOQUEIA; lint ainda é informativo.
+#   qualidade  -> typecheck e lint BLOQUEIAM, erros E warnings.
 #
 #                 O typecheck estava em 39 erros e foi ZERADO em 21/08/2026,
 #                 na mesma passada em que `strict` foi ligado (A13). Como a
@@ -18,11 +18,15 @@ name: CI
 #                 erros do A13 foram zerados, e com baseline zero não existe
 #                 "subiu um pouco". Era o que este comentário mandava fazer.
 #
-#                 Os 6 WARNINGS restantes (todos `react-hooks/exhaustive-deps`)
-#                 seguem informativos, e de propósito: cada um exige decidir se
-#                 a dependência foi omitida por engano ou por desenho, e três
-#                 ficam no Dashboard e na importação de fatura. Bloquear neles
-#                 empurraria para o `eslint-disable` fácil.
+#                 Os 6 WARNINGS de `react-hooks/exhaustive-deps` foram ZERADOS
+#                 em 25/08/2026 e passaram a bloquear também. O receio anotado
+#                 aqui era que bloquear empurrasse para o `eslint-disable`
+#                 fácil; os seis caíram sem nenhum disable — cinco viraram
+#                 `useCallback`/`useMemo` e um era guarda morta —, então o
+#                 receio não se confirmou e a baseline pôde ir a zero. Se algum
+#                 dia uma omissão for mesmo deliberada, o disable com
+#                 justificativa na linha é resposta legítima; o que não pode é
+#                 warning anônimo se acumulando sem ninguém decidir nada.
 #
 # Nota: `vite build` usa SWC e NÃO faz typecheck — o deploy da Vercel passa mesmo
 # com erro de tipo. O job de typecheck aqui é a única visibilidade que existe.
@@ -110,12 +114,10 @@ jobs:
           # publicado quando o job ficar vermelho.
           [ "${total}" -eq 0 ]
 
-      # Erros zerados em 24/08/2026 (A13): sem baseline, qualquer um derruba o
-      # job. Warnings seguem só medidos.
+      # Erros zerados em 24/08/2026 (A13) e warnings em 25/08/2026: sem
+      # baseline dos dois lados, qualquer um derruba o job.
       - name: Lint
         id: lint
-        env:
-          BASELINE_WARNINGS: "6"
         run: |
           set -uo pipefail
           npx eslint . -f json -o eslint.json > /dev/null 2>&1 || true
@@ -135,7 +137,7 @@ jobs:
             echo "| | Agora | Permitido |"
             echo "|---|---|---|"
             echo "| Erros | ${erros} | 0 |"
-            echo "| Warnings | ${warnings} | ${BASELINE_WARNINGS} (informativo) |"
+            echo "| Warnings | ${warnings} | 0 |"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "${erros}" -gt 0 ]; then
@@ -143,9 +145,10 @@ jobs:
             npx eslint . || true
           fi
 
-          if [ "${warnings}" -gt "${BASELINE_WARNINGS}" ]; then
-            echo "::warning::Warnings subiram de ${BASELINE_WARNINGS} para ${warnings}."
+          if [ "${warnings}" -gt 0 ]; then
+            echo "::error::Lint falhou com ${warnings} warning(s). A baseline é zero desde 25/08/2026."
+            npx eslint . || true
           fi
 
           # Falha por último, com o resumo já publicado.
-          [ "${erros}" -eq 0 ]
+          [ "${erros}" -eq 0 ] && [ "${warnings}" -eq 0 ]

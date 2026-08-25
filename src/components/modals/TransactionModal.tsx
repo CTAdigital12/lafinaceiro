@@ -205,7 +205,10 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setOriginalCardId(null);
       setOriginalDueDate(null);
     }
-  }, [sourceData, open, isDuplicating, refundFrom]);
+    // `transaction` entra sem custo: quando existe, ele É o `sourceData` (mesma
+    // identidade, ver a atribuição acima), e quando não existe é nulo estável.
+    // Nenhuma reexecução nova — só a dependência que o corpo de fato lê.
+  }, [sourceData, transaction, open, isDuplicating, refundFrom]);
 
   // Auto-suggest pending status when the transaction lands in the future.
   //
