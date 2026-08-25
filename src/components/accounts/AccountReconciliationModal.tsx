@@ -73,6 +73,7 @@ interface AccountReconciliationModalProps {
 }
 
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { mensagemDeErro } from "@/lib/mensagemDeErro";
 
 export function AccountReconciliationModal({
   open,
@@ -165,8 +166,8 @@ export function AccountReconciliationModal({
 
       setResult(reconciliation);
       setBankBalance(balance);
-    } catch (err: any) {
-      toast({ title: "Erro ao processar arquivo", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao processar arquivo", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -222,8 +223,8 @@ export function AccountReconciliationModal({
       const systemTx = await fetchSystemTransactions(minDate, maxDate);
       const allItems = getAllSpreadsheetItems();
       setResult(reconcileSpreadsheet(allItems, systemTx));
-    } catch (err: any) {
-      toast({ title: "Erro ao incluir", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao incluir", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
@@ -240,8 +241,8 @@ export function AccountReconciliationModal({
       const systemTx = await fetchSystemTransactions(minDate, maxDate);
       const allItems = getAllSpreadsheetItems();
       setResult(reconcileSpreadsheet(allItems, systemTx));
-    } catch (err: any) {
-      toast({ title: "Erro ao excluir", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao excluir", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
       setDeleteConfirm(null);
@@ -259,8 +260,8 @@ export function AccountReconciliationModal({
       const systemTx = await fetchSystemTransactions(minDate, maxDate);
       const allItems = getAllSpreadsheetItems();
       setResult(reconcileSpreadsheet(allItems, systemTx));
-    } catch (err: any) {
-      toast({ title: "Erro ao corrigir", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao corrigir", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
@@ -291,8 +292,8 @@ export function AccountReconciliationModal({
       const systemTx = await fetchSystemTransactions(minDate, maxDate);
       const allItems = getAllSpreadsheetItems();
       setResult(reconcileSpreadsheet(allItems, systemTx));
-    } catch (err: any) {
-      toast({ title: "Erro ao conciliar", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao conciliar", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
@@ -319,8 +320,8 @@ export function AccountReconciliationModal({
 
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast({ title: "Saldo sincronizado com sucesso!" });
-    } catch (err: any) {
-      toast({ title: "Erro ao sincronizar saldo", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao sincronizar saldo", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setSyncingBalance(false);
     }
@@ -482,11 +483,14 @@ export function AccountReconciliationModal({
                 </TabsList>
 
                 <ScrollArea className="mt-3 h-[calc(90vh-340px)] min-h-[250px]">
-                  {["all", "matched", "discrepancies", "missing", "extra"].map((tab) => (
+                  // `as const` faz `tab` ser a união que `filter` espera, em vez de
+                  // `string` — o cast `as any` que estava aqui também
+                  // engoliria um valor escrito errado no array.
+                  {(["all", "matched", "discrepancies", "missing", "extra"] as const).map((tab) => (
                     <TabsContent key={tab} value={tab} className="mt-0">
                       <AccountResultTable
                         result={result}
-                        filter={tab as any}
+                        filter={tab}
                         processingIds={processingIds}
                         onAdd={handleAddTransaction}
                         onDelete={setDeleteConfirm}

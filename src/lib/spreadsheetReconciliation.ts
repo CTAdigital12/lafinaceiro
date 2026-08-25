@@ -345,13 +345,16 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetItem[
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  // `header: 1` devolve matriz de células cruas — número, string, data ou
+  // vazio. Aqui tudo vira texto logo em seguida, então `unknown` basta e
+  // impede que alguém use uma célula como número sem converter.
+  const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
 
   if (rows.length < 2) return [];
 
-  const header = rows[0].map((c: any) => String(c));
+  const header = rows[0].map((c) => String(c));
   const cols = detectColumns(header);
 
-  const stringRows = rows.map((r) => r.map((c: any) => String(c)));
+  const stringRows = rows.map((r) => r.map((c) => String(c)));
   return rowsToItems(stringRows, 1, cols);
 }

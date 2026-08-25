@@ -67,6 +67,7 @@ interface SpreadsheetReconciliationModalProps {
 }
 
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { mensagemDeErro } from "@/lib/mensagemDeErro";
 
 export function SpreadsheetReconciliationModal({
   open,
@@ -131,8 +132,8 @@ export function SpreadsheetReconciliationModal({
       // quem não marcasse criava o crédito como despesa, somando na fatura.
       setRefundItems(new Set(spreadsheetItems.filter((i) => i.isCredit).map((i) => i.rowIndex)));
       setResult(reconciliation);
-    } catch (err: any) {
-      toast({ title: "Erro ao processar arquivo", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao processar arquivo", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -185,8 +186,8 @@ export function SpreadsheetReconciliationModal({
         { matchCreditSign: true }
       );
       setResult(newResult);
-    } catch (err: any) {
-      toast({ title: "Erro ao incluir", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao incluir", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
@@ -219,8 +220,8 @@ export function SpreadsheetReconciliationModal({
         ...(result?.onlyInSpreadsheet || []),
       ];
       setResult(reconcileSpreadsheet(allSpreadsheetItems, systemTx, { matchCreditSign: true }));
-    } catch (err: any) {
-      toast({ title: "Erro ao excluir", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao excluir", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
       setDeleteConfirm(null);
@@ -250,8 +251,8 @@ export function SpreadsheetReconciliationModal({
         ...(result?.onlyInSpreadsheet || []),
       ];
       setResult(reconcileSpreadsheet(allSpreadsheetItems, systemTx, { matchCreditSign: true }));
-    } catch (err: any) {
-      toast({ title: "Erro ao corrigir", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao corrigir", description: mensagemDeErro(err), variant: "destructive" });
     } finally {
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
@@ -348,11 +349,14 @@ export function SpreadsheetReconciliationModal({
                 </TabsList>
 
                 <ScrollArea className="mt-3 h-[calc(90vh-280px)] min-h-[280px]">
-                  {["all", "matched", "discrepancies", "missing", "extra"].map((tab) => (
+                  // `as const` faz `tab` ser a união que `filter` espera, em vez de
+                  // `string` — o cast `as any` que estava aqui também
+                  // engoliria um valor escrito errado no array.
+                  {(["all", "matched", "discrepancies", "missing", "extra"] as const).map((tab) => (
                     <TabsContent key={tab} value={tab} className="mt-0">
                       <ResultTable
                         result={result}
-                        filter={tab as any}
+                        filter={tab}
                         processingIds={processingIds}
                         onAdd={handleAddTransaction}
                         onDelete={setDeleteConfirm}
