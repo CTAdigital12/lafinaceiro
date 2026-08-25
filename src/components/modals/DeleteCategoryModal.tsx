@@ -50,9 +50,15 @@ export function DeleteCategoryModal({
       .map((c) => c.id);
   };
 
+  // Só o ID entra no efeito. Depender do objeto `category` inteiro faria as duas
+  // consultas rodarem de novo (e limpariam a categoria de destino já escolhida)
+  // a cada vez que a lista de categorias fosse recarregada e devolvesse um
+  // objeto novo com o mesmo conteúdo.
+  const categoryId = category?.id;
+
   // Fetch transaction count when modal opens
   useEffect(() => {
-    if (isOpen && category) {
+    if (isOpen && categoryId) {
       setIsLoading(true);
       setTargetCategoryId("");
       
@@ -61,13 +67,13 @@ export function DeleteCategoryModal({
         const { data: subcats } = await supabase
           .from("categories")
           .select("id")
-          .eq("parent_id", category.id);
+          .eq("parent_id", categoryId);
         
         const subcatIds = subcats?.map(s => s.id) || [];
         setSubcategoryIds(subcatIds);
         
         // Count transactions
-        const categoryIds = [category.id, ...subcatIds];
+        const categoryIds = [categoryId, ...subcatIds];
         const { count, error } = await supabase
           .from("transactions")
           .select("*", { count: "exact", head: true })
@@ -84,7 +90,7 @@ export function DeleteCategoryModal({
       
       fetchData();
     }
-  }, [isOpen, category?.id]);
+  }, [isOpen, categoryId]);
 
   // Filter out the category being deleted and its subcategories from available targets
   const availableCategories = expenseCategories.filter((c) => {

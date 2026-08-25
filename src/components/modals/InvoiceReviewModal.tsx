@@ -115,7 +115,11 @@ export function InvoiceReviewModal({
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [showPostClosingWarning, setShowPostClosingWarning] = useState(true);
 
-  const items = importData?.items || [];
+  // O `|| []` criava um array NOVO a cada render quando não há itens, e esse
+  // array é dependência do efeito de inicialização lá embaixo — que então
+  // reexecutava a cada render (sem efeito prático, porque o corpo exige
+  // `items.length > 0`, mas ruído real na lista de dependências).
+  const items = useMemo(() => importData?.items || [], [importData?.items]);
   const postClosingCount = importData?.post_closing_count || 0;
   const validationWarning = importData?.validation_warning;
   const invoiceMonth = importData?.invoice_month;

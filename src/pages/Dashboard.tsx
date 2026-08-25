@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Wallet, TrendingUp, TrendingDown, CreditCard, Loader2 } from "lucide-react";
 import { SummaryCard } from "@/components/dashboard/SummaryCard";
 import { CategoryChart } from "@/components/dashboard/CategoryChart";
@@ -76,7 +76,12 @@ export default function Dashboard() {
   const isLoading = accountsLoading || transactionsLoading || cardsLoading || categoriesLoading;
 
   // Filter function based on expense view filters (for regular expenses, not refunds)
-  const filterTransactionsByView = (t: Transaction) => {
+  //
+  // O `useCallback` não é micro-otimização: sem ele os useMemo abaixo não
+  // conseguem declarar a dependência que de fato usam, e sobra o
+  // `expenseFilters` escrito à mão — que só por acaso era o gatilho certo. A
+  // identidade agora muda exatamente quando os filtros mudam.
+  const filterTransactionsByView = useCallback((t: Transaction) => {
     if (t.type !== "expense" || t.is_refund) return false;
     if (t.is_card_payment) return false; // Exclui pagamentos de fatura (transferência interna)
     if (t.is_provisional) return false;
@@ -91,10 +96,10 @@ export default function Dashboard() {
       (expenseFilters.includes("corporate") && isCorporate) ||
       (expenseFilters.includes("reimbursable") && isReimbursable)
     );
-  };
+  }, [expenseFilters]);
 
   // Filter function for refunds of expenses (to subtract from category totals)
-  const filterRefundsByView = (t: Transaction) => {
+  const filterRefundsByView = useCallback((t: Transaction) => {
     // Refunds are expense type with is_refund = true, they should reduce the original category
     if (t.type !== "expense" || !t.is_refund) return false;
     if (t.is_card_payment) return false; // Exclui pagamentos de fatura
@@ -110,10 +115,10 @@ export default function Dashboard() {
       (expenseFilters.includes("corporate") && isCorporate) ||
       (expenseFilters.includes("reimbursable") && isReimbursable)
     );
-  };
+  }, [expenseFilters]);
 
   // Helper to calculate totals for a set of category IDs
-  const calculateCategoryTotals = (categoryIds: string[]) => {
+  const calculateCategoryTotals = useCallback((categoryIds: string[]) => {
     const expenses = transactions
       .filter(t => filterTransactionsByView(t) && categoryIds.includes(t.category_id!))
       .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -127,7 +132,7 @@ export default function Dashboard() {
       refundValue: refunds,
       netValue: expenses - refunds,
     };
-  };
+  }, [transactions, filterTransactionsByView, filterRefundsByView]);
 
   // Calculate total expenses based on current filter (expenses - refunds)
   const filteredTotalExpense = useMemo(() => {
@@ -140,7 +145,7 @@ export default function Dashboard() {
       .reduce((sum, t) => sum + Number(t.amount), 0);
     
     return expenses - refunds;
-  }, [transactions, expenseFilters]);
+  }, [transactions, filterTransactionsByView, filterRefundsByView]);
 
   // Calculate expenses grouped by parent category (with refunds subtracted)
   const expensesByParentCategory = useMemo(() => {
@@ -182,7 +187,7 @@ export default function Dashboard() {
     }).filter(c => c.value > 0);
 
     return [...result, ...orphanExpenses].sort((a, b) => b.value - a.value);
-  }, [expenseCategories, transactions, expenseFilters]);
+  }, [expenseCategories, calculateCategoryTotals]);
 
   // Get subcategories data for a parent category (with refunds included as negative)
   const getSubcategoriesData = (parentId: string): SubcategoryData[] => {

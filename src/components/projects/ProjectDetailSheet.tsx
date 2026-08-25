@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,25 +61,33 @@ export function ProjectDetailSheet({
     initialSort: { field: "date", direction: "desc" },
   });
 
-  useEffect(() => {
-    if (open && project) {
-      loadLinkedTransactions();
-    }
-  }, [open, project?.id, project?.spent_amount]);
-
-  const loadLinkedTransactions = async () => {
+  // Definida ANTES do efeito porque agora é dependência dele. Sem o
+  // `useCallback` a função nasceria nova a cada render e o efeito buscaria
+  // em loop; com ele, a identidade só muda quando o projeto muda.
+  const projectId = project.id;
+  const loadLinkedTransactions = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("transactions")
       .select("id, description, amount, date, type, is_refund, categories (name, icon, color)")
-      .eq("project_id", project.id)
+      .eq("project_id", projectId)
       .order("date", { ascending: false });
 
     if (!error && data) {
       setTransactions(data as LinkedTransaction[]);
     }
     setLoading(false);
-  };
+  }, [projectId]);
+
+  // `spent_amount` continua na lista: é ele que dispara a recarga depois de
+  // vincular ou desvincular um lançamento. O antigo `&& project` era guarda
+  // morta — a prop é `Project`, não opcional, e o resto do componente já a
+  // desreferencia sem checar.
+  useEffect(() => {
+    if (open) {
+      loadLinkedTransactions();
+    }
+  }, [open, loadLinkedTransactions, project.spent_amount]);
 
   const remaining = project.target_amount - project.spent_amount;
   const percentage = project.target_amount > 0
