@@ -27,6 +27,8 @@ interface SettleReimbursementModalProps {
     description: string;
     amount: number;
     date: string;
+    /** Vencimento da fatura, quando a despesa é de cartão. */
+    due_date?: string | null;
   } | null;
 }
 
@@ -47,8 +49,13 @@ export function SettleReimbursementModal({
   const fmt = useFormatCurrency();
   const { accounts } = useAccounts();
   const { settleExternal } = useReimbursementPayment();
+  // Numa despesa de cartão o reembolso chega perto do VENCIMENTO da fatura,
+  // não da data da compra: uma compra de 17/06 numa fatura que vence em 15/08
+  // é paga de volta em agosto. Ancorar na data da compra jogava o PIX para
+  // fora da janela de candidatas. Conta comum não tem due_date -> usa `date`.
+  const refDate = transaction?.due_date ?? transaction?.date;
   const { candidates, isLoading: loadingCandidates } =
-    useReimbursementIncomeCandidates(transaction?.date, open);
+    useReimbursementIncomeCandidates(refDate, open);
 
   const [mode, setMode] = useState<Mode>("link");
   const [incomeId, setIncomeId] = useState("");
