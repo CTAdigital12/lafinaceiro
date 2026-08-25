@@ -15,7 +15,44 @@ const part = (amount: number, overrides: Partial<SplitPart> = {}): SplitPart => 
   label: null,
   is_reimbursable: false,
   is_corporate_expense: false,
+  recurring_rule_id: null,
   ...overrides,
+});
+
+describe("recorrência por parte", () => {
+  it("recusa a mesma recorrência em duas partes", () => {
+    expect(
+      validateParts(
+        [
+          part(500, { recurring_rule_id: "rule-a" }),
+          part(300, { recurring_rule_id: "rule-a" }),
+        ],
+        800,
+      ),
+    ).toBe("A mesma recorrência foi escolhida em duas partes.");
+  });
+
+  it("aceita recorrências diferentes em cada parte", () => {
+    expect(
+      validateParts(
+        [
+          part(500, { recurring_rule_id: "rule-a" }),
+          part(300, { recurring_rule_id: "rule-b" }),
+        ],
+        800,
+      ),
+    ).toBeNull();
+  });
+
+  it("não replica a recorrência ao ratear nas demais parcelas", () => {
+    const rateado = prorateParts(
+      [part(500, { recurring_rule_id: "rule-a" }), part(300)],
+      800,
+      400,
+    );
+    expect(rateado.map((p) => p.recurring_rule_id)).toEqual([null, null]);
+    expect(rateado.map((p) => p.amount)).toEqual([250, 150]);
+  });
 });
 
 describe("round2", () => {

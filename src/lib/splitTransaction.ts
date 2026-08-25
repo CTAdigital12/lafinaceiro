@@ -14,6 +14,13 @@ export interface SplitPart {
   label: string | null;
   is_reimbursable: boolean;
   is_corporate_expense: boolean;
+  /**
+   * Recorrência que esta parte quita. Existe para um único débito no extrato
+   * dar baixa em DUAS previsões recorrentes do mês (o PIX que paga o ingresso
+   * e a parcela do empréstimo): cada parte reivindica a sua regra, e o gerador
+   * de provisórias enxerga as duas atendidas. `null` = parte sem recorrência.
+   */
+  recurring_rule_id: string | null;
 }
 
 /** Arredonda para 2 casas evitando o erro de ponto flutuante do JS (1.005). */
@@ -44,6 +51,10 @@ export function prorateParts(
   const scaled = parts.map((p) => ({
     ...p,
     amount: round2((Number(p.amount) / originalTotal) * total),
+    // A recorrência NÃO é replicada: reivindicar uma regra vale para o mês
+    // daquele lançamento, e as demais parcelas caem em outros meses — herdar o
+    // vínculo faria o gerador pular a previsão desses meses.
+    recurring_rule_id: null,
   }));
 
   const diff = round2(total - sumParts(scaled));
@@ -134,6 +145,12 @@ export function validateParts(parts: SplitPart[], transactionAmount: number): st
     return diff > 0
       ? `A soma das partes excede o valor da transação em R$ ${diff.toFixed(2)}.`
       : `Faltam R$ ${Math.abs(diff).toFixed(2)} para completar o valor da transação.`;
+  }
+  // Mesma trava da RPC, antecipada para o formulário: duas partes na mesma
+  // recorrência reivindicariam o mesmo mês da mesma regra.
+  const rules = parts.map((p) => p.recurring_rule_id).filter((id): id is string => !!id);
+  if (new Set(rules).size !== rules.length) {
+    return "A mesma recorrência foi escolhida em duas partes.";
   }
   return null;
 }

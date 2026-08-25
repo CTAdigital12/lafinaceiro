@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2, SplitSquareHorizontal, Layers, Undo2, ReceiptText, Briefcase } from "lucide-react";
+import { Loader2, Plus, Trash2, SplitSquareHorizontal, Layers, Undo2, ReceiptText, Briefcase, Repeat } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -21,10 +21,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CategoryCombobox } from "@/components/CategoryCombobox";
 import { useCategories } from "@/hooks/useCategories";
+import { useRecurringRules } from "@/hooks/useRecurringRules";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import {
+  useRecurringProvisionals,
   useSplitGroup,
   useSplittableInstallments,
   useTransactionSplit,
@@ -52,10 +61,16 @@ interface PartForm {
   label: string;
   isReimbursable: boolean;
   isCorporate: boolean;
+  /** Recorrência que esta parte quita ("" = nenhuma). */
+  recurringRuleId: string;
   /** Parte já reembolsada: valor e flags não podem mais mudar. */
   locked: boolean;
   reimbursementStatus: string | null;
 }
+
+/** Radix Select não aceita item com value vazio, então "sem recorrência" tem
+ *  o seu próprio valor sentinela. */
+const NO_RULE = "none";
 
 let partKeySeq = 0;
 const newKey = () => `part-${partKeySeq++}`;
@@ -67,6 +82,7 @@ const emptyPart = (): PartForm => ({
   label: "",
   isReimbursable: false,
   isCorporate: false,
+  recurringRuleId: "",
   locked: false,
   reimbursementStatus: null,
 });
@@ -79,10 +95,12 @@ export function SplitTransactionModal({
   const { user } = useAuth();
   const fmt = useFormatCurrency();
   const { incomeCategories, expenseCategories, categories: allCategories } = useCategories();
+  const { rules } = useRecurringRules();
   const { splitTransaction, unsplitTransaction, updateSplitParts } = useTransactionSplit();
 
   const [parts, setParts] = useState<PartForm[]>([]);
   const [applyToInstallments, setApplyToInstallments] = useState(false);
+  const [deleteProvisionals, setDeleteProvisionals] = useState(true);
   const [showUnsplitConfirm, setShowUnsplitConfirm] = useState(false);
 
   const { data: transaction, isLoading: isLoadingTransaction } = useQuery({
@@ -148,6 +166,7 @@ export function SplitTransactionModal({
           label: "",
           isReimbursable: p.is_reimbursable,
           isCorporate: p.is_corporate_expense,
+          recurringRuleId: p.recurring_rule_id ?? "",
           locked:
             p.reimbursement_status === "reimbursed" ||
             !!p.reimbursement_payment_id ||
@@ -167,6 +186,7 @@ export function SplitTransactionModal({
         categoryId: transaction.category_id ?? "",
         isReimbursable: transaction.is_reimbursable,
         isCorporate: transaction.is_corporate_expense,
+        recurringRuleId: transaction.recurring_rule_id ?? "",
       },
       emptyPart(),
     ]);
@@ -177,6 +197,7 @@ export function SplitTransactionModal({
     if (!open) {
       initKeyRef.current = null;
       setParts([]);
+      setDeleteProvisionals(true);
       setShowUnsplitConfirm(false);
     }
   }, [open]);
@@ -187,11 +208,54 @@ export function SplitTransactionModal({
     label: p.label.trim() || null,
     is_reimbursable: p.isReimbursable,
     is_corporate_expense: p.isCorporate,
+    recurring_rule_id: p.recurringRuleId || null,
   }));
 
   const allocated = sumParts(numericParts);
   const remaining = round2(totalAmount - allocated);
   const validationError = validateParts(numericParts, totalAmount);
+
+  const selectedRuleIds = useMemo(
+    () => new Set(parts.map((p) => p.recurringRuleId).filter(Boolean)),
+    [parts],
+  );
+
+  /** Regras do mesmo tipo da transação. Inativas só aparecem se já estiverem
+   *  escolhidas — senão o Select mostraria um valor sem rótulo. */
+  const ruleOptions = useMemo(
+    () =>
+      rules.filter(
+        (r) => r.type === transaction?.type && (r.active || selectedRuleIds.has(r.id)),
+      ),
+    [rules, transaction?.type, selectedRuleIds],
+  );
+
+  const { provisionals } = useRecurringProvisionals(
+    transaction?.date,
+    open && ruleOptions.length > 0,
+  );
+
+  /**
+   * Previsões que este rateio passa a quitar: a provisória que o gerador criou
+   * para a regra escolhida, no mesmo mês. Ela precisa sair, senão o mês soma a
+   * previsão E a parte que a substitui. As próprias partes ficam de fora — ao
+   * dividir uma provisória, ela não é a previsão "sobrando".
+   */
+  const replacedProvisionals = useMemo(() => {
+    const ownIds = new Set<string>([
+      ...(transaction ? [transaction.id] : []),
+      ...existingParts.map((p) => p.id),
+    ]);
+    const found = new Map<string, (typeof provisionals)[number]>();
+
+    for (const ruleId of selectedRuleIds) {
+      const match = provisionals.find(
+        (pr) => pr.recurring_rule_id === ruleId && !ownIds.has(pr.id),
+      );
+      if (match) found.set(match.id, match);
+    }
+    return [...found.values()];
+  }, [selectedRuleIds, provisionals, transaction, existingParts]);
 
   const updatePart = (index: number, changes: Partial<PartForm>) => {
     setParts((prev) => prev.map((p, i) => (i === index ? { ...p, ...changes } : p)));
@@ -237,22 +301,30 @@ export function SplitTransactionModal({
     e.preventDefault();
     if (!transaction || validationError) return;
 
+    const provisionalIdsToDelete =
+      deleteProvisionals && replacedProvisionals.length > 0
+        ? replacedProvisionals.map((pr) => pr.id)
+        : undefined;
+
     if (isSplit) {
-      await updateSplitParts.mutateAsync(
-        parts.map((p, i) => ({
+      await updateSplitParts.mutateAsync({
+        updates: parts.map((p, i) => ({
           id: p.id!,
           amount: numericParts[i].amount,
           category_id: numericParts[i].category_id,
           is_reimbursable: numericParts[i].is_reimbursable,
           is_corporate_expense: numericParts[i].is_corporate_expense,
           reimbursement_status: p.reimbursementStatus,
+          recurring_rule_id: numericParts[i].recurring_rule_id,
         })),
-      );
+        provisionalIdsToDelete,
+      });
     } else {
       await splitTransaction.mutateAsync({
         transaction,
         parts: numericParts,
         applyToInstallments: applyToInstallments && !!transaction.installment_group_id,
+        provisionalIdsToDelete,
       });
     }
 
@@ -304,6 +376,13 @@ export function SplitTransactionModal({
               Cada parte vira um lançamento próprio, com a sua categoria. Marque como{" "}
               <strong>reembolsável</strong> a parte que outra pessoa vai te pagar — ela aparece em
               Reembolsos Diversos e sai dos seus totais de despesa.
+              {ruleOptions.length > 0 && (
+                <>
+                  {" "}
+                  Se este débito quitou mais de uma previsão do mês, aponte a{" "}
+                  <strong>recorrência</strong> de cada parte.
+                </>
+              )}
             </p>
 
             {/* Partes */}
@@ -377,6 +456,37 @@ export function SplitTransactionModal({
                       />
                     </div>
                   </div>
+
+                  {ruleOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Repeat className="h-3.5 w-3.5" />
+                        Quita a recorrência (opcional)
+                      </Label>
+                      <Select
+                        value={part.recurringRuleId || NO_RULE}
+                        disabled={part.locked}
+                        onValueChange={(value) =>
+                          updatePart(index, {
+                            recurringRuleId: value === NO_RULE ? "" : value,
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Nenhuma" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_RULE}>Nenhuma</SelectItem>
+                          {ruleOptions.map((rule) => (
+                            <SelectItem key={rule.id} value={rule.id}>
+                              {rule.description}
+                              {rule.active ? "" : " (inativa)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   {!isSplit && (
                     <div className="space-y-1.5">
@@ -455,6 +565,34 @@ export function SplitTransactionModal({
 
             {validationError && (
               <p className="text-sm text-expense">{validationError}</p>
+            )}
+
+            {/* Previsões recorrentes substituídas por este rateio */}
+            {replacedProvisionals.length > 0 && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+                <Checkbox
+                  checked={deleteProvisionals}
+                  onCheckedChange={(v) => setDeleteProvisionals(v === true)}
+                  className="mt-0.5"
+                />
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <Repeat className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    Excluir a{replacedProvisionals.length > 1 ? "s" : ""} previsão
+                    {replacedProvisionals.length > 1 ? "ões" : ""} que este rateio quita
+                  </span>
+                  <ul className="space-y-0.5 text-xs text-muted-foreground">
+                    {replacedProvisionals.map((provisional) => (
+                      <li key={provisional.id}>
+                        {provisional.description} — {fmt(Number(provisional.amount))}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground">
+                    Sem isso o mês soma a previsão <em>e</em> a parte que a substitui.
+                  </p>
+                </div>
+              </label>
             )}
 
             {/* Parcelas */}
