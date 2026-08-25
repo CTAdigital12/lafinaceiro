@@ -862,6 +862,10 @@ export type Database = {
         }
         Returns: string
       }
+      settle_transactions_with_payment: {
+        Args: { p_payment_id: string; p_target_ids: string[] }
+        Returns: string
+      }
       split_transaction: {
         Args: { p_parts: Json; p_transaction_id: string }
         Returns: string
