@@ -1,4 +1,4 @@
-import { normalizeString, normalizeDate } from "./deduplication";
+import { normalizeDate } from "./deduplication";
 import { collapseSplitGroups, type CollapsedRow } from "./splitTransaction";
 import * as XLSX from "xlsx";
 
@@ -149,20 +149,43 @@ export function reconcileSpreadsheet(
     const item = spreadsheetItems[si];
     const normalizedItemDate = normalizeDate(item.date);
 
+    // Entre todos os candidatos da mesma data, o de valor MAIS PRÓXIMO — não o
+    // primeiro da lista. Pegar o primeiro pareava R$ 100 da planilha com um
+    // aluguel de R$ 5.000 no mesmo dia, oferecia "corrija o valor" no lançamento
+    // errado e ainda devolvia o certo como "só no sistema", onde vira duplicata.
+    // A quantidade de pares não muda: só muda com QUEM cada linha se pareia.
+    let best: SystemRow | null = null;
+    let bestDiff = Infinity;
+    let bestSimilarity = -1;
+
     for (const tx of systemRows) {
       if (usedSystemIds.has(tx.id)) continue;
 
       if (matchCreditSign && item.isCredit !== !!tx.is_refund) continue;
 
       const normalizedTxDate = normalizeDate(tx.date);
+      if (normalizedItemDate !== normalizedTxDate) continue;
 
-      if (normalizedItemDate === normalizedTxDate) {
-        const diff = item.amount - Number(tx.amount);
-        valueDiscrepancies.push({ spreadsheet: item, transaction: tx, difference: diff });
-        usedSpreadsheetIndices.add(si);
-        usedSystemIds.add(tx.id);
-        break;
+      const distance = Math.abs(item.amount - Number(tx.amount));
+      const similarity = descriptionSimilarity(item.description, tx.original_description || tx.description);
+
+      // Empate no valor (duas linhas do mesmo dia e mesmo valor) é desempatado
+      // pela descrição, do mesmo jeito que na passada 1.
+      if (distance < bestDiff || (distance === bestDiff && similarity > bestSimilarity)) {
+        best = tx;
+        bestDiff = distance;
+        bestSimilarity = similarity;
       }
+    }
+
+    if (best) {
+      valueDiscrepancies.push({
+        spreadsheet: item,
+        transaction: best,
+        difference: item.amount - Number(best.amount),
+      });
+      usedSpreadsheetIndices.add(si);
+      usedSystemIds.add(best.id);
     }
   }
 
