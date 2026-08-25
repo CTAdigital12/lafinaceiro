@@ -29,7 +29,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { InvestmentAsset, ASSET_TYPE_LABELS, usesTotalBalancePricing } from "@/hooks/useInvestments";
+import { InvestmentAsset, assetTypeLabel, selectableTypesFor, usesTotalBalancePricing } from "@/hooks/useInvestments";
 import { InvestmentInstitution } from "@/hooks/useInstitutions";
 
 const formSchema = z.object({
@@ -253,9 +253,13 @@ export function AssetModal({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.entries(ASSET_TYPE_LABELS).map(([value, label]) => (
+                      {/* `selectableTypesFor` acrescenta o tipo do ativo em
+                          edição quando ele não é ofertado (acoes/etfs/bdrs, ou
+                          um tipo inesperado), senão o campo abriria vazio e o
+                          usuário trocaria o tipo sem querer ao salvar. */}
+                      {selectableTypesFor(field.value).map((value) => (
                         <SelectItem key={value} value={value}>
-                          {label}
+                          {assetTypeLabel(value)}
                         </SelectItem>
                       ))}
                     </SelectContent>

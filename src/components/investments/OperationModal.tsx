@@ -40,7 +40,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   InvestmentAsset,
   InvestmentTransaction,
-  ASSET_TYPE_LABELS,
+  SELECTABLE_ASSET_TYPES,
+  assetTypeLabel,
 } from "@/hooks/useInvestments";
 import { LinkToAccountSection } from "./LinkToAccountSection";
 import type { NovaOperacao, NovoAtivo } from "@/hooks/useInvestments";
@@ -223,7 +224,7 @@ export function OperationModal({
           ticker: values.assetTicker.toUpperCase(),
           // O campo do formulário é `string` porque o select nasce vazio
           // (""), o que não cabe no enum. A escolha vem de
-          // `ASSET_TYPE_LABELS`, então em runtime é sempre um `AssetType`.
+          // `SELECTABLE_ASSET_TYPES`, então em runtime é sempre um `AssetType`.
           asset_type: values.assetType as AssetType,
           quantity: 0,
           average_price: 0,
@@ -391,9 +392,9 @@ export function OperationModal({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {Object.entries(ASSET_TYPE_LABELS).map(([value, label]) => (
+                            {SELECTABLE_ASSET_TYPES.map((value) => (
                               <SelectItem key={value} value={value}>
-                                {label}
+                                {assetTypeLabel(value)}
                               </SelectItem>
                             ))}
                           </SelectContent>

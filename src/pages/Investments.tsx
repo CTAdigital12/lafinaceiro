@@ -108,7 +108,7 @@ export default function Investments() {
     // `asset_type` chega como `string`: o formulário aceita "" enquanto o
     // select está vazio, e a COLUNA no banco é `text` — a união de
     // `InvestmentAsset` é convenção que o app mantém, não algo que o banco
-    // garante. A escolha vem de `ASSET_TYPE_LABELS`, então em runtime o valor
+    // garante. A escolha vem de `SELECTABLE_ASSET_TYPES`, então em runtime o valor
     // é sempre um `AssetType`.
     const tipo = assetData.asset_type as AssetType;
 

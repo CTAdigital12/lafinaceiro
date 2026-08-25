@@ -34,7 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { InvestmentAsset, ASSET_TYPE_LABELS, getAssetPatrimony, getAssetAppliedValue, usesTotalBalancePricing } from "@/hooks/useInvestments";
+import { InvestmentAsset, assetTypeLabel, listAssetTypes, getAssetPatrimony, getAssetAppliedValue, usesTotalBalancePricing } from "@/hooks/useInvestments";
 import { InvestmentInstitution } from "@/hooks/useInstitutions";
 import { useListSearchSort } from "@/hooks/useListSearchSort";
 import { ListSearchInput } from "@/components/ui/list-search-input";
@@ -64,38 +64,40 @@ function getMaturityStatus(maturityDate: string | null): { status: "expired" | "
 }
 
 export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAsset }: AssetTableProps) {
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    renda_fixa: true,
-    renda_variavel: true,
-    fundos: true,
-    crypto: true,
-    saldo_corretora: true,
-  });
+  // Grupo sem entrada aqui nasce ABERTO (ver `isGroupOpen`): antes o padrão
+  // era um objeto fixo de cinco tipos, e qualquer tipo fora dele abriria
+  // fechado — mais um jeito de o ativo passar despercebido.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   const formatCurrency = useFormatCurrency();
 
   const formatNumber = (value: number, decimals = 2) =>
     new Intl.NumberFormat("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 
+  // O `?? true` importa: sem entrada no mapa o grupo está ABERTO, e `!undefined`
+  // daria `true` de novo — o primeiro clique num grupo nunca tocado não fecharia.
   const toggleGroup = (type: string) => {
-    setOpenGroups((prev) => ({ ...prev, [type]: !prev[type] }));
+    setOpenGroups((prev) => ({ ...prev, [type]: !(prev[type] ?? true) }));
   };
 
-  const assetTypes = ["renda_fixa", "renda_variavel", "fundos", "crypto", "saldo_corretora"];
+  const isGroupOpen = (type: string) => openGroups[type] ?? true;
+
+  // Derivado dos DADOS, não de uma lista fixa: tipo conhecido mas fora do
+  // select (acoes, etfs, bdrs) e até tipo inesperado vindo do banco aparecem
+  // como grupo, em vez de sumirem da tabela enquanto contam no total.
+  const assetTypes = useMemo(() => listAssetTypes(assetsByType), [assetsByType]);
 
   // Busca + ordenação globais aplicadas dentro de cada grupo. Roda o hook sobre a
   // lista achatada e re-agrupa por tipo preservando a ordem.
   const allAssets = useMemo(
     () => assetTypes.flatMap((t) => assetsByType[t] || []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [assetsByType]
+    [assetTypes, assetsByType]
   );
   const typeById = useMemo(() => {
     const m = new Map<string, string>();
     for (const t of assetTypes) for (const a of assetsByType[t] || []) m.set(a.id, t);
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assetsByType]);
+  }, [assetTypes, assetsByType]);
 
   const institutionName = (id: string | null | undefined) =>
     institutions.find((i) => i.id === id)?.name ?? "";
@@ -168,19 +170,19 @@ export function AssetTable({ assetsByType, institutions, onEditAsset, onDeleteAs
           return (
             <Collapsible
               key={type}
-              open={openGroups[type]}
+              open={isGroupOpen(type)}
               onOpenChange={() => toggleGroup(type)}
               className="mb-4"
             >
               <CollapsibleTrigger asChild>
                 <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted/70 transition-colors">
                   <div className="flex items-center gap-2">
-                    {openGroups[type] ? (
+                    {isGroupOpen(type) ? (
                       <ChevronDown className="h-4 w-4" />
                     ) : (
                       <ChevronRight className="h-4 w-4" />
                     )}
-                    <span className="font-medium">{ASSET_TYPE_LABELS[type]}</span>
+                    <span className="font-medium">{assetTypeLabel(type)}</span>
                     <span className="text-sm text-muted-foreground">({assets.length} ativos)</span>
                   </div>
                   <span className="font-semibold">{formatCurrency(groupTotal)}</span>
