@@ -146,6 +146,7 @@ export function ParentCategoryDetailSheet({
       reimbursement_income_id: null,
       split_group_id: null,
       split_parent_id: null,
+      split_origin: null,
       card_last_digits: null,
     });
     setIsModalOpen(true);

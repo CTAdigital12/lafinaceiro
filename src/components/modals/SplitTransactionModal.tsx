@@ -130,6 +130,16 @@ export function SplitTransactionModal({
     open && !!transaction?.installment_group_id,
   );
 
+  /**
+   * Grupo que nasceu de "quitar previstos com um pagamento": as partes são
+   * lançamentos REAIS, não linhas sintéticas da divisão. Desfazer não apaga
+   * nada nesse caso (ver a migration 20260825150000), e o aviso precisa dizer
+   * a verdade. As duas provas são as mesmas que a RPC usa.
+   */
+  const isSettleGroup = existingParts.some(
+    (p) => p.split_origin === "settle" || (!!p.split_parent_id && !!p.installment_group_id),
+  );
+
   /** Valor total a ratear: o da transação, ou a soma das partes ao editar. */
   const totalAmount = useMemo(() => {
     if (isSplit) return sumParts(existingParts.map((p) => ({ amount: Number(p.amount) })));
@@ -661,8 +671,18 @@ export function SplitTransactionModal({
           <AlertDialogHeader>
             <AlertDialogTitle>Desfazer a divisão?</AlertDialogTitle>
             <AlertDialogDescription>
-              As partes extras serão excluídas e o valor total volta para o lançamento original. As
-              categorias das partes se perdem. Partes já reembolsadas impedem a operação.
+              {isSettleGroup ? (
+                <>
+                  Este grupo veio de uma quitação, então os lançamentos são reais: nenhum será
+                  excluído. Eles voltam a aparecer separados, cada um com o seu valor, e continuam
+                  quitados na data do pagamento. O lançamento do pagamento não é recriado.
+                </>
+              ) : (
+                <>
+                  As partes extras serão excluídas e o valor total volta para o lançamento original.
+                  As categorias das partes se perdem. Partes já reembolsadas impedem a operação.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

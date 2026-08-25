@@ -8,6 +8,8 @@ const payment = {
   is_card_payment: false,
   split_group_id: null,
   is_refund: false,
+  reimbursement_payment_id: null,
+  reimbursement_income_id: null,
 };
 
 describe("canSettleWithPayment", () => {
@@ -22,6 +24,10 @@ describe("canSettleWithPayment", () => {
     expect(canSettleWithPayment({ ...payment, is_card_payment: true })).toBe(false);
     expect(canSettleWithPayment({ ...payment, split_group_id: "group-1" })).toBe(false);
     expect(canSettleWithPayment({ ...payment, is_refund: true })).toBe(false);
+    // As duas colunas de reembolso faltavam aqui e a RPC já as rejeitava: o
+    // botão aparecia e o banco recusava.
+    expect(canSettleWithPayment({ ...payment, reimbursement_payment_id: "tx-1" })).toBe(false);
+    expect(canSettleWithPayment({ ...payment, reimbursement_income_id: "tx-1" })).toBe(false);
   });
 
   it("trata os booleanos nulos do banco como falsos", () => {

@@ -76,6 +76,8 @@ export interface Transaction {
   // Split fields (transação dividida em várias categorias)
   split_group_id: string | null;
   split_parent_id: string | null;
+  /** 'settle' = o grupo veio de uma quitação, e as partes são lançamentos reais. */
+  split_origin: string | null;
   is_provisional: boolean;
   recurring_rule_id: string | null;
   project_id: string | null;
@@ -123,6 +125,7 @@ export type NewTransaction = Omit<
   | "project_id"
   | "split_group_id"
   | "split_parent_id"
+  | "split_origin"
   | "is_reimbursement"
   | "reimbursement_payment_id"
   | "reimbursement_income_id"
