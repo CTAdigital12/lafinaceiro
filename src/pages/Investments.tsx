@@ -21,12 +21,14 @@ import { AssetModal } from "@/components/investments/AssetModal";
 import { InstitutionsList } from "@/components/investments/InstitutionsList";
 import { useInvestments, InvestmentTransaction } from "@/hooks/useInvestments";
 import { useInstitutions } from "@/hooks/useInstitutions";
+import type { NovaOperacao, InvestmentAsset, AssetType } from "@/hooks/useInvestments";
+import type { AssetModalFormData } from "@/components/investments/AssetModal";
 
 export default function Investments() {
   const [operationModalOpen, setOperationModalOpen] = useState(false);
   const [pricesModalOpen, setPricesModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
-  const [editingAsset, setEditingAsset] = useState<any>(null);
+  const [editingAsset, setEditingAsset] = useState<InvestmentAsset | null>(null);
   const [editingOperation, setEditingOperation] = useState<InvestmentTransaction | null>(null);
   const [deletingOperation, setDeletingOperation] = useState<InvestmentTransaction | null>(null);
 
@@ -56,7 +58,7 @@ export default function Investments() {
     deleteInstitution,
   } = useInstitutions();
 
-  const handleEditAsset = (asset: any) => {
+  const handleEditAsset = (asset: InvestmentAsset) => {
     setEditingAsset(asset);
     setAssetModalOpen(true);
   };
@@ -76,7 +78,7 @@ export default function Investments() {
     setOperationModalOpen(true);
   };
 
-  const handleOperationSubmit = (data: any) => {
+  const handleOperationSubmit = (data: NovaOperacao) => {
     if (editingOperation) {
       updateTransaction.mutate({ id: editingOperation.id, ...data });
     } else {
@@ -90,7 +92,7 @@ export default function Investments() {
     setDeletingOperation(null);
   };
 
-  const handleAssetSubmit = (data: any) => {
+  const handleAssetSubmit = (data: AssetModalFormData) => {
     const { 
       calculated_quantity, 
       calculated_average_price, 
@@ -103,10 +105,18 @@ export default function Investments() {
       ...assetData 
     } = data;
     
+    // `asset_type` chega como `string`: o formulário aceita "" enquanto o
+    // select está vazio, e a COLUNA no banco é `text` — a união de
+    // `InvestmentAsset` é convenção que o app mantém, não algo que o banco
+    // garante. A escolha vem de `ASSET_TYPE_LABELS`, então em runtime o valor
+    // é sempre um `AssetType`.
+    const tipo = assetData.asset_type as AssetType;
+
     if (editingAsset) {
       updateAsset.mutate({ 
         id: editingAsset.id, 
         ...assetData,
+        asset_type: tipo,
         quantity: calculated_quantity ?? editingAsset.quantity,
         average_price: calculated_average_price ?? editingAsset.average_price,
         pricing_method: pricing_method ?? editingAsset.pricing_method,
@@ -116,6 +126,7 @@ export default function Investments() {
     } else {
       createAsset.mutate({
         ...assetData,
+        asset_type: tipo,
         quantity: calculated_quantity || 0,
         average_price: calculated_average_price || 0,
         pricing_method: pricing_method || "unit_price",
@@ -233,8 +244,10 @@ export default function Investments() {
         operation={editingOperation}
         onSubmit={handleOperationSubmit}
         onCreateAsset={async (data) => {
+          // A linha volta do banco com `asset_type: string` (coluna `text`);
+          // o app trata como `AssetType`. Mesma convenção da nota acima.
           const result = await createAsset.mutateAsync(data);
-          return result;
+          return result as InvestmentAsset;
         }}
       />
 

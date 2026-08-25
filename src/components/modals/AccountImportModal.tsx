@@ -143,7 +143,11 @@ export function AccountImportModal({
           throw new Error(data.error || "Erro ao processar extrato");
         }
 
-        items = (data.items || []).map((item: any) => ({
+        // O que a edge function devolve por lançamento do extrato. `amount`
+        // vem com sinal: negativo é despesa.
+        type ItemDoExtrato = { date: string; description: string; amount: number };
+
+        items = (data.items || []).map((item: ItemDoExtrato) => ({
           date: item.date,
           description: item.description,
           amount: Math.abs(item.amount),

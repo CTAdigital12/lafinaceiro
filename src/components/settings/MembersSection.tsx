@@ -19,6 +19,7 @@ import { Mail, UserPlus, Loader2, Trash2, CheckCircle, Users, KeyRound } from "l
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { mensagemDeErro } from "@/lib/mensagemDeErro";
 
 const emailSchema = z.string().email("E-mail inválido");
 
@@ -79,8 +80,8 @@ export function MembersSection() {
       setEmail("");
       setMemberPassword("");
       refetch();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(mensagemDeErro(err));
     } finally {
       setIsAdding(false);
     }

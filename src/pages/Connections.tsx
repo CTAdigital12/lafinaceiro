@@ -10,12 +10,36 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Trash2, RefreshCw, Link2, CreditCard, Wallet } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { Tables } from "@/integrations/supabase/types";
+
+/** O que este arquivo usa do widget da Pluggy, carregado por <script>. */
+interface PluggyConnectOptions {
+  connectToken: string;
+  onSuccess: (data: { item: { id: string } }) => void;
+  onError: (error: unknown) => void;
+  onClose?: () => void;
+}
+
+interface PluggyConnectWidget {
+  init: () => void;
+}
 
 declare global {
   interface Window {
-    PluggyConnect?: any;
+    PluggyConnect?: new (options: PluggyConnectOptions) => PluggyConnectWidget;
   }
 }
+
+/**
+ * Linha de `pluggy_items` com os joins que a consulta desta tela pede.
+ *
+ * As colunas vêm de `Tables<"pluggy_items">` para não divergirem do schema; só
+ * os dois joins são declarados à mão, porque o tipo gerado não os descreve.
+ */
+type Conexao = Tables<"pluggy_items"> & {
+  accounts: { name: string; type: string; icon: string } | null;
+  credit_cards: { name: string; last_digits: string; brand: string } | null;
+};
 
 export default function Connections() {
   const { user } = useAuth();
@@ -33,7 +57,8 @@ export default function Connections() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      // O tipo gerado não descreve os joins do select; `Conexao` os declara.
+      return (data || []) as Conexao[];
     },
     enabled: !!user,
   });
@@ -193,13 +218,22 @@ export default function Connections() {
   }
 
   function launchWidget(accessToken: string) {
-    const pluggyConnect = new window.PluggyConnect({
+    // O global só existe depois que o <script> da Pluggy carrega. Os
+    // chamadores já esperam por ele (`waitForPluggyConnect`), mas o tipo não
+    // enxerga isso — e antes, com `any`, um `new undefined(...)` teria
+    // estourado em runtime sem aviso.
+    const PluggyConnect = window.PluggyConnect;
+    if (!PluggyConnect) {
+      console.warn("PluggyConnect indisponível no momento de abrir o widget");
+      return;
+    }
+    const pluggyConnect = new PluggyConnect({
       connectToken: accessToken,
       onSuccess: (data: { item: { id: string } }) => {
         console.log("Pluggy success:", data);
         saveItemMutation.mutate(data.item.id);
       },
-      onError: (error: any) => {
+      onError: (error: unknown) => {
         console.error("Pluggy error:", error);
         toast({
           title: "Erro na conexão",
@@ -263,7 +297,7 @@ export default function Connections() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {connections.map((conn: any) => {
+          {connections.map((conn: Conexao) => {
             const linkedAccount = conn.accounts;
             const linkedCard = conn.credit_cards;
             const isCard = !!linkedCard;
@@ -275,8 +309,8 @@ export default function Connections() {
                     <div className="flex items-center gap-3">
                       {conn.connector_logo ? (
                         <img
-                          src={conn.connector_logo}
-                          alt={conn.connector_name}
+                          src={conn.connector_logo ?? undefined}
+                          alt={conn.connector_name ?? "Conexão"}
                           className="h-10 w-10 rounded-lg object-contain bg-muted p-1"
                         />
                       ) : (

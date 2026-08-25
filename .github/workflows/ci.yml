@@ -14,9 +14,9 @@ name: CI
 #                 erro é novo. Era o que este comentário mandava fazer quando
 #                 chegasse a zero.
 #
-#                 O lint segue informativo — 36 erros + 6 warnings. Os 36 são
-#                 TODOS `no-explicit-any`, concentrados em conciliação (15),
-#                 investimentos (7) e páginas (11); os 6 warnings são todos
+#                 O lint segue informativo — 15 erros + 6 warnings. Os 15 são
+#                 TODOS `no-explicit-any` e TODOS em conciliação (extrato e
+#                 planilha), que é o que falta do A13; os 6 warnings são todos
 #                 `react-hooks/exhaustive-deps`. Se bloqueasse hoje,
 #                 todo PR abriria vermelho e o portão viraria ruído que se
 #                 aprende a ignorar. Quando os `any` caírem, é o momento de
@@ -112,7 +112,7 @@ jobs:
         id: lint
         continue-on-error: true
         env:
-          BASELINE_ERROS: "36"
+          BASELINE_ERROS: "15"
           BASELINE_WARNINGS: "6"
         run: |
           set -uo pipefail

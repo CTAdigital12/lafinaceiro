@@ -13,12 +13,36 @@ import { validateLinkCandidate } from "@/lib/investments/linkCandidate";
 
 export type PricingMethod = "unit_price" | "total_balance";
 
+/**
+ * Tipos de ativo aceitos. Fonte única: o schema dos formulários e a interface
+ * abaixo derivam daqui, em vez de repetirem a união.
+ *
+ * ATENÇÃO — há uma divergência PRÉ-EXISTENTE que esta constante torna visível:
+ * `ASSET_TYPE_LABELS` (que monta o select de criação) e o `assetTypes` do
+ * `AssetTable` (que decide o que é listado) conhecem só os CINCO primeiros.
+ * `acoes`, `etfs` e `bdrs` não podem ser criados pela tela e, se existissem no
+ * banco, não apareceriam na tabela de ativos. Não mexi nisso aqui porque
+ * acrescentar os três ao select muda a tela; fica registrado.
+ */
+export const ASSET_TYPES = [
+  "renda_fixa",
+  "renda_variavel",
+  "fundos",
+  "crypto",
+  "saldo_corretora",
+  "acoes",
+  "etfs",
+  "bdrs",
+] as const;
+
+export type AssetType = (typeof ASSET_TYPES)[number];
+
 export interface InvestmentAsset {
   id: string;
   user_id: string;
   name: string;
   ticker: string;
-  asset_type: "renda_fixa" | "renda_variavel" | "fundos" | "crypto" | "saldo_corretora" | "acoes" | "etfs" | "bdrs";
+  asset_type: AssetType;
   quantity: number;
   average_price: number;
   current_price: number;
@@ -75,6 +99,57 @@ export const ASSET_TYPE_LABELS: Record<string, string> = {
   saldo_corretora: "Saldo em Corretora",
 };
 
+/**
+ * Payload de criação de ativo.
+ *
+ * Fora do obrigatório: chave, dono e carimbos (o banco preenche), mais os
+ * campos que só fazem sentido em parte dos tipos de ativo — instituição,
+ * vencimento, taxa e liquidez são de renda fixa; `pricing_method` e
+ * `current_balance` têm DEFAULT. Quem cria um ativo pela operação de compra
+ * informa só nome, ticker, tipo e preço.
+ */
+export type NovoAtivo = Omit<
+  InvestmentAsset,
+  | "id"
+  | "user_id"
+  | "created_at"
+  | "updated_at"
+  | "institution_id"
+  | "maturity_date"
+  | "pricing_method"
+  | "current_balance"
+  | "yield_info"
+  | "liquidity"
+> & {
+  institution_id?: string | null;
+  maturity_date?: string | null;
+  pricing_method?: PricingMethod;
+  current_balance?: number;
+  yield_info?: string | null;
+  liquidity?: string | null;
+};
+
+/**
+ * Payload de criação de operação.
+ *
+ * Além das colunas, carrega os campos que só existem para orquestrar o efeito
+ * colateral no extrato — criar a despesa da compra, ou vincular a receita do
+ * resgate. Eles são retirados antes do insert.
+ */
+export type NovaOperacao = Omit<
+  InvestmentTransaction,
+  "id" | "user_id" | "created_at" | "asset" | "linked_transaction_id" | "notes"
+> & {
+  // Colunas nulas por natureza: nenhum ponto de criação as informa.
+  linked_transaction_id?: string | null;
+  notes?: string | null;
+  createExpenseTransaction?: boolean;
+  accountId?: string;
+  categoryId?: string;
+  linkMode?: "existing" | "new";
+  existingTransactionId?: string;
+};
+
 export function useInvestments() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -113,7 +188,7 @@ export function useInvestments() {
 
   // Create asset
   const createAsset = useMutation({
-    mutationFn: async (asset: Omit<InvestmentAsset, "id" | "user_id" | "created_at" | "updated_at">) => {
+    mutationFn: async (asset: NovoAtivo) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
@@ -408,15 +483,7 @@ export function useInvestments() {
   // Create transaction (buy/sell/dividend)
   // ============================================================
   const createTransaction = useMutation({
-    mutationFn: async (
-      transaction: Omit<InvestmentTransaction, "id" | "user_id" | "created_at" | "asset"> & {
-        createExpenseTransaction?: boolean;
-        accountId?: string;
-        categoryId?: string;
-        linkMode?: "existing" | "new";
-        existingTransactionId?: string;
-      }
-    ) => {
+    mutationFn: async (transaction: NovaOperacao) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
@@ -490,18 +557,10 @@ export function useInvestments() {
   // best-effort. TODO: futura RPC `update_investment_transaction_atomic`.
   // ============================================================
   const updateTransaction = useMutation({
-    mutationFn: async (
-      input: { id: string } & Omit<
-        InvestmentTransaction,
-        "id" | "user_id" | "created_at" | "asset"
-      > & {
-        createExpenseTransaction?: boolean;
-        accountId?: string;
-        categoryId?: string;
-        linkMode?: "existing" | "new";
-        existingTransactionId?: string;
-      }
-    ) => {
+    // Mesmo payload da criação, mais o id. Antes era a união inteira escrita
+    // de novo aqui, com uma diferença silenciosa: exigia
+    // `linked_transaction_id` e `notes`, que a tela nunca informa.
+    mutationFn: async (input: NovaOperacao & { id: string }) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
