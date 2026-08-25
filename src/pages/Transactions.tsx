@@ -31,6 +31,7 @@ import {
   ArrowDown,
   Clock,
   SplitSquareHorizontal,
+  ListChecks,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +72,8 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { SplitTransactionModal } from "@/components/modals/SplitTransactionModal";
+import { SettleWithPaymentModal } from "@/components/modals/SettleWithPaymentModal";
+import { canSettleWithPayment } from "@/hooks/useSettleWithPayment";
 import { TransactionFiltersModal, TransactionFilters } from "@/components/modals/TransactionFiltersModal";
 import { CategorySelector } from "@/components/CategorySelector";
 import { InstallmentDetailsSheet } from "@/components/InstallmentDetailsSheet";
@@ -133,6 +136,7 @@ export default function Transactions() {
   const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [selectedInstallmentGroupId, setSelectedInstallmentGroupId] = useState<string | null>(null);
   const [splitTransactionId, setSplitTransactionId] = useState<string | null>(null);
+  const [settlePayment, setSettlePayment] = useState<Transaction | null>(null);
   const [filters, setFilters] = useState<TransactionFilters>({
     categoryIds: [],
     type: "all",
@@ -1095,6 +1099,17 @@ export default function Transactions() {
                                   <SplitSquareHorizontal className="h-4 w-4" />
                                 </Button>
                               )}
+                              {canSettleWithPayment(transaction) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setSettlePayment(transaction)}
+                                  title="Quitar previstos com este pagamento"
+                                >
+                                  <ListChecks className="h-4 w-4" />
+                                </Button>
+                              )}
                               {!transaction.is_refund && (
                                 <Button
                                   variant="ghost"
@@ -1210,6 +1225,20 @@ export default function Transactions() {
                                 transaction.split_group_id ? "text-violet-600" : "text-muted-foreground"
                               )}
                             />
+                          </Button>
+                        )}
+                        {canSettleWithPayment(transaction) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSettlePayment(transaction);
+                            }}
+                            title="Quitar previstos com este pagamento"
+                          >
+                            <ListChecks className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         )}
                       </div>
@@ -1337,6 +1366,12 @@ export default function Transactions() {
       </AlertDialog>
 
       {/* Split Transaction Modal */}
+      <SettleWithPaymentModal
+        open={!!settlePayment}
+        onOpenChange={(open) => !open && setSettlePayment(null)}
+        payment={settlePayment}
+      />
+
       <SplitTransactionModal
         open={!!splitTransactionId}
         onOpenChange={(open) => !open && setSplitTransactionId(null)}
