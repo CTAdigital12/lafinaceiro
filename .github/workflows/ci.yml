@@ -14,13 +14,15 @@ name: CI
 #                 erro é novo. Era o que este comentário mandava fazer quando
 #                 chegasse a zero.
 #
-#                 O lint segue informativo — 15 erros + 6 warnings. Os 15 são
-#                 TODOS `no-explicit-any` e TODOS em conciliação (extrato e
-#                 planilha), que é o que falta do A13; os 6 warnings são todos
-#                 `react-hooks/exhaustive-deps`. Se bloqueasse hoje,
-#                 todo PR abriria vermelho e o portão viraria ruído que se
-#                 aprende a ignorar. Quando os `any` caírem, é o momento de
-#                 fazer com o lint o que já foi feito com o typecheck.
+#                 O lint dos ERROS também bloqueia desde 24/08/2026: os 101
+#                 erros do A13 foram zerados, e com baseline zero não existe
+#                 "subiu um pouco". Era o que este comentário mandava fazer.
+#
+#                 Os 6 WARNINGS restantes (todos `react-hooks/exhaustive-deps`)
+#                 seguem informativos, e de propósito: cada um exige decidir se
+#                 a dependência foi omitida por engano ou por desenho, e três
+#                 ficam no Dashboard e na importação de fatura. Bloquear neles
+#                 empurraria para o `eslint-disable` fácil.
 #
 # Nota: `vite build` usa SWC e NÃO faz typecheck — o deploy da Vercel passa mesmo
 # com erro de tipo. O job de typecheck aqui é a única visibilidade que existe.
@@ -56,7 +58,7 @@ jobs:
         run: npm test
 
   qualidade:
-    name: Typecheck (bloqueia) e Lint (informativo)
+    name: Typecheck e Lint (bloqueiam)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -108,11 +110,11 @@ jobs:
           # publicado quando o job ficar vermelho.
           [ "${total}" -eq 0 ]
 
+      # Erros zerados em 24/08/2026 (A13): sem baseline, qualquer um derruba o
+      # job. Warnings seguem só medidos.
       - name: Lint
         id: lint
-        continue-on-error: true
         env:
-          BASELINE_ERROS: "15"
           BASELINE_WARNINGS: "6"
         run: |
           set -uo pipefail
@@ -130,14 +132,20 @@ jobs:
           {
             echo "### Lint"
             echo ""
-            echo "| | Agora | Baseline (21/08/2026) |"
+            echo "| | Agora | Permitido |"
             echo "|---|---|---|"
-            echo "| Erros | ${erros} | ${BASELINE_ERROS} |"
-            echo "| Warnings | ${warnings} | ${BASELINE_WARNINGS} |"
+            echo "| Erros | ${erros} | 0 |"
+            echo "| Warnings | ${warnings} | ${BASELINE_WARNINGS} (informativo) |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${erros}" -gt "${BASELINE_ERROS}" ]; then
-            echo "::warning::Lint subiu de ${BASELINE_ERROS} para ${erros} erros."
-          elif [ "${erros}" -lt "${BASELINE_ERROS}" ]; then
-            echo "::notice::Lint caiu de ${BASELINE_ERROS} para ${erros} erros."
+          if [ "${erros}" -gt 0 ]; then
+            echo "::error::Lint falhou com ${erros} erro(s). A baseline é zero desde o A13."
+            npx eslint . || true
           fi
+
+          if [ "${warnings}" -gt "${BASELINE_WARNINGS}" ]; then
+            echo "::warning::Warnings subiram de ${BASELINE_WARNINGS} para ${warnings}."
+          fi
+
+          # Falha por último, com o resumo já publicado.
+          [ "${erros}" -eq 0 ]
