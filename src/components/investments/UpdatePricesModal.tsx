@@ -4,7 +4,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
-import { InvestmentAsset, ASSET_TYPE_LABELS, usesTotalBalancePricing } from "@/hooks/useInvestments";
+import { InvestmentAsset, assetTypeLabel, usesTotalBalancePricing } from "@/hooks/useInvestments";
 import { HelpCircle } from "lucide-react";
 import {
   Tooltip,
@@ -114,7 +114,7 @@ export function UpdatePricesModal({
               {Object.entries(variableByType).map(([type, typeAssets]) => (
                 <div key={type} className="mb-4">
                   <p className="text-xs text-muted-foreground mb-2">
-                    {ASSET_TYPE_LABELS[type]}
+                    {assetTypeLabel(type)}
                   </p>
                   <div className="space-y-2">
                     {typeAssets.map((asset) => (
@@ -169,7 +169,7 @@ export function UpdatePricesModal({
               {Object.entries(fixedByType).map(([type, typeAssets]) => (
                 <div key={type} className="mb-4">
                   <p className="text-xs text-muted-foreground mb-2">
-                    {ASSET_TYPE_LABELS[type]}
+                    {assetTypeLabel(type)}
                   </p>
                   <div className="space-y-2">
                     {typeAssets.map((asset) => {

@@ -10,32 +10,22 @@ import {
   type AssetUpdatePayload,
 } from "@/lib/investments/assetMutation";
 import { validateLinkCandidate } from "@/lib/investments/linkCandidate";
+import { assetTypeLabel, type AssetType } from "@/lib/investments/assetTypes";
 
 export type PricingMethod = "unit_price" | "total_balance";
 
-/**
- * Tipos de ativo aceitos. Fonte única: o schema dos formulários e a interface
- * abaixo derivam daqui, em vez de repetirem a união.
- *
- * ATENÇÃO — há uma divergência PRÉ-EXISTENTE que esta constante torna visível:
- * `ASSET_TYPE_LABELS` (que monta o select de criação) e o `assetTypes` do
- * `AssetTable` (que decide o que é listado) conhecem só os CINCO primeiros.
- * `acoes`, `etfs` e `bdrs` não podem ser criados pela tela e, se existissem no
- * banco, não apareceriam na tabela de ativos. Não mexi nisso aqui porque
- * acrescentar os três ao select muda a tela; fica registrado.
- */
-export const ASSET_TYPES = [
-  "renda_fixa",
-  "renda_variavel",
-  "fundos",
-  "crypto",
-  "saldo_corretora",
-  "acoes",
-  "etfs",
-  "bdrs",
-] as const;
-
-export type AssetType = (typeof ASSET_TYPES)[number];
+// A união, os rótulos e a ordem de exibição vivem em `@/lib/investments/assetTypes`
+// para serem testáveis sem o cliente Supabase. Re-exportados aqui porque as telas
+// de investimentos já importavam tudo deste hook.
+export {
+  ASSET_TYPES,
+  ASSET_TYPE_LABELS,
+  SELECTABLE_ASSET_TYPES,
+  assetTypeLabel,
+  listAssetTypes,
+  selectableTypesFor,
+} from "@/lib/investments/assetTypes";
+export type { AssetType } from "@/lib/investments/assetTypes";
 
 export interface InvestmentAsset {
   id: string;
@@ -90,14 +80,6 @@ export interface InvestmentTransaction {
   created_at: string;
   asset?: InvestmentAsset;
 }
-
-export const ASSET_TYPE_LABELS: Record<string, string> = {
-  renda_fixa: "Renda Fixa",
-  renda_variavel: "Renda Variável",
-  fundos: "Fundos de Investimentos",
-  crypto: "Criptomoedas",
-  saldo_corretora: "Saldo em Corretora",
-};
 
 /**
  * Payload de criação de ativo.
@@ -753,7 +735,7 @@ export function useInvestments() {
 
   // Allocation data for chart - using correct patrimony calculation
   const allocationData = Object.entries(assetsByType).map(([type, typeAssets]) => ({
-    name: ASSET_TYPE_LABELS[type] || type,
+    name: assetTypeLabel(type),
     value: typeAssets.reduce((sum, a) => sum + getAssetPatrimony(a), 0),
   }));
 
