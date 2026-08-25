@@ -73,7 +73,7 @@ import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { SplitTransactionModal } from "@/components/modals/SplitTransactionModal";
 import { SettleWithPaymentModal } from "@/components/modals/SettleWithPaymentModal";
-import { canSettleWithPayment } from "@/hooks/useSettleWithPayment";
+import { canSettleWithPayment } from "@/lib/settleWithPayment";
 import { TransactionFiltersModal, TransactionFilters } from "@/components/modals/TransactionFiltersModal";
 import { CategorySelector } from "@/components/CategorySelector";
 import { InstallmentDetailsSheet } from "@/components/InstallmentDetailsSheet";

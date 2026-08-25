@@ -6,11 +6,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
-import {
-  settleRemaining,
-  useSettleCandidates,
-  useSettleWithPayment,
-} from "@/hooks/useSettleWithPayment";
+import { useSettleCandidates, useSettleWithPayment } from "@/hooks/useSettleWithPayment";
+import { settleRemaining } from "@/lib/settleWithPayment";
 import { formatYmd } from "@/lib/dateUtils";
 import { round2 } from "@/lib/splitTransaction";
 import { cn } from "@/lib/utils";

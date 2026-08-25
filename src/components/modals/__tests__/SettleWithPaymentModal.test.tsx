@@ -40,10 +40,13 @@ const CANDIDATES = vi.hoisted(() => [
   },
 ]);
 
-vi.mock("@/hooks/useSettleWithPayment", async () => ({
-  ...(await vi.importActual<typeof import("@/hooks/useSettleWithPayment")>(
-    "@/hooks/useSettleWithPayment",
-  )),
+/**
+ * Mock COMPLETO, sem `importActual`: o módulo real importa o cliente Supabase,
+ * que estoura com "supabaseUrl is required" onde não há .env — é assim que o
+ * CI roda. As regras puras vivem em `@/lib/settleWithPayment` justamente por
+ * isso, e são testadas lá.
+ */
+vi.mock("@/hooks/useSettleWithPayment", () => ({
   useSettleCandidates: () => ({ candidates: CANDIDATES, isLoading: false }),
   useSettleWithPayment: () => ({
     settleWithPayment: { mutateAsync: settleMock, isPending: false },

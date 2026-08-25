@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canSettleWithPayment, settleRemaining } from "@/hooks/useSettleWithPayment";
+import { canSettleWithPayment, settleRemaining } from "@/lib/settleWithPayment";
 
 const payment = {
   status: "completed",

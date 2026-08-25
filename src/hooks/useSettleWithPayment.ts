@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { round2 } from "@/lib/splitTransaction";
 
 /**
  * Quitar VÁRIOS lançamentos previstos com UM débito real (ex.: um PIX que
@@ -122,34 +121,4 @@ export function useSettleWithPayment() {
   });
 
   return { settleWithPayment };
-}
-
-/**
- * Um lançamento só pode quitar previstos quando ele é o débito real de uma
- * conta: já realizado, fora de cartão, ainda não dividido e não estornado.
- * Espelha as travas da RPC, para o botão não aparecer onde o banco recusaria.
- */
-export function canSettleWithPayment(tx: {
-  status: string;
-  is_provisional: boolean | null;
-  credit_card_id: string | null;
-  is_card_payment: boolean | null;
-  split_group_id: string | null;
-  is_refund: boolean | null;
-}): boolean {
-  return (
-    tx.status === "completed" &&
-    !tx.is_provisional &&
-    !tx.credit_card_id &&
-    !tx.is_card_payment &&
-    !tx.split_group_id &&
-    !tx.is_refund
-  );
-}
-
-/** Diferença entre o valor do pagamento e a soma dos selecionados. */
-export function settleRemaining(paymentAmount: number, selected: { amount: number }[]): number {
-  return round2(
-    round2(paymentAmount) - round2(selected.reduce((sum, t) => sum + Number(t.amount), 0)),
-  );
 }
