@@ -27,12 +27,62 @@ import type { Transaction } from "./useTransactions";
  *  um array novo a cada render e re-dispararia efeitos que dependem dele. */
 const EMPTY_PARTS: Transaction[] = [];
 const EMPTY_SIBLINGS: { id: string; amount: number; installment_number: number | null; description: string; due_date: string | null }[] = [];
+const EMPTY_PROVISIONALS: RecurringProvisional[] = [];
 
 export interface SplitTransactionInput {
   transaction: Pick<Transaction, "id" | "amount" | "credit_card_id" | "installment_group_id">;
   parts: SplitPart[];
   /** Repetir o mesmo rateio nas demais parcelas do grupo. */
   applyToInstallments?: boolean;
+  /**
+   * Previsões recorrentes que este rateio substitui, para apagar junto. Sem
+   * isso o mês contaria o gasto duas vezes (a previsão e a parte que a quita).
+   */
+  provisionalIdsToDelete?: string[];
+}
+
+/** Previsão gerada por uma regra recorrente, ainda não realizada. */
+export interface RecurringProvisional {
+  id: string;
+  recurring_rule_id: string;
+  description: string;
+  amount: number;
+  date: string;
+}
+
+/**
+ * Previsões recorrentes do mês de `refDate`. O modal de divisão usa isto para
+ * avisar que a parte vinculada a uma recorrência tem uma provisória sobrando
+ * no mesmo mês — a que o gerador criou antes do pagamento entrar.
+ */
+export function useRecurringProvisionals(refDate: string | null | undefined, enabled = true) {
+  const { user } = useAuth();
+  const month = refDate ? refDate.slice(0, 7) : null;
+
+  const { data: provisionals = EMPTY_PROVISIONALS, isLoading } = useQuery({
+    queryKey: ["recurring-provisionals", user?.id, month],
+    queryFn: async () => {
+      if (!month || !user?.id) return [];
+      const [year, monthNumber] = month.split("-").map(Number);
+      const start = `${month}-01`;
+      const end = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
+
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("id, recurring_rule_id, description, amount, date")
+        .eq("user_id", user.id)
+        .eq("is_provisional", true)
+        .not("recurring_rule_id", "is", null)
+        .gte("date", start)
+        .lte("date", end);
+
+      if (error) throw error;
+      return (data ?? []) as RecurringProvisional[];
+    },
+    enabled: !!user && !!month && enabled,
+  });
+
+  return { provisionals, isLoading };
 }
 
 /** Partes de uma transação já dividida, na ordem de criação. */
@@ -100,6 +150,7 @@ export function useTransactionSplit() {
     qc.invalidateQueries({ queryKey: ["transaction-to-split"] });
     qc.invalidateQueries({ queryKey: ["split-group"] });
     qc.invalidateQueries({ queryKey: ["splittable-installments"] });
+    qc.invalidateQueries({ queryKey: ["recurring-provisionals"] });
     qc.invalidateQueries({ queryKey: ["installment-group"] });
     qc.invalidateQueries({ queryKey: ["invoice-transactions"] });
     qc.invalidateQueries({ queryKey: ["credit-card-transactions-reconciliation"] });
@@ -111,7 +162,12 @@ export function useTransactionSplit() {
   };
 
   const splitTransaction = useMutation({
-    mutationFn: async ({ transaction, parts, applyToInstallments }: SplitTransactionInput) => {
+    mutationFn: async ({
+      transaction,
+      parts,
+      applyToInstallments,
+      provisionalIdsToDelete,
+    }: SplitTransactionInput) => {
       const { error } = await supabase.rpc("split_transaction", {
         p_transaction_id: transaction.id,
         p_parts: parts as unknown as Json,
@@ -151,9 +207,29 @@ export function useTransactionSplit() {
         }
       }
 
-      return { installmentsSplit, failures };
+      // Só depois da divisão dar certo: a previsão é o registro que sobra, e
+      // apagá-la antes deixaria o mês sem nada se a RPC recusasse o rateio. O
+      // filtro `is_provisional` é uma trava — um id defasado no formulário não
+      // pode apagar um lançamento real.
+      let provisionalsDeleted = 0;
+      if (provisionalIdsToDelete && provisionalIdsToDelete.length > 0) {
+        const { data: deleted, error: deleteError } = await supabase
+          .from("transactions")
+          .delete()
+          .in("id", provisionalIdsToDelete)
+          .eq("is_provisional", true)
+          .select("id");
+
+        if (deleteError) {
+          failures.push(`Previsões não excluídas: ${deleteError.message}`);
+        } else {
+          provisionalsDeleted = deleted?.length ?? 0;
+        }
+      }
+
+      return { installmentsSplit, failures, provisionalsDeleted };
     },
-    onSuccess: ({ installmentsSplit, failures }) => {
+    onSuccess: ({ installmentsSplit, failures, provisionalsDeleted }) => {
       invalidate();
 
       if (failures.length > 0) {
@@ -165,12 +241,18 @@ export function useTransactionSplit() {
         return;
       }
 
+      const details = [
+        installmentsSplit > 0
+          ? `O mesmo rateio foi aplicado a mais ${installmentsSplit} parcela(s).`
+          : null,
+        provisionalsDeleted > 0
+          ? `${provisionalsDeleted} previsão(ões) recorrente(s) excluída(s).`
+          : null,
+      ].filter(Boolean);
+
       toast({
         title: "Transação dividida!",
-        description:
-          installmentsSplit > 0
-            ? `O mesmo rateio foi aplicado a mais ${installmentsSplit} parcela(s).`
-            : undefined,
+        description: details.length > 0 ? details.join(" ") : undefined,
       });
     },
     onError: (e: Error) =>
@@ -201,7 +283,10 @@ export function useTransactionSplit() {
    * deixaria o lançamento espelho (mark_reimbursed) órfão.
    */
   const updateSplitParts = useMutation({
-    mutationFn: async (
+    mutationFn: async ({
+      updates,
+      provisionalIdsToDelete,
+    }: {
       updates: {
         id: string;
         amount: number;
@@ -209,8 +294,12 @@ export function useTransactionSplit() {
         is_reimbursable: boolean;
         is_corporate_expense: boolean;
         reimbursement_status: string | null;
-      }[],
-    ) => {
+        recurring_rule_id: string | null;
+      }[];
+      /** Mesmo papel que em `splitTransaction`: a previsão que a parte passou
+       *  a quitar sai junto, senão o mês conta o gasto duas vezes. */
+      provisionalIdsToDelete?: string[];
+    }) => {
       for (const part of updates) {
         const { error } = await supabase
           .from("transactions")
@@ -219,6 +308,7 @@ export function useTransactionSplit() {
             category_id: part.category_id,
             is_reimbursable: part.is_reimbursable,
             is_corporate_expense: part.is_corporate_expense,
+            recurring_rule_id: part.recurring_rule_id,
             reimbursement_status:
               part.reimbursement_status === "reimbursed"
                 ? "reimbursed"
@@ -227,6 +317,15 @@ export function useTransactionSplit() {
                   : null,
           })
           .eq("id", part.id);
+        if (error) throw new Error(error.message);
+      }
+
+      if (provisionalIdsToDelete && provisionalIdsToDelete.length > 0) {
+        const { error } = await supabase
+          .from("transactions")
+          .delete()
+          .in("id", provisionalIdsToDelete)
+          .eq("is_provisional", true);
         if (error) throw new Error(error.message);
       }
     },
