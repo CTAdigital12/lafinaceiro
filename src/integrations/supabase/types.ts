@@ -709,6 +709,7 @@ export type Database = {
           reimbursement_status: string | null
           split_group_id: string | null
           split_parent_id: string | null
+          split_origin: string | null
           status: string
           total_installments: number | null
           type: string
@@ -744,6 +745,7 @@ export type Database = {
           reimbursement_status?: string | null
           split_group_id?: string | null
           split_parent_id?: string | null
+          split_origin?: string | null
           status?: string
           total_installments?: number | null
           type: string
@@ -779,6 +781,7 @@ export type Database = {
           reimbursement_status?: string | null
           split_group_id?: string | null
           split_parent_id?: string | null
+          split_origin?: string | null
           status?: string
           total_installments?: number | null
           type?: string
