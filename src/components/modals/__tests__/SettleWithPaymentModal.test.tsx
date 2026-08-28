@@ -13,6 +13,9 @@ import userEvent from "@testing-library/user-event";
 
 const settleMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
+/** Lista viva: os testes trocam o conteúdo para simular uma refetch. */
+const state = vi.hoisted(() => ({ candidates: [] as Array<Record<string, unknown>> }));
+
 const CANDIDATES = vi.hoisted(() => [
   {
     id: "parcela-emprestimo",
@@ -25,6 +28,8 @@ const CANDIDATES = vi.hoisted(() => [
     installment_number: 3,
     total_installments: 10,
     categories: { name: "Reformas e melhorias" },
+    account_id: "conta-itau",
+    accounts: { name: "Itaú" },
   },
   {
     id: "parcela-ingresso",
@@ -37,6 +42,8 @@ const CANDIDATES = vi.hoisted(() => [
     installment_number: 2,
     total_installments: 6,
     categories: { name: "Lazer" },
+    account_id: "conta-nubank",
+    accounts: { name: "Nubank" },
   },
 ]);
 
@@ -47,7 +54,7 @@ const CANDIDATES = vi.hoisted(() => [
  * isso, e são testadas lá.
  */
 vi.mock("@/hooks/useSettleWithPayment", () => ({
-  useSettleCandidates: () => ({ candidates: CANDIDATES, isLoading: false }),
+  useSettleCandidates: () => ({ candidates: state.candidates, isLoading: false }),
   useSettleWithPayment: () => ({
     settleWithPayment: { mutateAsync: settleMock, isPending: false },
   }),
@@ -65,6 +72,7 @@ const PAYMENT = {
   amount: 1611,
   date: "2026-08-20",
   type: "expense",
+  account_id: "conta-itau",
 };
 
 const renderModal = () =>
@@ -73,7 +81,10 @@ const renderModal = () =>
   );
 
 describe("SettleWithPaymentModal", () => {
-  beforeEach(() => settleMock.mockClear());
+  beforeEach(() => {
+    settleMock.mockClear();
+    state.candidates = CANDIDATES;
+  });
 
   it("mantém o botão travado enquanto a soma não fecha", async () => {
     const user = userEvent.setup();
@@ -102,6 +113,46 @@ describe("SettleWithPaymentModal", () => {
     const call = settleMock.mock.calls[0][0];
     expect(call.paymentId).toBe("pix-luiz");
     expect([...call.targetIds].sort()).toEqual(["parcela-emprestimo", "parcela-ingresso"]);
+  });
+
+  it("marca a candidata que está em OUTRA conta", async () => {
+    renderModal();
+
+    // A lista não filtra por conta de propósito (a RPC move a conta do alvo
+    // para a do pagamento). O que a torna segura é a diferença ficar visível.
+    expect(screen.getByText("Nubank")).toBeInTheDocument();
+    expect(screen.queryByText("Itaú")).toBeNull();
+  });
+
+  it("não promete um filtro por conta que a consulta não faz", async () => {
+    state.candidates = [];
+    renderModal();
+
+    expect(screen.getByText(/fora de cartão em até 60 dias/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nesta conta/i)).toBeNull();
+  });
+
+  it("envia o que foi VALIDADO, não o que ficou marcado", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderModal();
+
+    await user.click(screen.getByText("Empréstimo Reforma 3/10"));
+    await user.click(screen.getByText("Ingresso Eltinho 2/6"));
+
+    // Refetch (outra aba, outro aparelho): o ingresso sai da lista e o
+    // empréstimo passa a valer o pagamento inteiro. A soma volta a fechar, o
+    // botão libera — e o id do ingresso continua no Set de marcados.
+    state.candidates = [{ ...CANDIDATES[0], amount: 1611 }];
+    rerender(<SettleWithPaymentModal open onOpenChange={() => {}} payment={PAYMENT} />);
+
+    const quitar = screen.getByRole("button", { name: /quitar/i });
+    await waitFor(() => expect(quitar).toBeEnabled());
+    await user.click(quitar);
+
+    await waitFor(() => expect(settleMock).toHaveBeenCalledTimes(1));
+    // Enviar o Set cru mandaria também "parcela-ingresso", que a validação da
+    // soma não viu — validando uma coisa e enviando outra.
+    expect(settleMock.mock.calls[0][0].targetIds).toEqual(["parcela-emprestimo"]);
   });
 
   it("avisa que o lançamento do pagamento será excluído", async () => {
