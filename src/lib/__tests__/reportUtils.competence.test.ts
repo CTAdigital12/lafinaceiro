@@ -52,6 +52,29 @@ describe("getCompetenceDate", () => {
 
     expect(getCompetenceDate(t)).toBe("2026-08-25");
   });
+
+  // Este caso não é hipotético: o TransactionModal mostra "Data de Vencimento
+  // (opcional)" quando o pagamento é em conta e grava o valor ANTES da guarda
+  // de cartão. Uma cópia da regra no SettleReimbursementModal supunha que
+  // conta comum nunca tem due_date, e uma despesa reembolsável com vencimento
+  // manual distante tirava o PIX da janela de candidatas.
+  it("despesa em conta com vencimento manual distante continua ancorada na data", () => {
+    expect(
+      getCompetenceDate({
+        credit_card_id: null,
+        due_date: "2026-06-30",
+        date: "2026-03-02",
+      }),
+    ).toBe("2026-03-02");
+  });
+
+  it("aceita o recorte mínimo de transação que as telas carregam", () => {
+    // A assinatura é estrutural de propósito, para a regra ser reusável em vez
+    // de recopiada. Um objeto só com os três campos precisa compilar e passar.
+    expect(
+      getCompetenceDate({ credit_card_id: "card-1", due_date: "2026-09-15", date: "2026-08-25" }),
+    ).toBe("2026-09-15");
+  });
 });
 
 describe("competenceRangeFilter", () => {

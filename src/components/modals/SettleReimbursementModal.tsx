@@ -17,6 +17,7 @@ import { useReimbursementIncomeCandidates } from "@/hooks/useReimbursementIncome
 import { useReimbursementPayment } from "@/hooks/useReimbursementPayment";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { formatYmd } from "@/lib/dateUtils";
+import { getCompetenceDate } from "@/lib/reportUtils";
 
 interface SettleReimbursementModalProps {
   open: boolean;
@@ -29,6 +30,8 @@ interface SettleReimbursementModalProps {
     date: string;
     /** Vencimento da fatura, quando a despesa é de cartão. */
     due_date?: string | null;
+    /** Decide se o `due_date` vale como âncora — ver `getCompetenceDate`. */
+    credit_card_id?: string | null;
   } | null;
 }
 
@@ -52,8 +55,21 @@ export function SettleReimbursementModal({
   // Numa despesa de cartão o reembolso chega perto do VENCIMENTO da fatura,
   // não da data da compra: uma compra de 17/06 numa fatura que vence em 15/08
   // é paga de volta em agosto. Ancorar na data da compra jogava o PIX para
-  // fora da janela de candidatas. Conta comum não tem due_date -> usa `date`.
-  const refDate = transaction?.due_date ?? transaction?.date;
+  // fora da janela de candidatas.
+  //
+  // A âncora vem de `getCompetenceDate`, a mesma regra usada nos relatórios e
+  // no filtro do PostgREST, em vez de uma quarta cópia. A cópia que estava
+  // aqui dizia "conta comum não tem due_date" — invariante que a app NÃO
+  // garante: o TransactionModal mostra "Data de Vencimento (opcional)" para
+  // pagamento em conta e grava o valor ANTES da guarda de cartão. Com um
+  // vencimento manual distante, a janela saía do lugar e o PIX sumia da lista.
+  const refDate = transaction
+    ? getCompetenceDate({
+        credit_card_id: transaction.credit_card_id ?? null,
+        due_date: transaction.due_date ?? null,
+        date: transaction.date,
+      })
+    : undefined;
   const { candidates, isLoading: loadingCandidates } =
     useReimbursementIncomeCandidates(refDate, open);
 
