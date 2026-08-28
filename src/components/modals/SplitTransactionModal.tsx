@@ -240,7 +240,7 @@ export function SplitTransactionModal({
     [rules, transaction?.type, selectedRuleIds],
   );
 
-  const { provisionals } = useRecurringProvisionals(
+  const { provisionals, isLoading: loadingProvisionals } = useRecurringProvisionals(
     transaction?.date,
     open && ruleOptions.length > 0,
   );
@@ -266,6 +266,18 @@ export function SplitTransactionModal({
     }
     return [...found.values()];
   }, [selectedRuleIds, provisionals, transaction, existingParts]);
+
+  /**
+   * Salvar antes desta consulta responder gravava o rateio SEM apagar a
+   * previsão que ele quita: `replacedProvisionals` ainda estaria vazio, o
+   * `provisionalIdsToDelete` sairia `undefined`, e o mês passaria a somar a
+   * previsão E a parte que a substitui — em silêncio, porque o aviso de
+   * exclusão também só aparece depois que a consulta responde.
+   *
+   * Só trava quando há regra escolhida: sem regra não existe previsão a
+   * substituir, e a consulta nem chega a ser habilitada.
+   */
+  const awaitingProvisionals = loadingProvisionals && selectedRuleIds.size > 0;
 
   const updatePart = (index: number, changes: Partial<PartForm>) => {
     setParts((prev) => prev.map((p, i) => (i === index ? { ...p, ...changes } : p)));
@@ -309,7 +321,7 @@ export function SplitTransactionModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!transaction || validationError) return;
+    if (!transaction || validationError || awaitingProvisionals) return;
 
     const provisionalIdsToDelete =
       deleteProvisionals && replacedProvisionals.length > 0
@@ -588,8 +600,9 @@ export function SplitTransactionModal({
                 <div className="space-y-1">
                   <span className="flex items-center gap-2 text-sm font-medium">
                     <Repeat className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    Excluir a{replacedProvisionals.length > 1 ? "s" : ""} previsão
-                    {replacedProvisionals.length > 1 ? "ões" : ""} que este rateio quita
+                    {replacedProvisionals.length > 1
+                      ? "Excluir as previsões que este rateio quita"
+                      : "Excluir a previsão que este rateio quita"}
                   </span>
                   <ul className="space-y-0.5 text-xs text-muted-foreground">
                     {replacedProvisionals.map((provisional) => (
@@ -652,8 +665,12 @@ export function SplitTransactionModal({
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" className="gap-2" disabled={isPending || !!validationError}>
-                  {isPending ? (
+                <Button
+                  type="submit"
+                  className="gap-2"
+                  disabled={isPending || !!validationError || awaitingProvisionals}
+                >
+                  {isPending || awaitingProvisionals ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <SplitSquareHorizontal className="h-4 w-4" />
