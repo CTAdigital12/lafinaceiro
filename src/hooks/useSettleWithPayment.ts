@@ -31,7 +31,9 @@ export interface SettleCandidate {
   is_provisional: boolean;
   installment_number: number | null;
   total_installments: number | null;
+  account_id: string | null;
   categories?: { name: string } | null;
+  accounts?: { name: string } | null;
 }
 
 const EMPTY_CANDIDATES: SettleCandidate[] = [];
@@ -44,12 +46,20 @@ function shiftIsoDate(iso: string, days: number): string {
 }
 
 /**
- * Lançamentos previstos (pendentes ou provisórios) numa conta, do mesmo tipo
- * do pagamento e dentro de ±60 dias dele, que ainda podem ser quitados.
+ * Lançamentos previstos (pendentes ou provisórios) FORA DE CARTÃO, do mesmo
+ * tipo do pagamento e dentro de ±60 dias dele, que ainda podem ser quitados.
  *
  * Os filtros espelham as travas da RPC, para o formulário não oferecer opção
  * que o banco vai recusar: nada de cartão (fatura tem o seu próprio fluxo),
  * nada já dividido, e nunca o próprio pagamento.
+ *
+ * NÃO filtra pela conta do pagamento, de propósito. A RPC reatribui
+ * `account_id = <conta do pagamento>` nos alvos, ou seja, a operação é "este
+ * débito pagou estes previstos, onde quer que estivessem previstos" — prever
+ * no banco A e pagar pelo B é caso legítimo. Filtrar também sumiria com as
+ * provisórias de recorrência cuja regra não tem conta (`account_id` nulo).
+ * Por isso a conta de cada candidata é EXIBIDA na lista: a diferença fica
+ * visível em vez de escondida. O texto da tela dizia "nesta conta" e mentia.
  */
 export function useSettleCandidates(
   payment: { id: string; type: string; date: string } | null,
@@ -65,7 +75,7 @@ export function useSettleCandidates(
       const { data, error } = await supabase
         .from("transactions")
         .select(
-          "id, description, amount, date, due_date, status, is_provisional, installment_number, total_installments, categories (name)",
+          "id, description, amount, date, due_date, status, is_provisional, installment_number, total_installments, account_id, categories (name), accounts (name)",
         )
         .eq("user_id", user.id)
         .eq("type", payment.type)

@@ -22,6 +22,8 @@ interface SettleWithPaymentModalProps {
     amount: number;
     date: string;
     type: string;
+    /** Conta do débito. A RPC reatribui as candidatas para ela. */
+    account_id?: string | null;
   } | null;
 }
 
@@ -70,9 +72,12 @@ export function SettleWithPaymentModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payment || !canSubmit) return;
+    // `selected` e não `selectedIds`: a soma é validada sobre a interseção com
+    // a lista viva, então enviar o Set cru poderia mandar id que já saiu da
+    // lista — validando uma coisa e enviando outra.
     await settleWithPayment.mutateAsync({
       paymentId: payment.id,
-      targetIds: [...selectedIds],
+      targetIds: selected.map((c) => c.id),
     });
     onOpenChange(false);
   };
@@ -111,7 +116,7 @@ export function SettleWithPaymentModal({
             </div>
           ) : candidates.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-              Nenhum lançamento previsto nesta conta em até 60 dias desta data.
+              Nenhum lançamento previsto fora de cartão em até 60 dias desta data.
             </p>
           ) : (
             <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
@@ -141,6 +146,16 @@ export function SettleWithPaymentModal({
                           // preenche o que está vazio), para a herança não ser surpresa.
                           <span className="italic">• sem categoria</span>
                         )}
+                        {/* Previsto de outra conta é caso legítimo — a RPC move a
+                            conta para a do pagamento. Mostrar de onde ele vem é o
+                            que torna seguro NÃO filtrar por conta. */}
+                        {candidate.account_id &&
+                          payment.account_id &&
+                          candidate.account_id !== payment.account_id && (
+                            <Badge variant="outline" className="text-[10px]">
+                              {candidate.accounts?.name ?? "outra conta"}
+                            </Badge>
+                          )}
                         {candidate.total_installments && candidate.total_installments > 1 && (
                           <Badge variant="secondary" className="text-[10px]">
                             {candidate.installment_number}/{candidate.total_installments}
