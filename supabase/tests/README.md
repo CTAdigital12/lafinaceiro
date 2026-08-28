@@ -19,7 +19,8 @@ psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/schema.sql
 for f in supabase/migrations/20260727120000_split_transaction.sql \
          supabase/migrations/20260824120000_split_transaction_recurring_rule.sql \
          supabase/migrations/20260824170000_settle_transactions_with_payment.sql \
-         supabase/migrations/20260825150000_desfazer_divisao_nao_apaga_previsto_quitado.sql; do
+         supabase/migrations/20260825150000_desfazer_divisao_nao_apaga_previsto_quitado.sql \
+         supabase/migrations/20260828120000_quitacao_herda_categoria_do_pagamento.sql; do
   psql -h /tmp/lfs -p 54329 -U postgres -q -v ON_ERROR_STOP=1 -f "$f"
 done
 
