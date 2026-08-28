@@ -13,6 +13,9 @@ import { useToast } from "@/hooks/use-toast";
  * apagado, porque o grupo passa a ocupar o lugar dele. Assim o parcelamento
  * não encolhe e a conciliação continua casando 1:1 com a linha do extrato,
  * que `collapseSplitGroups` reconstrói somando as partes.
+ *
+ * Única coluna que a quitação PREENCHE: previsto sem categoria herda a do
+ * pagamento (20260828120000), que de outro modo morreria nesse delete.
  */
 
 /** Janela de datas para listar previstos candidatos, em dias. */

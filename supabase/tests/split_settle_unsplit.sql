@@ -103,3 +103,28 @@ values ('aaaaaaaa-0000-0000-0000-000000000001', :'u', 'Empréstimo 3/5', 1500.00
        ('aaaaaaaa-0000-0000-0000-000000000002', :'u', 'Ingresso 2/4',    111.00, 'expense', '2026-09-12', 'completed', '33333333-3333-3333-3333-333333333333', 2, 4, '99999999-9999-9999-9999-999999999999', 'aaaaaaaa-0000-0000-0000-000000000001', null);
 select public.unsplit_transaction('aaaaaaaa-0000-0000-0000-000000000001') is not null as desfez;
 select count(*) as as_duas_sobreviveram, sum(amount) as total from public.transactions;
+
+\echo '### 6. CATEGORIA: só o alvo SEM categoria herda a do pagamento'
+truncate public.transactions cascade;
+\set cat_pag 'eeeeeeee-0000-0000-0000-000000000001'
+\set cat_alvo 'eeeeeeee-0000-0000-0000-000000000002'
+insert into public.transactions (id, user_id, description, amount, type, date, status, is_provisional, category_id)
+values ('aaaaaaaa-0000-0000-0000-000000000001', :'u', 'Previsto sem categoria',  60.00, 'expense', '2026-09-10', 'pending', true, null),
+       ('aaaaaaaa-0000-0000-0000-000000000002', :'u', 'Previsto já classificado', 40.00, 'expense', '2026-09-10', 'pending', true, :'cat_alvo'),
+       ('bbbbbbbb-0000-0000-0000-000000000001', :'u', 'PIX classificado',       100.00, 'expense', '2026-09-12', 'completed', false, :'cat_pag');
+select public.settle_transactions_with_payment('bbbbbbbb-0000-0000-0000-000000000001',
+  array['aaaaaaaa-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000002']::uuid[]) is not null as quitou;
+-- herdou = o vazio recebeu a do pagamento; manteve = o classificado não foi tocado.
+select description,
+       category_id = :'cat_pag'::uuid  as ficou_com_a_do_pagamento,
+       category_id = :'cat_alvo'::uuid as ficou_com_a_propria
+  from public.transactions order by description;
+
+\echo '### 7. CATEGORIA: pagamento sem categoria não apaga a do alvo'
+truncate public.transactions cascade;
+insert into public.transactions (id, user_id, description, amount, type, date, status, is_provisional, category_id)
+values ('aaaaaaaa-0000-0000-0000-000000000001', :'u', 'Previsto classificado', 100.00, 'expense', '2026-09-10', 'pending', true, :'cat_alvo'),
+       ('bbbbbbbb-0000-0000-0000-000000000001', :'u', 'PIX sem categoria',     100.00, 'expense', '2026-09-12', 'completed', false, null);
+select public.settle_transactions_with_payment('bbbbbbbb-0000-0000-0000-000000000001',
+  array['aaaaaaaa-0000-0000-0000-000000000001']::uuid[]) is not null as quitou;
+select description, category_id = :'cat_alvo'::uuid as manteve_a_propria from public.transactions;

@@ -101,7 +101,8 @@ export function SettleWithPaymentModal({
           <p className="text-sm text-muted-foreground">
             Marque os lançamentos previstos que este débito pagou. Eles viram as partes deste
             pagamento — conservando categoria, parcelamento e recorrência — e passam a somar uma
-            linha só, igual à do extrato. A soma tem que fechar com o valor do pagamento.
+            linha só, igual à do extrato. Quem estiver sem categoria herda a deste pagamento. A
+            soma tem que fechar com o valor do pagamento.
           </p>
 
           {isLoading ? (
@@ -133,7 +134,13 @@ export function SettleWithPaymentModal({
                       <p className="truncate text-sm font-medium">{candidate.description}</p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <span>{formatYmd(candidate.date, "dd/MM/yyyy")}</span>
-                        {candidate.categories?.name && <span>• {candidate.categories.name}</span>}
+                        {candidate.categories?.name ? (
+                          <span>• {candidate.categories.name}</span>
+                        ) : (
+                          // Sinaliza quem vai herdar a categoria do pagamento (a RPC só
+                          // preenche o que está vazio), para a herança não ser surpresa.
+                          <span className="italic">• sem categoria</span>
+                        )}
                         {candidate.total_installments && candidate.total_installments > 1 && (
                           <Badge variant="secondary" className="text-[10px]">
                             {candidate.installment_number}/{candidate.total_installments}
