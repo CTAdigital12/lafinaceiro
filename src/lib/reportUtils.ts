@@ -37,8 +37,16 @@ export function filterPureIncome(transactions: Transaction[]): Transaction[] {
  * Returns the competence date for a transaction:
  * - Credit card transactions use due_date
  * - Others use date
+ *
+ * O parâmetro é a forma MÍNIMA que a função lê, e não `Transaction`, para que
+ * telas com um recorte próprio da transação possam reusar a regra em vez de
+ * reescrevê-la. `Transaction` satisfaz esta forma, então nenhum chamador muda.
  */
-export function getCompetenceDate(t: Transaction): string {
+export function getCompetenceDate(t: {
+  credit_card_id: string | null;
+  due_date: string | null;
+  date: string;
+}): string {
   return t.credit_card_id && t.due_date ? t.due_date : t.date;
 }
 
