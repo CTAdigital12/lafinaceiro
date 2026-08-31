@@ -50,16 +50,19 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          # Mesma major do ambiente de desenvolvimento (v20.20.2). O Vitest 4
-          # exige ^20.19 || ^22.13 || >=24.
+          # A versão vem do `.nvmrc`, não escrita aqui: assim a máquina
+          # (`nvm use`) e o CI não têm como divergir. Era um comentário
+          # pedindo paridade; virou mecanismo.
           #
-          # Não confundir com a versão do RUNTIME DAS ACTIONS: o aviso de
-          # depreciação que aparecia aqui era do `@v4` de checkout/setup-node,
-          # que roda em Node 20 e o GitHub está aposentando — resolvido subindo
-          # para `@v5`, que roda em Node 24. Este campo controla outra coisa: o
-          # Node que executa npm, vitest e tsc. Ele fica em 20 de propósito,
-          # para o CI rodar no mesmo Node da máquina.
-          node-version: "20"
+          # Node 20 saiu em abril/2026 e ficou sem correção de segurança.
+          # Subimos para 24 (LTS ativo) em 31/08/2026, depois de rodar suíte,
+          # typecheck, lint e build nele na máquina.
+          #
+          # Não confundir com o RUNTIME DAS ACTIONS: o aviso de depreciação que
+          # aparecia no CI era do `@v4` de checkout/setup-node, resolvido
+          # subindo para `@v5`. Este campo é outra coisa — o Node que executa
+          # npm, vitest e tsc.
+          node-version-file: ".nvmrc"
           cache: npm
 
       - name: Instalar dependências
@@ -76,7 +79,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version-file: ".nvmrc"
           cache: npm
 
       - name: Instalar dependências
