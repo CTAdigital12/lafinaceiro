@@ -193,3 +193,64 @@ describe("TransactionModal — vencimento de parcelas no cartão (A5)", () => {
     ]);
   });
 });
+
+/**
+ * O laço de parcelamento REPLICA o valor digitado em cada parcela — digitar
+ * 100 em 3x grava R$ 300,00, não 3 x R$ 33,33. O rótulo fixo "Valor" não dizia
+ * isso em lugar nenhum da tela.
+ */
+describe("TransactionModal — o valor digitado é por parcela (M1)", () => {
+  /** Renderiza, digita o valor e liga o parcelamento com os números pedidos. */
+  async function abrirParcelamento(valor: string, atual: number, total: number) {
+    vi.useFakeTimers();
+    vi.setSystemTime(DIA_DA_COMPRA);
+    render(<TransactionModal open onOpenChange={() => {}} />);
+    vi.useRealTimers();
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Valor"), valor);
+    await user.click(screen.getByLabelText("É compra parcelada?"));
+
+    fireEvent.change(screen.getByLabelText("Total de Parcelas"), {
+      target: { value: String(total) },
+    });
+    if (atual !== 1) {
+      fireEvent.change(screen.getByLabelText("Parcela Atual"), {
+        target: { value: String(atual) },
+      });
+    }
+  }
+
+  /**
+   * Texto do parágrafo do total, com o espaço fino do `Intl` (U+00A0, entre
+   * "R$" e o número) trocado por espaço comum.
+   */
+  function textoDoTotal(): string {
+    const linha = screen.getByText(/Total do parcelamento/).closest("p");
+    return (linha?.textContent ?? "").replace(/\u00a0/g, " ");
+  }
+
+  it("renomeia o campo e mostra a conta ao ligar o parcelamento", async () => {
+    await abrirParcelamento("100", 1, 3);
+
+    expect(screen.getByLabelText("Valor por parcela")).toBeInTheDocument();
+    expect(textoDoTotal()).toContain("3 × R$ 100,00 = R$ 300,00");
+  });
+
+  it("conta só as parcelas que serão criadas quando a compra entra pela 2ª", async () => {
+    await abrirParcelamento("100", 2, 3);
+
+    // O laço vai da parcela atual até a última: duas linhas, R$ 200,00.
+    expect(textoDoTotal()).toContain("2 × R$ 100,00 = R$ 200,00");
+  });
+
+  it("o campo volta a se chamar Valor quando o parcelamento é desligado", async () => {
+    await abrirParcelamento("100", 1, 3);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText("É compra parcelada?"));
+
+    expect(screen.getByLabelText("Valor")).toBeInTheDocument();
+    expect(screen.queryByText(/Total do parcelamento/)).toBeNull();
+  });
+});

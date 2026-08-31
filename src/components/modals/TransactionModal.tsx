@@ -33,7 +33,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCreditCards } from "@/hooks/useCreditCards";
@@ -94,6 +94,14 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const isEditing = !!transaction;
   const isDuplicating = !!duplicateFrom;
   const isCreatingRefund = !!refundFrom;
+
+  // Parcelamento só roda na criação (ver o `isInstallment && !isEditing` do
+  // submit): o switch nem é renderizado ao editar, mas o estado sobrevive ao
+  // fechar/reabrir do modal, então o rótulo tem de olhar as duas coisas.
+  const isInstallmentMode = isInstallment && !isEditing;
+  // O laço cria da parcela atual até a última — é esse o número que multiplica
+  // o valor digitado, e não `totalInstallments`, quando a compra entra pela 3ª.
+  const installmentsToCreate = Math.max(1, totalInstallments - installmentNumber + 1);
   const categories = type === "income" ? incomeCategories : expenseCategories;
   
   // Find selected category with full info
@@ -438,7 +446,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
 
           {/* Amount */}
           <div className="space-y-2">
-            <Label htmlFor="amount">Valor</Label>
+            <Label htmlFor="amount">{isInstallmentMode ? "Valor por parcela" : "Valor"}</Label>
             <CurrencyInput
               id="amount"
               value={amount}
@@ -706,7 +714,17 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                     />
                   </div>
                   <p className="col-span-2 text-xs text-muted-foreground">
-                    Serão criadas {totalInstallments - installmentNumber + 1} parcelas (da {installmentNumber}ª até a {totalInstallments}ª)
+                    Serão criadas {installmentsToCreate} parcelas (da {installmentNumber}ª até a {totalInstallments}ª)
+                  </p>
+                  {/* O valor digitado é replicado em cada parcela, não dividido
+                      entre elas. O rótulo "Valor por parcela" avisa; este total
+                      é o que de fato impede o erro de digitar o valor da compra. */}
+                  <p className="col-span-2 text-xs">
+                    <span className="text-muted-foreground">Total do parcelamento: </span>
+                    <span className="font-medium text-foreground">
+                      {installmentsToCreate} × {formatCurrency(amount ?? 0)} ={" "}
+                      {formatCurrency((amount ?? 0) * installmentsToCreate)}
+                    </span>
                   </p>
                 </div>
               )}
