@@ -70,11 +70,11 @@ export function useBudgets(month: number, year: number) {
 
   const updateBudget = useMutation({
     // `TablesUpdate<>` vem do schema gerado, então só aceita COLUNAS reais.
-      // `Partial<Budget>` aceitava também as relações do join e os campos
-      // calculados no cliente, que iriam parar no `.update()` e o PostgREST
-      // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
-      // folga de tipo —, mas agora o compilador impede que passe a fazer.
-      mutationFn: async ({ id, ...budget }: TablesUpdate<"budgets"> & { id: string }) => {
+    // `Partial<Budget>` aceitava também as relações do join e os campos
+    // calculados no cliente, que iriam parar no `.update()` e o PostgREST
+    // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
+    // folga de tipo —, mas agora o compilador impede que passe a fazer.
+    mutationFn: async ({ id, ...budget }: TablesUpdate<"budgets"> & { id: string }) => {
       const { data, error } = await supabase
         .from("budgets")
         .update(budget)

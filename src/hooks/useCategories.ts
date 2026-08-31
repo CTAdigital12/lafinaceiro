@@ -132,11 +132,11 @@ export function useCategories() {
 
   const updateCategory = useMutation({
     // `TablesUpdate<>` vem do schema gerado, então só aceita COLUNAS reais.
-      // `Partial<Category>` aceitava também as relações do join e os campos
-      // calculados no cliente, que iriam parar no `.update()` e o PostgREST
-      // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
-      // folga de tipo —, mas agora o compilador impede que passe a fazer.
-      mutationFn: async ({ id, ...updates }: TablesUpdate<"categories"> & { id: string }) => {
+    // `Partial<Category>` aceitava também as relações do join e os campos
+    // calculados no cliente, que iriam parar no `.update()` e o PostgREST
+    // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
+    // folga de tipo —, mas agora o compilador impede que passe a fazer.
+    mutationFn: async ({ id, ...updates }: TablesUpdate<"categories"> & { id: string }) => {
       const { data, error } = await supabase
         .from("categories")
         .update(updates)
