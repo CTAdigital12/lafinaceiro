@@ -26,6 +26,12 @@ done
 
 psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/split_settle_unsplit.sql
 
+# A suíte da fatura precisa da tabela `credit_cards`, que o schema.sql não tem
+# (ele cobre só o que as RPCs de divisão tocam):
+psql -h /tmp/lfs -p 54329 -U postgres -q -c "create table public.credit_cards (id uuid primary key, user_id uuid not null, name text not null, current_invoice numeric(12,2) not null default 0, status text not null default 'open');"
+psql -h /tmp/lfs -p 54329 -U postgres -q -v ON_ERROR_STOP=1 -f supabase/migrations/20260828120000_recompute_card_invoice.sql
+psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/recompute_card_invoice.sql
+
 pg_ctl -D /tmp/lfpg stop
 ```
 
