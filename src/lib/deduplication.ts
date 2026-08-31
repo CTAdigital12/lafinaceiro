@@ -3,6 +3,7 @@
  */
 
 import { collapseSplitGroups } from "./splitTransaction";
+import { stripInstallmentMarkers } from "./installmentDescription";
 
 /**
  * Normaliza uma string para comparação resiliente:
@@ -40,6 +41,28 @@ export function normalizeDate(date: string | Date | null | undefined): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * "MM-DD" da data, ou "" quando não há data utilizável.
+ *
+ * O ano fica de fora de propósito no caminho das parcelas: ele NÃO vem do
+ * arquivo, é inferido pelo parser (mês da compra > mês da fatura -> ano-1,
+ * senão ano da fatura, em csvInvoiceParser.parseDate e no inferPurchaseYear da
+ * edge function). A inferência erra por um ano na última parcela de todo plano
+ * de 12+ meses — compra de out/2025 em 12x tem a parcela 12/12 na fatura de
+ * out/2026, mês igual, ano inferido 2026, enquanto a linha gravada tem 2025.
+ * Comparar a data cheia transformaria essa parcela em falso "novo" (duplicata
+ * gravada em silêncio); o mês-dia é estável nas 12.
+ */
+function monthDay(date: string | Date | null | undefined): string {
+  const ymd = normalizeDate(date);
+  return /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd.slice(5) : "";
+}
+
+/** Descrição sem marcador de parcela, normalizada para comparação. */
+function baseDescription(text: string | null | undefined): string {
+  return normalizeString(stripInstallmentMarkers(text || ""));
+}
+
 export interface ExistingTransaction {
   id: string;
   description: string;
@@ -72,12 +95,15 @@ export interface ImportedItem {
  * 1. Data: comparação de strings YYYY-MM-DD
  * 2. Valor: tolerância Math.abs(a - b) <= 0.05
  * 3. String: compara importado normalizado com original_description (fallback description)
- * 4. Parcela: se importado tem installment_current, exige match de installment_number + total_installments
+ * 4. Parcela: se importado tem installment_current, exige match de
+ *    installment_number + total_installments e, quando o lado existente veio de
+ *    importação (tem original_description), também da descrição-base.
  * 5. Divisão: as partes de uma transação dividida contam como UMA linha, com o
  *    valor somado — é assim que o gasto aparece na fatura importada.
  * 6. Sinal: crédito só casa com estorno e compra só casa com compra. Sem isso,
  *    um estorno de R$ 0,16 seria dado como duplicata da compra de R$ 0,16 no
  *    mesmo dia (a tolerância de valor compara módulos) e nunca seria importado.
+ * 7. Empate: entre candidatos igualmente válidos, ganha o de mesmo mês-dia.
  */
 export function detectDuplicates(
   importedItems: ImportedItem[],
@@ -92,7 +118,9 @@ export function detectDuplicates(
   importedItems.forEach((item, index) => {
     const isInstallment = !!(item.installment_current && item.installment_total);
 
-    const match = collapsed.find((existing) => {
+    // `filter` e não `find`: com mais de um candidato válido é preciso escolher
+    // o certo (regra 7), e o primeiro da lista não é necessariamente ele.
+    const candidates = collapsed.filter((existing) => {
       if (usedExistingIds.has(existing.id)) return false;
 
       // Rule 6: Sinal (crédito x compra)
@@ -104,10 +132,22 @@ export function detectDuplicates(
 
       if (isInstallment) {
         // Rule 4: Installment match
-        return (
-          existing.installment_number === item.installment_current &&
-          existing.total_installments === item.installment_total
-        );
+        if (existing.installment_number !== item.installment_current) return false;
+        if (existing.total_installments !== item.installment_total) return false;
+
+        // Valor + índice de parcela NÃO identificam uma compra. Duas compras de
+        // R$ 89,90 em 12x na mesma fatura casavam cruzado: a linha de B consumia
+        // a transação de A, B saía como "duplicata" (some) e a linha de A, sem
+        // par, entrava como nova (duplica A). Mesma soma, duas linhas erradas.
+        //
+        // A descrição só entra como rejeição quando o lado existente TEM
+        // original_description: aí os dois lados vieram do parser e a comparação
+        // é entre iguais. Parcela criada à mão tem descrição digitada pelo
+        // usuário ("Netflix") e nunca bateria com a da fatura
+        // ("NETFLIX.COM*ASSINATURA") — exigir descrição ali trocaria este bug
+        // por duplicata garantida em todo parcelamento manual.
+        if (!existing.original_description) return true;
+        return baseDescription(existing.original_description) === baseDescription(item.description);
       } else {
         // Rule 1: Date match (normalized)
         const dateMatch = normalizeDate(existing.date) === normalizeDate(item.purchase_date);
@@ -119,6 +159,14 @@ export function detectDuplicates(
         return existingStr === importedStr;
       }
     });
+
+    // Rule 7: duas compras iguais na MESMA loja (mesmo valor, mesmo índice de
+    // parcela) só se distinguem pela data da compra. Sem candidato de mesmo
+    // mês-dia, fica o primeiro — o comportamento de antes.
+    const target = isInstallment && candidates.length > 1 ? monthDay(item.purchase_date) : "";
+    const match = target
+      ? candidates.find((c) => monthDay(c.date) === target) ?? candidates[0]
+      : candidates[0];
 
     if (match) {
       duplicateMap.set(index, match);
