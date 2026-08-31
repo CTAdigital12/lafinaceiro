@@ -71,11 +71,11 @@ export function useRecurringRules() {
 
   const updateRule = useMutation({
     // `TablesUpdate<>` vem do schema gerado, então só aceita COLUNAS reais.
-      // `Partial<RecurringRule>` aceitava também as relações do join e os campos
-      // calculados no cliente, que iriam parar no `.update()` e o PostgREST
-      // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
-      // folga de tipo —, mas agora o compilador impede que passe a fazer.
-      mutationFn: async ({ id, ...updates }: TablesUpdate<"recurring_rules"> & { id: string }) => {
+    // `Partial<RecurringRule>` aceitava também as relações do join e os campos
+    // calculados no cliente, que iriam parar no `.update()` e o PostgREST
+    // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
+    // folga de tipo —, mas agora o compilador impede que passe a fazer.
+    mutationFn: async ({ id, ...updates }: TablesUpdate<"recurring_rules"> & { id: string }) => {
       const { data, error } = await supabase
         .from("recurring_rules")
         .update(updates)

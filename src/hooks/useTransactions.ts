@@ -405,11 +405,11 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
 
   const updateTransaction = useMutation({
     // `TablesUpdate<>` vem do schema gerado, então só aceita COLUNAS reais.
-      // `Partial<Transaction>` aceitava também as relações do join e os campos
-      // calculados no cliente, que iriam parar no `.update()` e o PostgREST
-      // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
-      // folga de tipo —, mas agora o compilador impede que passe a fazer.
-      mutationFn: async ({ id, ...transaction }: TablesUpdate<"transactions"> & { id: string }) => {
+    // `Partial<Transaction>` aceitava também as relações do join e os campos
+    // calculados no cliente, que iriam parar no `.update()` e o PostgREST
+    // rejeitaria como coluna desconhecida. Nenhum chamador fazia isso — era
+    // folga de tipo —, mas agora o compilador impede que passe a fazer.
+    mutationFn: async ({ id, ...transaction }: TablesUpdate<"transactions"> & { id: string }) => {
       // First, get the original transaction to check for credit card changes and invoice status
       const { data: original } = await supabase
         .from("transactions")

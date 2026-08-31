@@ -46,12 +46,19 @@ jobs:
     name: Testes (bloqueia o merge)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           # Mesma major do ambiente de desenvolvimento (v20.20.2). O Vitest 4
           # exige ^20.19 || ^22.13 || >=24.
+          #
+          # Não confundir com a versão do RUNTIME DAS ACTIONS: o aviso de
+          # depreciação que aparecia aqui era do `@v4` de checkout/setup-node,
+          # que roda em Node 20 e o GitHub está aposentando — resolvido subindo
+          # para `@v5`, que roda em Node 24. Este campo controla outra coisa: o
+          # Node que executa npm, vitest e tsc. Ele fica em 20 de propósito,
+          # para o CI rodar no mesmo Node da máquina.
           node-version: "20"
           cache: npm
 
@@ -65,9 +72,9 @@ jobs:
     name: Typecheck e Lint (bloqueiam)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: npm
