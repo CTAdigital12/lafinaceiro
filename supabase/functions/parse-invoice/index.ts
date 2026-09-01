@@ -94,27 +94,61 @@ function detectInstallmentPattern(description: string): { current: number; total
   return null;
 }
 
-// Infer the year of the purchase date based on invoice month/year
+/**
+ * Infer the year of the purchase date based on invoice month/year.
+ *
+ * A regra anterior era "se o mês da compra > mês da fatura, foi ano passado".
+ * Ela embute a premissa de que a compra aconteceu nos ÚLTIMOS 12 MESES —
+ * verdade para compra avulsa, que aparece na fatura do próprio mês ou na
+ * seguinte, e falsa para parcela: a linha "12/18" carrega a data da compra
+ * original, que pode estar a um ano e meio dali. A partir de 12 meses a regra
+ * escolhia o ano errado, sempre para a frente, e a data adiantada ainda podia
+ * disparar o `isPostClosing` — que deixa o item DESMARCADO na tela de revisão,
+ * virando lançamento que não entra.
+ *
+ * O índice da parcela é a informação que faltava: a parcela `k` veio de uma
+ * compra cerca de `k-1` meses antes da fatura que a cobra. Escolhemos, entre os
+ * anos possíveis, o que põe a compra mais perto dessa distância. Compra avulsa
+ * tem alvo 0 e cai no MESMO resultado da regra antiga.
+ *
+ * Gêmea de `resolvePurchaseDate` em `src/lib/csvInvoiceParser.ts` (caminho
+ * CSV/XLS); as duas precisam andar juntas.
+ */
 function inferPurchaseYear(
   purchaseDay: number,
   purchaseMonth: number,
   invoiceMonth: number,
   invoiceYear: number,
-  closingDay: number
+  closingDay: number,
+  installmentCurrent?: number
 ): { year: number; isPostClosing: boolean } {
-  let year: number;
-  let isPostClosing = false;
+  const target = Math.max(0, (installmentCurrent ?? 1) - 1);
+  // Um ano a mais do que o alvo exige cobre o arredondamento da primeira
+  // parcela (que pode ser cobrada no mês seguinte ao da compra).
+  const oldestYear = invoiceYear - Math.floor(target / 12) - 1;
 
-  if (purchaseMonth > invoiceMonth) {
-    year = invoiceYear - 1;
-  } else if (purchaseMonth === invoiceMonth) {
-    year = invoiceYear;
-    if (purchaseDay > closingDay) {
-      isPostClosing = true;
+  let year = invoiceYear;
+  let bestScore = Infinity;
+
+  // Do mais recente para o mais antigo: em caso de empate fica o mais recente.
+  for (let candidate = invoiceYear; candidate >= oldestYear; candidate--) {
+    const monthsAgo = (invoiceYear - candidate) * 12 + (invoiceMonth - purchaseMonth);
+    // Compra depois da fatura que a cobra não existe; só o arredondamento de
+    // fechamento pode zerar essa distância, nunca deixá-la negativa.
+    if (monthsAgo < 0) continue;
+
+    const score = Math.abs(monthsAgo - target);
+    if (score < bestScore) {
+      bestScore = score;
+      year = candidate;
     }
-  } else {
-    year = invoiceYear;
   }
+
+  // Pós-fechamento é a compra desta fatura feita depois do dia do fechamento.
+  // Parcela antiga não é pós-fechamento coisa nenhuma: com o ano certo, a
+  // condição abaixo já não alcança mais.
+  const isPostClosing =
+    year === invoiceYear && purchaseMonth === invoiceMonth && purchaseDay > closingDay;
 
   return { year, isPostClosing };
 }
@@ -510,17 +544,20 @@ IMPORTANTE:
         continue;
       }
 
+      // A parcela é lida ANTES do ano: é o índice dela que diz há quantos meses
+      // a compra aconteceu.
+      const installmentInfo = detectInstallmentPattern(rawItem.description);
+
       const { year: purchaseYear, isPostClosing } = inferPurchaseYear(
         purchaseDay,
         purchaseMonth,
         invoiceMonth,
         invoiceYear,
-        closingDay
+        closingDay,
+        installmentInfo?.current
       );
 
       const purchaseDate = `${purchaseYear}-${String(purchaseMonth).padStart(2, '0')}-${String(purchaseDay).padStart(2, '0')}`;
-
-      const installmentInfo = detectInstallmentPattern(rawItem.description);
 
       // O sinal não vai para o banco (`amount` é sempre positivo lá), mas não
       // pode ser jogado fora: vira `is_credit`, que o InvoiceReviewModal
