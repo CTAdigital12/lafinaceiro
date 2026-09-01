@@ -123,49 +123,110 @@ function detectInstallments(description: string): { current: number; total: numb
   return null;
 }
 
-// Parse date and infer year based on invoice context
-function parseDate(value: string, options: CSVInvoiceParseOptions): string | null {
+interface DateParts {
+  day: number;
+  month: number;
+  /** Ano explícito no arquivo. `null` quando a célula traz só DD/MM. */
+  year: number | null;
+}
+
+// Parse date. O ano NÃO é resolvido aqui: a fatura em geral traz só "DD/MM", e
+// escolher o ano depende do índice de parcela, que só é conhecido depois de ler
+// a descrição (ver resolvePurchaseYear).
+function parseDateParts(value: string): DateParts | null {
   if (!value) return null;
-  
+
   const cleaned = value.replace(/["']/g, "").trim();
-  
+
   // Try DD/MM or DD/MM/YY or DD/MM/YYYY
   const match = cleaned.match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$/);
   if (match) {
     const day = parseInt(match[1], 10);
     const month = parseInt(match[2], 10);
-    let year: number;
-    
+
+    let year: number | null = null;
     if (match[3]) {
-      // Year provided
       year = parseInt(match[3], 10);
       if (year < 100) {
         year += 2000; // Convert 2-digit to 4-digit
       }
-    } else {
-      // Infer year based on invoice month/year
-      // If purchase month > invoice month, purchase was in previous year
-      if (month > options.invoiceMonth) {
-        year = options.invoiceYear - 1;
-      } else {
-        year = options.invoiceYear;
-      }
     }
-    
+
     // Validate day/month
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
-      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      return { day, month, year };
     }
   }
-  
+
   // Try YYYY-MM-DD
   const isoMatch = cleaned.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (isoMatch) {
-    const [, year, month, day] = isoMatch;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    return {
+      day: parseInt(isoMatch[3], 10),
+      month: parseInt(isoMatch[2], 10),
+      year: parseInt(isoMatch[1], 10),
+    };
   }
-  
+
   return null;
+}
+
+/**
+ * Resolve a data da compra, escolhendo o ano quando o arquivo não o traz.
+ *
+ * A regra anterior era "se o mês da compra > mês da fatura, foi ano passado".
+ * Ela embute a premissa de que a compra aconteceu nos ÚLTIMOS 12 MESES —
+ * verdade para compra avulsa, que aparece na fatura do próprio mês ou na
+ * seguinte, e falsa para parcela: a linha "12/18" carrega a data da compra
+ * original, que pode estar a um ano e meio dali. A partir de 12 meses a regra
+ * escolhia o ano errado, sempre para a frente. Efeitos medidos: a parcela era
+ * gravada com a data um (ou dois) anos adiantada, e podia ser marcada
+ * pós-fechamento por engano — o que a deixa DESMARCADA na tela de revisão,
+ * virando lançamento que não entra.
+ *
+ * O índice da parcela é a informação que faltava: a parcela `k` veio de uma
+ * compra cerca de `k-1` meses antes da fatura que a cobra. Então escolhemos,
+ * entre os anos possíveis, o que põe a compra mais perto dessa distância.
+ * Compra avulsa tem alvo 0 e cai no MESMO resultado da regra antiga — nenhum
+ * comportamento existente muda.
+ *
+ * A mesma regra existe no parser de PDF (`supabase/functions/parse-invoice`,
+ * `inferPurchaseYear`); as duas precisam andar juntas.
+ */
+function resolvePurchaseDate(
+  parts: DateParts,
+  options: CSVInvoiceParseOptions,
+  installmentCurrent?: number,
+): string {
+  const ymd = (year: number) =>
+    `${year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+
+  if (parts.year !== null) return ymd(parts.year);
+
+  // Distância declarada pelo índice da parcela, em meses.
+  const target = Math.max(0, (installmentCurrent ?? 1) - 1);
+  // Um ano a mais do que o alvo exige cobre o arredondamento da primeira
+  // parcela (que pode ser cobrada no mês seguinte ao da compra).
+  const oldestYear = options.invoiceYear - Math.floor(target / 12) - 1;
+
+  let bestYear = options.invoiceYear;
+  let bestScore = Infinity;
+
+  // Do mais recente para o mais antigo: em caso de empate fica o mais recente.
+  for (let year = options.invoiceYear; year >= oldestYear; year--) {
+    const monthsAgo = (options.invoiceYear - year) * 12 + (options.invoiceMonth - parts.month);
+    // Compra depois da fatura que a cobra não existe; só o arredondamento de
+    // fechamento pode zerar essa distância, nunca deixá-la negativa.
+    if (monthsAgo < 0) continue;
+
+    const score = Math.abs(monthsAgo - target);
+    if (score < bestScore) {
+      bestScore = score;
+      bestYear = year;
+    }
+  }
+
+  return ymd(bestYear);
 }
 
 // Extrai os 4 dígitos do cartão da célula. Aceita formatos comuns:
@@ -218,18 +279,20 @@ function tryParseTransaction(
   row: string[],
   options: CSVInvoiceParseOptions
 ): CSVInvoiceTransaction | null {
-  // Âncora de data: primeira célula (esq -> dir) que parseia como data.
+  // Âncora de data: primeira célula (esq -> dir) que parseia como data. O ano
+  // fica pendente até a descrição dizer se a linha é parcela — ver
+  // resolvePurchaseDate.
   let dateIdx = -1;
-  let parsedDate: string | null = null;
+  let dateParts: DateParts | null = null;
   for (let i = 0; i < row.length; i++) {
-    const d = parseDate(row[i], options);
+    const d = parseDateParts(row[i]);
     if (d) {
       dateIdx = i;
-      parsedDate = d;
+      dateParts = d;
       break;
     }
   }
-  if (dateIdx === -1 || !parsedDate) return null;
+  if (dateIdx === -1 || !dateParts) return null;
 
   // Âncora de valor: primeira célula monetária varrendo da DIREITA p/ esquerda.
   let amountIdx = -1;
@@ -271,6 +334,9 @@ function tryParseTransaction(
   }
 
   const installments = detectInstallments(description);
+
+  // Só agora dá para resolver o ano: ele depende do índice da parcela.
+  const parsedDate = resolvePurchaseDate(dateParts, options, installments?.current);
 
   // Valor negativo = crédito na fatura. O sinal não pode chegar ao banco: o
   // resto do app assume `amount` positivo (`Math.abs` no conciliador, somas por
