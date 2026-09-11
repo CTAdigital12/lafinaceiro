@@ -17,11 +17,7 @@ import type { TooltipProps } from "recharts";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { TrendingUp, TrendingDown, PiggyBank, Wallet } from "lucide-react";
-import {
-  filterPureExpenses,
-  filterPureIncome,
-  getCompetenceDate,
-} from "@/lib/reportUtils";
+import { buildCashFlowSeries } from "@/lib/cashFlowSeries";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export function CashFlowTab() {
@@ -41,63 +37,37 @@ export function CashFlowTab() {
       months.push(format(subMonths(now, i), "yyyy-MM"));
     }
 
-    const incomeByMonth: Record<string, number> = {};
-    const expenseByMonth: Record<string, number> = {};
+    const {
+      months: rows,
+      positiveMonths,
+      totalMonths,
+      avgSavingRate,
+      periodBalance,
+      lastMonthBalance,
+    } = buildCashFlowSeries(transactions, months);
 
-    const pureIncome = filterPureIncome(transactions);
-    const pureExpenses = filterPureExpenses(transactions);
-
-    for (const t of pureIncome) {
-      const m = getCompetenceDate(t).substring(0, 7);
-      incomeByMonth[m] = (incomeByMonth[m] || 0) + Number(t.amount);
-    }
-
-    for (const t of pureExpenses) {
-      const m = getCompetenceDate(t).substring(0, 7);
-      if (t.is_refund) {
-        expenseByMonth[m] = (expenseByMonth[m] || 0) - Number(t.amount);
-      } else {
-        expenseByMonth[m] = (expenseByMonth[m] || 0) + Number(t.amount);
-      }
-    }
-
-    let cumBalance = 0;
-    let posCount = 0;
-    let savingRateSum = 0;
-    let monthsWithIncome = 0;
-
-    const data = months.map((m) => {
-      const income = incomeByMonth[m] || 0;
-      const expense = Math.max(0, expenseByMonth[m] || 0);
-      const balance = income - expense;
-      cumBalance += balance;
-
-      if (balance > 0) posCount++;
-      if (income > 0) {
-        savingRateSum += ((income - expense) / income) * 100;
-        monthsWithIncome++;
-      }
-
-      const [y, mo] = m.split("-");
+    const data = rows.map((row) => {
+      const [y, mo] = row.month.split("-");
       const label = format(new Date(Number(y), Number(mo) - 1), "MMM yy", { locale: ptBR });
 
       return {
         name: label,
-        receitas: Math.round(income),
-        despesas: Math.round(expense),
-        saldoMensal: Math.round(balance),
-        saldo: Math.round(cumBalance),
+        receitas: Math.round(row.income),
+        // Negativo é legítimo: no mês em que os estornos superam as despesas,
+        // o líquido é entrada de dinheiro (achado M2).
+        despesas: Math.round(row.netExpense),
+        saldoMensal: Math.round(row.balance),
+        saldo: Math.round(row.cumulativeBalance),
       };
     });
 
-    const lastMonth = data[data.length - 1];
     return {
       chartData: data,
-      positiveMonths: posCount,
-      totalMonths: months.length,
-      avgSavingRate: monthsWithIncome > 0 ? Math.round(savingRateSum / monthsWithIncome) : 0,
-      periodBalance: cumBalance,
-      lastMonthBalance: lastMonth?.saldoMensal ?? 0,
+      positiveMonths,
+      totalMonths,
+      avgSavingRate,
+      periodBalance,
+      lastMonthBalance,
     };
   }, [transactions]);
 

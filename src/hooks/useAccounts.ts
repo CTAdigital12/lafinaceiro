@@ -9,6 +9,13 @@ export interface Account {
   user_id: string;
   name: string;
   type: "bank" | "wallet" | "savings" | "investment";
+  /**
+   * Coluna crua da tabela. NÃO é o saldo da conta: ela só é escrita no
+   * cadastro/edição, onde carrega o saldo DIGITADO, e nunca acompanha os
+   * lançamentos. Para exibir saldo use sempre `computed_balance` — foi este
+   * campo que o `PayInvoiceModal` mostrava no seletor de conta (achado M9),
+   * divergindo da tela de Contas.
+   */
   current_balance: number;
   initial_balance: number;
   icon: string;
