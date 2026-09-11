@@ -15,6 +15,7 @@ import {
 import { useAccounts, Account } from "@/hooks/useAccounts";
 import { detectBankFromName } from "@/lib/bankConfig";
 import { fetchRealizedNetForAccount } from "@/lib/accountBalance";
+import { anchorInitialBalance } from "@/lib/accountAnchor";
 
 interface AccountModalProps {
   open: boolean;
@@ -92,26 +93,32 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
     const accountData = {
       name,
       type,
-      current_balance: balanceValue,
       icon: detectedBank ? icon : (selectedType?.icon || "🏦"),
       color,
     };
 
+    // Os dois caminhos gravam a MESMA coisa — `initial_balance`, a âncora que
+    // faz o saldo exibido virar o valor digitado. `current_balance` não é mais
+    // escrita: era a fonte de verdade do desenho antigo e virou armadilha
+    // (achado M9). A coluna segue na tabela, com DEFAULT 0, e ninguém a lê.
     if (isEditing && account) {
-      // initial_balance = saldo desejado − soma realizada, para que
-      // computed_balance volte a bater com o valor digitado.
-      //
       // A soma vem de fetchRealizedNetForAccount, que pagina (auditoria C2).
       // Antes era uma consulta única, cortada em silêncio pelo teto de linhas
       // do PostgREST — e como o resultado é GRAVADO, um corte aqui deixava o
       // initial_balance permanentemente errado.
       const txNet = await fetchRealizedNetForAccount(account.id);
 
-      const newInitialBalance = balanceValue - txNet;
-      await updateAccount.mutateAsync({ id: account.id, ...accountData, initial_balance: newInitialBalance });
+      await updateAccount.mutateAsync({
+        id: account.id,
+        ...accountData,
+        initial_balance: anchorInitialBalance(balanceValue, txNet),
+      });
     } else {
-      // New account: no transactions yet, so initial_balance = entered balance
-      await createAccount.mutateAsync(accountData);
+      // Conta nova não tem lançamento: é o mesmo cálculo com txNet zero.
+      await createAccount.mutateAsync({
+        ...accountData,
+        initial_balance: anchorInitialBalance(balanceValue, 0),
+      });
     }
 
     onOpenChange(false);

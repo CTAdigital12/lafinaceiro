@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { fetchRealizedNetByAccount } from "@/lib/accountBalance";
+import { computedBalance } from "@/lib/accountAnchor";
 
 export interface Account {
   id: string;
@@ -10,13 +11,13 @@ export interface Account {
   name: string;
   type: "bank" | "wallet" | "savings" | "investment";
   /**
-   * Coluna crua da tabela. NÃO é o saldo da conta: ela só é escrita no
-   * cadastro/edição, onde carrega o saldo DIGITADO, e nunca acompanha os
-   * lançamentos. Para exibir saldo use sempre `computed_balance` — foi este
-   * campo que o `PayInvoiceModal` mostrava no seletor de conta (achado M9),
-   * divergindo da tela de Contas.
+   * `current_balance` NÃO está aqui de propósito. A coluna existe na tabela
+   * (`NOT NULL DEFAULT 0`, herdada do desenho anterior a `initial_balance`),
+   * mas nada no app deve lê-la: é um retrato congelado na última edição da
+   * conta. Foi ela que o `PayInvoiceModal` exibia no seletor (achado M9),
+   * divergindo da tela de Contas em R$ 1.471,27 na conta real. Fora do tipo,
+   * o TypeScript impede o próximo `acc.current_balance`.
    */
-  current_balance: number;
   initial_balance: number;
   icon: string;
   color: string;
@@ -52,7 +53,7 @@ export function useAccounts() {
         return {
           ...acc,
           initial_balance: initialBalance,
-          computed_balance: initialBalance + txNet,
+          computed_balance: computedBalance(initialBalance, txNet),
         } as Account;
       });
     },
@@ -65,7 +66,9 @@ export function useAccounts() {
         throw new Error("Usuário não autenticado");
       }
       
-      const initialBalance = account.current_balance || 0;
+      // A âncora vem pronta do formulário (`anchorInitialBalance`), em vez de
+      // ser derivada de `current_balance` como no desenho antigo.
+      const initialBalance = account.initial_balance ?? 0;
       const { data, error } = await supabase
         .from("accounts")
         .insert([{ 
