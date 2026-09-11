@@ -18,7 +18,6 @@ export type Database = {
         Row: {
           color: string | null
           created_at: string
-          current_balance: number
           icon: string | null
           id: string
           initial_balance: number
@@ -31,7 +30,6 @@ export type Database = {
         Insert: {
           color?: string | null
           created_at?: string
-          current_balance?: number
           icon?: string | null
           id?: string
           initial_balance?: number
@@ -44,7 +42,6 @@ export type Database = {
         Update: {
           color?: string | null
           created_at?: string
-          current_balance?: number
           icon?: string | null
           id?: string
           initial_balance?: number

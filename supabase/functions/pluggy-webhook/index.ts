@@ -529,19 +529,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Update account balance if it's a bank account
-      if (targetAccountId && accountId) {
-        const accDetailRes = await fetch(`${PLUGGY_API}/accounts/${accountId}`, {
-          headers: { "X-API-KEY": apiKey },
-        });
-        if (accDetailRes.ok) {
-          const accDetail = await accDetailRes.json();
-          await supabase
-            .from("accounts")
-            .update({ current_balance: accDetail.balance })
-            .eq("id", targetAccountId);
-        }
-      }
+      // O saldo da conta NÃO é mais um número guardado: é
+      // `initial_balance + lançamentos` (ver src/lib/accountAnchor.ts). O bloco
+      // que existia aqui buscava o saldo na Pluggy só para gravar
+      // `current_balance`, coluna que ninguém lia e que foi removida da tabela.
+      // Sobrescrever `initial_balance` com o saldo do banco seria REANCORAR a
+      // conta sem a pessoa pedir, e isso é decisão dela — por isso nada
+      // substitui o bloco.
 
       // Update credit card invoice if it's a card
       if (targetCardId && accountId) {
