@@ -587,7 +587,7 @@ export function PayInvoiceModal({
                                       <span>{acc.icon}</span>
                                       <span>{acc.name}</span>
                                       <span className="text-muted-foreground text-xs">
-                                        ({formatCurrency(Number(acc.current_balance))})
+                                        ({formatCurrency(acc.computed_balance)})
                                       </span>
                                     </span>
                                   </SelectItem>
@@ -743,7 +743,7 @@ export function PayInvoiceModal({
                                     <span>{acc.icon}</span>
                                     <span>{acc.name}</span>
                                     <span className="text-muted-foreground text-xs">
-                                      ({formatCurrency(Number(acc.current_balance))})
+                                      ({formatCurrency(acc.computed_balance)})
                                     </span>
                                   </span>
                                 </SelectItem>
