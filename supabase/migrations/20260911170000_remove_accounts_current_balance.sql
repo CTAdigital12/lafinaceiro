@@ -33,8 +33,8 @@ select id, current_balance, now() as arquivado_em
   from public.accounts;
 
 comment on table public.accounts_current_balance_backup is
-  'Último valor de accounts.current_balance antes de a coluna ser removida em '
-  '11/09/2026. Só arquivo: nada lê esta tabela. Pode ser descartada.';
+  'Último valor de accounts.current_balance antes de a coluna ser removida, em '
+  'setembro/2026. Só arquivo: nada lê esta tabela. Pode ser descartada.';
 
 alter table public.accounts
   drop column if exists current_balance;
