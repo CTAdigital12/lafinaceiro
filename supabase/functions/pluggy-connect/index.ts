@@ -198,7 +198,9 @@ Deno.serve(async (req) => {
                 user_id: userId,
                 name: pluggyAccount.name || item.connector?.name || "Conta Pluggy",
                 type: accType,
-                current_balance: pluggyAccount.balance || 0,
+                // Só `initial_balance`: o saldo da conta é
+                // `initial_balance + lançamentos` (ver src/lib/accountAnchor.ts).
+                // A coluna `current_balance` foi removida da tabela.
                 initial_balance: pluggyAccount.balance || 0,
                 pluggy_account_id: pluggyAccount.id,
               })
