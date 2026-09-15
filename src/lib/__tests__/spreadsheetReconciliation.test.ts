@@ -8,6 +8,7 @@ import {
   type SystemTransaction,
 } from "@/lib/spreadsheetReconciliation";
 import type { OFXTransaction } from "@/lib/ofxParser";
+import * as XLSX from "xlsx";
 
 let nextId = 0;
 
@@ -401,6 +402,92 @@ describe("parseSpreadsheetFile — CSV", () => {
     );
 
     expect(items[0].amount).toBe(1234.56);
+  });
+});
+
+const xlsxFile = (rows: unknown[][], name = "fatura.xlsx") => {
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet, "Fatura 09-26");
+  const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  return new File([buffer], name, {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+};
+
+describe("parseSpreadsheetFile — cabeçalho que não está na primeira linha", () => {
+  // A fatura do Itaú (XLSX) abre com uma linha de título "Lançamentos" e só
+  // então vem o cabeçalho, com "Parcelamento" ENTRE descrição e valor. Lendo a
+  // linha 0 como cabeçalho, nada casava e o fallback usava a coluna 2 como
+  // valor — que é "Parcelamento", vazia. Valor zero descarta a linha, e a
+  // planilha inteira voltava vazia: "Nenhum item encontrado na planilha".
+  it("acha o cabeçalho depois de uma linha de título (XLSX da fatura do Itaú)", async () => {
+    const items = await parseSpreadsheetFile(
+      xlsxFile([
+        ["Lançamentos", "", "", "", "", "", "", "", ""],
+        ["Data", "Lançamento", "Parcelamento", "Valor", "", "Titularidade", "Nome", "Tipo do cartão", "Número do cartão"],
+        [46272, "Zig The Global Funtech", "", 21, "", "Titular", "Andre", "Wallet", "****0993"],
+        [46271, "Conta Vivo", "", 163, "", "Titular", "Andre", "Virtual recorrente", "****5391"],
+      ]),
+    );
+
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ description: "Zig The Global Funtech", amount: 21, isCredit: false });
+    expect(items[1]).toMatchObject({ description: "Conta Vivo", amount: 163 });
+  });
+
+  it("converte a data serial do Excel", async () => {
+    const items = await parseSpreadsheetFile(
+      xlsxFile([
+        ["Lançamentos"],
+        ["Data", "Lançamento", "Parcelamento", "Valor"],
+        [46272, "Zig The Global Funtech", "", 21],
+      ]),
+    );
+
+    expect(items[0].date).toBe("2026-09-07");
+  });
+
+  it("estorno negativo na fatura continua virando crédito", async () => {
+    const items = await parseSpreadsheetFile(
+      xlsxFile([
+        ["Lançamentos"],
+        ["Data", "Lançamento", "Parcelamento", "Valor"],
+        [46272, "Estorno Zig", "", -18],
+      ]),
+    );
+
+    expect(items[0]).toMatchObject({ amount: 18, isCredit: true });
+  });
+
+  it("no CSV também pula o preâmbulo antes do cabeçalho", async () => {
+    const items = await parseSpreadsheetFile(
+      csvFile(
+        [
+          "Fatura Cartão de Crédito",
+          "Vencimento;15/09/2026",
+          "",
+          "Data;Lançamento;Parcelamento;Valor",
+          "10/03/2026;MERCADO SAO JOSE;;1.234,56",
+        ].join("\n"),
+      ),
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ date: "2026-03-10", description: "MERCADO SAO JOSE", amount: 1234.56 });
+  });
+
+  it("rowIndex segue apontando a linha do arquivo, não a do cabeçalho", async () => {
+    const items = await parseSpreadsheetFile(
+      xlsxFile([
+        ["Lançamentos"],
+        ["Data", "Lançamento", "Parcelamento", "Valor"],
+        [46272, "PRIMEIRA", "", 10],
+        [46272, "SEGUNDA", "", 20],
+      ]),
+    );
+
+    expect(items.map((i) => i.rowIndex)).toEqual([2, 3]);
   });
 });
 

@@ -263,12 +263,22 @@ function parseDate(value: string | number | undefined): string | null {
 
 // ── CSV helpers ──────────────────────────────────────────────────────
 
+const DELIMITERS = [";", ",", "\t", "|"];
+
+function delimiterRegex(d: string): RegExp {
+  return new RegExp(d === "|" ? "\\|" : d === "\t" ? "\t" : d, "g");
+}
+
+/** Quantos separadores candidatos a linha tem — mede o quanto ela é tabular. */
+function countDelimiters(line: string): number {
+  return DELIMITERS.reduce((max, d) => Math.max(max, (line.match(delimiterRegex(d)) || []).length), 0);
+}
+
 function detectDelimiter(line: string): string {
-  const delimiters = [";", ",", "\t", "|"];
   let maxCount = 0;
   let best = ",";
-  for (const d of delimiters) {
-    const count = (line.match(new RegExp(d === "|" ? "\\|" : d === "\t" ? "\t" : d, "g")) || []).length;
+  for (const d of DELIMITERS) {
+    const count = (line.match(delimiterRegex(d)) || []).length;
     if (count > maxCount) {
       maxCount = count;
       best = d;
@@ -303,7 +313,14 @@ function parseCSVLine(line: string, delimiter: string): string[] {
   return values;
 }
 
-function detectColumns(header: string[]) {
+interface Columns {
+  dateCol: number;
+  descCol: number;
+  amountCol: number;
+}
+
+/** Colunas achadas PELO NOME; `-1` onde o cabeçalho não traz aquele nome. */
+function matchColumns(header: string[]): Columns {
   const datePatterns = ["data", "date", "dt", "data compra", "data transação", "data transacao"];
   const descPatterns = ["descrição", "descricao", "description", "desc", "estabelecimento", "lançamento", "lancamento"];
   const amountPatterns = ["valor", "amount", "value", "vlr", "total"];
@@ -316,11 +333,47 @@ function detectColumns(header: string[]) {
     if (amountCol === -1 && amountPatterns.some((p) => low.includes(p))) amountCol = i;
   });
 
-  if (dateCol === -1) dateCol = 0;
-  if (descCol === -1) descCol = 1;
-  if (amountCol === -1) amountCol = 2;
-
   return { dateCol, descCol, amountCol };
+}
+
+function detectColumns(header: string[]): Columns {
+  const { dateCol, descCol, amountCol } = matchColumns(header);
+  return {
+    dateCol: dateCol === -1 ? 0 : dateCol,
+    descCol: descCol === -1 ? 1 : descCol,
+    amountCol: amountCol === -1 ? 2 : amountCol,
+  };
+}
+
+/** Até onde vale procurar o cabeçalho antes de desistir e usar a linha 0. */
+const HEADER_SCAN_LIMIT = 15;
+
+/**
+ * Acha a linha do CABEÇALHO, que não é necessariamente a primeira.
+ *
+ * A fatura do Itaú (XLSX) abre com uma linha de título — "Lançamentos" — e só
+ * depois vem "Data | Lançamento | Parcelamento | Valor". Lendo a linha 0 como
+ * cabeçalho, nenhum nome casava e o fallback pegava a coluna 2 como valor: ali
+ * mora "Parcelamento", vazia. Valor zero descarta a linha, então TODA linha era
+ * descartada e a tela dizia "Nenhum item encontrado na planilha" (14/09/2026).
+ *
+ * Exige nome de DATA e de VALOR na mesma linha: são as duas colunas que o
+ * fallback posicional erra, e um preâmbulo solto raramente traz as duas.
+ */
+function findHeader(rows: string[][]): { headerIndex: number; cols: Columns } {
+  const limit = Math.min(rows.length, HEADER_SCAN_LIMIT);
+  for (let i = 0; i < limit; i++) {
+    const m = matchColumns(rows[i]);
+    if (m.dateCol === -1 || m.amountCol === -1) continue;
+    // Cabeçalho com data e valor mas sem nome de descrição: vale a primeira
+    // coluna que sobrou, não a 1 fixa — que poderia ser a própria data.
+    const descCol =
+      m.descCol !== -1
+        ? m.descCol
+        : rows[i].findIndex((_, c) => c !== m.dateCol && c !== m.amountCol);
+    return { headerIndex: i, cols: { ...m, descCol: descCol === -1 ? 1 : descCol } };
+  }
+  return { headerIndex: 0, cols: detectColumns(rows[0] ?? []) };
 }
 
 function rowsToItems(rows: string[][], startRow: number, cols: { dateCol: number; descCol: number; amountCol: number }): SpreadsheetItem[] {
@@ -364,12 +417,14 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetItem[
     const lines = text.split(/\r?\n/).filter((l) => l.trim());
     if (lines.length < 2) return [];
 
-    const delimiter = detectDelimiter(lines[0]);
-    const headerRow = parseCSVLine(lines[0], delimiter);
-    const cols = detectColumns(headerRow);
-
+    // O delimitador vem da linha mais "tabular" das primeiras: num arquivo com
+    // preâmbulo, a linha 0 pode ser um título sem separador nenhum.
+    const delimiter = detectDelimiter(
+      lines.slice(0, HEADER_SCAN_LIMIT).reduce((a, b) => (countDelimiters(b) > countDelimiters(a) ? b : a), lines[0]),
+    );
     const allRows = lines.map((l) => parseCSVLine(l, delimiter));
-    return rowsToItems(allRows, 1, cols);
+    const { headerIndex, cols } = findHeader(allRows);
+    return rowsToItems(allRows, headerIndex + 1, cols);
   }
 
   // XLSX / XLS
@@ -383,11 +438,9 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetItem[
 
   if (rows.length < 2) return [];
 
-  const header = rows[0].map((c) => String(c));
-  const cols = detectColumns(header);
-
   const stringRows = rows.map((r) => r.map((c) => String(c)));
-  return rowsToItems(stringRows, 1, cols);
+  const { headerIndex, cols } = findHeader(stringRows);
+  return rowsToItems(stringRows, headerIndex + 1, cols);
 }
 
 /**
