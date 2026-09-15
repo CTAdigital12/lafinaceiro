@@ -57,11 +57,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   parseSpreadsheetFile,
   reconcileSpreadsheet,
+  orphanRows,
+  ofxToSpreadsheetItems,
   type SpreadsheetItem,
   type SystemTransaction,
   type ReconciliationResult,
 } from "@/lib/spreadsheetReconciliation";
-import { parseOFXWithBalance, type OFXTransaction } from "@/lib/ofxParser";
+import { parseOFXWithBalance } from "@/lib/ofxParser";
 import { fetchRealizedNetForAccount } from "@/lib/accountBalance";
 
 interface AccountReconciliationModalProps {
@@ -97,6 +99,7 @@ export function AccountReconciliationModal({
   const [refundItems, setRefundItems] = useState<Set<number>>(new Set());
   const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
   const [syncingBalance, setSyncingBalance] = useState(false);
+  const [adoptingOrphans, setAdoptingOrphans] = useState(false);
   const [reconcileTarget, setReconcileTarget] = useState<SystemTransaction | null>(null);
   const [reconcileSearch, setReconcileSearch] = useState("");
   const [reconcileSort, setReconcileSort] = useState<{ key: "date" | "description" | "amount"; dir: "asc" | "desc" }>({ key: "date", dir: "asc" });
@@ -110,8 +113,12 @@ export function AccountReconciliationModal({
       // Sem estas duas colunas o collapse vira no-op silencioso (todo row cai no
       // ramo `!groupId`), e cada transação dividida aparece como uma divergência
       // de valor + uma sobra "apenas no sistema".
-      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status, is_provisional, recurring_rule_id, split_group_id, split_parent_id")
-      .eq("account_id", accountId)
+      .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status, is_provisional, recurring_rule_id, split_group_id, split_parent_id, account_id")
+      // Além dos lançamentos DESTA conta, traz os ÓRFÃOS (sem conta e sem
+      // cartão). Sem eles a conciliação reportava como "apenas no banco" algo
+      // que já existia no sistema, e a pessoa incluía um duplicado — ver
+      // `orphanRows`. Órfão que casa não é incluído: ganha a conta.
+      .or(`account_id.eq.${accountId},and(account_id.is.null,credit_card_id.is.null)`)
       .gte("date", minDate)
       .lte("date", maxDate);
 
@@ -136,16 +143,10 @@ export function AccountReconciliationModal({
         const content = await file.text();
         const ofxResult = parseOFXWithBalance(content);
         balance = ofxResult.balance;
-        spreadsheetItems = ofxResult.transactions.map((tx, i) => ({
-          date: tx.date,
-          description: tx.description,
-          amount: tx.amount,
-          // Extrato de conta não tem "crédito de fatura": o parser OFX já
-          // devolve o valor em módulo e a direção em `tx.type`. A conciliação
-          // de conta não liga `matchCreditSign`, então isto nunca é lido.
-          isCredit: false,
-          rowIndex: i,
-        }));
+        // A conversão é regra pura (`ofxToSpreadsheetItems`) porque é nela que a
+        // direção do lançamento se perdia. `matchCreditSign` segue desligado na
+        // conciliação de conta, então carregar `isCredit` não altera o matching.
+        spreadsheetItems = ofxToSpreadsheetItems(ofxResult.transactions);
       } else {
         spreadsheetItems = await parseSpreadsheetFile(file);
       }
@@ -163,6 +164,12 @@ export function AccountReconciliationModal({
 
       const systemTx = await fetchSystemTransactions(minDate, maxDate);
       const reconciliation = reconcileSpreadsheet(spreadsheetItems, systemTx);
+
+      // Pré-marca as ENTRADAS que o arquivo declara, como a conciliação de
+      // fatura já fazia. Sem isto a direção certa existia nos dados mas não
+      // chegava à tela: toda linha parecia despesa, e acertar dependia de a
+      // pessoa adivinhar pela descrição.
+      setRefundItems(new Set(spreadsheetItems.filter((i) => i.isCredit).map((i) => i.rowIndex)));
 
       setResult(reconciliation);
       setBankBalance(balance);
@@ -195,6 +202,8 @@ export function AccountReconciliationModal({
     setProcessingIds((prev) => new Set(prev).add(key));
 
     try {
+      // A direção vem do arquivo (`isCredit`); o botão de extorno só a
+      // sobrepõe quando a pessoa clica. Antes o arquivo não tinha voz nenhuma.
       const isRefund = refundItems.has(item.rowIndex);
       await createTransaction.mutateAsync({
         description: item.description,
@@ -229,6 +238,42 @@ export function AccountReconciliationModal({
       setProcessingIds((prev) => { const s = new Set(prev); s.delete(key); return s; });
     }
   }, [user, createTransaction, accountId, fetchSystemTransactions, getAllSpreadsheetItems, getDateRange, toast, refundItems]);
+
+  /**
+   * Lançamentos que casaram com o extrato mas estão sem conta — não entram no
+   * saldo e, antes de `orphanRows`, nem apareciam aqui: viravam falso "apenas
+   * no banco" e a pessoa incluía um duplicado.
+   */
+  const orfaos = useMemo(() => (result ? orphanRows(result) : []), [result]);
+
+  const handleAdoptOrphans = useCallback(async () => {
+    if (orfaos.length === 0) return;
+    setAdoptingOrphans(true);
+    try {
+      // `splitMemberIds` e não `id`: uma linha pode representar várias partes
+      // de uma divisão colapsada, e todas precisam da conta.
+      const ids = orfaos.flatMap((t) => t.splitMemberIds);
+      const { error } = await supabase
+        .from("transactions")
+        .update({ account_id: accountId })
+        .in("id", ids);
+      if (error) throw error;
+
+      toast({
+        title: ids.length === 1 ? "1 lançamento atribuído à conta" : `${ids.length} lançamentos atribuídos à conta`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+
+      const { minDate, maxDate } = getDateRange();
+      const systemTx = await fetchSystemTransactions(minDate, maxDate);
+      setResult(reconcileSpreadsheet(getAllSpreadsheetItems(), systemTx));
+    } catch (err) {
+      toast({ title: "Erro ao atribuir a conta", description: mensagemDeErro(err), variant: "destructive" });
+    } finally {
+      setAdoptingOrphans(false);
+    }
+  }, [orfaos, accountId, toast, queryClient, getDateRange, fetchSystemTransactions, getAllSpreadsheetItems]);
 
   const handleDeleteTransaction = useCallback(async (tx: SystemTransaction) => {
     const key = `del-${tx.id}`;
@@ -417,6 +462,48 @@ export function AccountReconciliationModal({
                     )}
                   </div>
 
+                  {/* Órfãos: casaram com o extrato mas não têm conta, então estão
+                      fora do saldo. Precisa ser uma ação e não só um aviso — foi
+                      justamente por não aparecerem que viraram duplicata. */}
+                  {orfaos.length > 0 && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 space-y-1">
+                        <p className="font-medium">
+                          {orfaos.length === 1
+                            ? "1 lançamento conciliado está sem conta"
+                            : `${orfaos.length} lançamentos conciliados estão sem conta`}
+                          {" "}e por isso fora do saldo.
+                        </p>
+                        <p>
+                          Eles existem no sistema e casam com o extrato, mas não pertencem a conta nenhuma.
+                          Atribua a conta em vez de incluí-los de novo.
+                        </p>
+                        {/* A ação é em lote, então a lista tem que estar à vista: um
+                            órfão de CARTÃO que casasse por coincidência iria parar na
+                            conta corrente, e quem clica precisa poder recusar antes. */}
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          {orfaos.slice(0, 5).map((t) => (
+                            <li key={t.id}>
+                              {format(new Date(t.date + "T12:00:00"), "dd/MM")} — {t.description} ({formatCurrency(Number(t.amount))})
+                            </li>
+                          ))}
+                          {orfaos.length > 5 && <li>e mais {orfaos.length - 5}…</li>}
+                        </ul>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={handleAdoptOrphans}
+                          disabled={adoptingOrphans}
+                        >
+                          {adoptingOrphans ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                          Atribuir a esta conta
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Indicador de conciliação incompleta — avisa mesmo com saldo
                       igual, porque "Sincronizar" zera a diferença ajustando o
                       saldo inicial e pode mascarar lançamentos faltantes. */}
@@ -483,9 +570,9 @@ export function AccountReconciliationModal({
                 </TabsList>
 
                 <ScrollArea className="mt-3 h-[calc(90vh-340px)] min-h-[250px]">
-                  // `as const` faz `tab` ser a união que `filter` espera, em vez de
-                  // `string` — o cast `as any` que estava aqui também
-                  // engoliria um valor escrito errado no array.
+                  {/* `as const` faz `tab` ser a união que `filter` espera, em vez de
+                      `string` — o cast `as any` que estava aqui também
+                      engoliria um valor escrito errado no array. */}
                   {(["all", "matched", "discrepancies", "missing", "extra"] as const).map((tab) => (
                     <TabsContent key={tab} value={tab} className="mt-0">
                       <AccountResultTable
@@ -738,6 +825,9 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
         description: m.spreadsheet.description,
         spreadsheetAmount: m.spreadsheet.amount,
         systemAmount: Number(m.transaction.amount),
+        // Também nas linhas conciliadas: é `spreadsheetItem` que carrega a
+        // direção, e sem ele a coluna Extrato mostraria toda linha como saída.
+        spreadsheetItem: m.spreadsheet,
         systemTx: m.transaction,
       }));
     }
@@ -820,8 +910,16 @@ function AccountResultTable({ result, filter, processingIds, onAdd, onDelete, on
                 )}
               </span>
             </TableCell>
-            <TableCell className="text-right font-mono text-sm">
-              {row.spreadsheetAmount !== undefined ? formatCurrency(row.spreadsheetAmount) : "—"}
+            {/* O valor do extrato COM SINAL: `amount` vem em módulo e a direção
+                em `isCredit`, então sem isto saída e entrada apareciam iguais na
+                tela e a pessoa não tinha como conferir o que ia incluir. */}
+            <TableCell className={cn(
+              "text-right font-mono text-sm",
+              row.spreadsheetItem && (row.spreadsheetItem.isCredit ? "text-income" : "text-expense"),
+            )}>
+              {row.spreadsheetAmount !== undefined
+                ? `${row.spreadsheetItem?.isCredit ? "+" : "−"} ${formatCurrency(row.spreadsheetAmount)}`
+                : "—"}
             </TableCell>
             <TableCell className="text-right font-mono text-sm">
               {row.systemAmount !== undefined ? formatCurrency(row.systemAmount) : "—"}

@@ -41,3 +41,6 @@ supabase/.branches/
 *.njsproj
 *.sln
 *.sw?
+public/diag-saldo.js
+public/diag-tx.js
+public/diag-orfaos.js
