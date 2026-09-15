@@ -1,4 +1,5 @@
 import { normalizeDate } from "./deduplication";
+import type { OFXTransaction } from "./ofxParser";
 import { collapseSplitGroups, type CollapsedRow } from "./splitTransaction";
 import * as XLSX from "xlsx";
 
@@ -31,6 +32,13 @@ export interface SystemTransaction {
   /** Divisão por categoria: as partes são colapsadas antes do matching. */
   split_group_id?: string | null;
   split_parent_id?: string | null;
+  /**
+   * Conta do lançamento. `null` significa ÓRFÃO: sem conta e sem cartão, o
+   * lançamento não entra em saldo nenhum. Fica `undefined` na conciliação de
+   * fatura, que não busca esta coluna — por isso `orphanRows` compara com
+   * `null` estrito.
+   */
+  account_id?: string | null;
 }
 
 /** Linha do sistema já com as partes de uma divisão somadas numa só. */
@@ -380,4 +388,44 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetItem[
 
   const stringRows = rows.map((r) => r.map((c) => String(c)));
   return rowsToItems(stringRows, 1, cols);
+}
+
+/**
+ * Lançamentos que CASARAM com o extrato mas estão órfãos — sem conta.
+ *
+ * Um lançamento sem `account_id` e sem `credit_card_id` não entra no saldo de
+ * lugar nenhum, e a conciliação, que busca por `account_id`, não o enxergava:
+ * o item do extrato caía em "apenas no banco" e a pessoa incluía um DUPLICADO.
+ * Aconteceu em 14/09/2026 com dois lançamentos de agosto, e o duplicado ainda
+ * entrou com o sinal invertido — o saldo errou por 108,00 numa diferença real
+ * de 94,00.
+ *
+ * Casar não basta para sumir com o problema: a linha aparece como conciliada
+ * mas continua fora do saldo. Por isso esta função existe — a tela usa o
+ * resultado para oferecer ATRIBUIR A CONTA, que é a correção de verdade.
+ */
+export function orphanRows(result: ReconciliationResult): SystemRow[] {
+  return [...result.matched, ...result.valueDiscrepancies]
+    .map((r) => r.transaction)
+    .filter((t) => t.account_id === null);
+}
+
+/**
+ * Converte o que o parser OFX devolve nos itens que a conciliação compara.
+ *
+ * Existe como regra pura porque a DIREÇÃO se perdia aqui. O parser já separa
+ * valor e direção (`amount` em módulo, `type`), mas o modal montava os itens
+ * com `isCredit: false` fixo — e então o "Incluir" chutava despesa e dependia
+ * do botão de extorno para saber o contrário. Marcar errado inverte o sinal, e
+ * o saldo erra em DUAS vezes o valor: em 14/09/2026 duas inclusões assim
+ * moveram o saldo em +94,00 quando deviam movê-lo em −94,00.
+ */
+export function ofxToSpreadsheetItems(transactions: OFXTransaction[]): SpreadsheetItem[] {
+  return transactions.map((tx, i) => ({
+    date: tx.date,
+    description: tx.description,
+    amount: tx.amount,
+    isCredit: tx.type === "income",
+    rowIndex: i,
+  }));
 }

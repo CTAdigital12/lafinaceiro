@@ -349,9 +349,9 @@ export function SpreadsheetReconciliationModal({
                 </TabsList>
 
                 <ScrollArea className="mt-3 h-[calc(90vh-280px)] min-h-[280px]">
-                  // `as const` faz `tab` ser a união que `filter` espera, em vez de
-                  // `string` — o cast `as any` que estava aqui também
-                  // engoliria um valor escrito errado no array.
+                  {/* `as const` faz `tab` ser a união que `filter` espera, em vez de
+                      `string` — o cast `as any` que estava aqui também
+                      engoliria um valor escrito errado no array. */}
                   {(["all", "matched", "discrepancies", "missing", "extra"] as const).map((tab) => (
                     <TabsContent key={tab} value={tab} className="mt-0">
                       <ResultTable

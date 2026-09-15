@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   reconcileSpreadsheet,
   parseSpreadsheetFile,
+  ofxToSpreadsheetItems,
+  orphanRows,
   type SpreadsheetItem,
   type SystemTransaction,
 } from "@/lib/spreadsheetReconciliation";
+import type { OFXTransaction } from "@/lib/ofxParser";
 
 let nextId = 0;
 
@@ -398,5 +401,121 @@ describe("parseSpreadsheetFile — CSV", () => {
     );
 
     expect(items[0].amount).toBe(1234.56);
+  });
+});
+
+describe("ofxToSpreadsheetItems — a direção do extrato não pode se perder", () => {
+  const ofx: OFXTransaction[] = [
+    { id: "o1", date: "2026-08-06", description: "PIX QRS NIC BR06 08", amount: 40, type: "expense" },
+    { id: "o2", date: "2026-08-10", description: "PIX TRANSF RAIZHE 10 08", amount: 93.9, type: "income" },
+  ];
+
+  it("traduz saída do OFX em débito e entrada em crédito", () => {
+    const items = ofxToSpreadsheetItems(ofx);
+
+    expect(items[0].isCredit).toBe(false);
+    expect(items[1].isCredit).toBe(true);
+  });
+
+  it("conserva o valor em módulo e numera as linhas na ordem do arquivo", () => {
+    const items = ofxToSpreadsheetItems(ofx);
+
+    expect(items.map((i) => i.amount)).toEqual([40, 93.9]);
+    expect(items.map((i) => i.rowIndex)).toEqual([0, 1]);
+  });
+
+  /**
+   * O bug real: com `isCredit` fixo em `false`, uma ENTRADA do extrato chegava
+   * à tela indistinguível de uma saída. Quem incluísse sem marcar o extorno
+   * gravava despesa, e o saldo errava em duas vezes o valor.
+   */
+  it("não achata entrada e saída de mesmo valor na mesma direção", () => {
+    const mesmoValor: OFXTransaction[] = [
+      { id: "o3", date: "2026-08-25", description: "PIX TRANSF Rulhan 25 08", amount: 54, type: "income" },
+      { id: "o4", date: "2026-08-25", description: "DEV PIX Rulhan Rafa25 08", amount: 54, type: "expense" },
+    ];
+
+    const items = ofxToSpreadsheetItems(mesmoValor);
+
+    expect(items[0].isCredit).toBe(true);
+    expect(items[1].isCredit).toBe(false);
+    expect(items[0].isCredit).not.toBe(items[1].isCredit);
+  });
+
+  it("carregar a direção não muda o matching da conciliação de conta", () => {
+    // `matchCreditSign` fica desligado em extrato de conta. Se carregar
+    // `isCredit` passasse a filtrar por sinal, toda entrada deixaria de casar.
+    const system = [tx("2026-08-10", 93.9, "PIX TRANSF RAIZHE 10 08", { id: "t1" })];
+
+    const result = reconcileSpreadsheet(ofxToSpreadsheetItems(ofx), system);
+
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0].transaction.id).toBe("t1");
+  });
+});
+
+describe("orphanRows — lançamento sem conta que casou com o extrato", () => {
+  const extrato = [item("2026-08-25", 54, "DEV PIX Rulhan Rafa25 08")];
+
+  it("aponta o lançamento órfão que casou, em vez de deixá-lo passar por conciliado", () => {
+    const orfao = tx("2026-08-25", 54, "DEV PIX Rulhan Rafa25 08", { id: "orfao", account_id: null });
+
+    const encontrados = orphanRows(reconcileSpreadsheet(extrato, [orfao]));
+
+    expect(encontrados.map((t) => t.id)).toEqual(["orfao"]);
+  });
+
+  it("não aponta lançamento que já tem conta", () => {
+    const comConta = tx("2026-08-25", 54, "DEV PIX Rulhan Rafa25 08", { account_id: "conta-1" });
+
+    expect(orphanRows(reconcileSpreadsheet(extrato, [comConta]))).toHaveLength(0);
+  });
+
+  /**
+   * A conciliação de FATURA não busca `account_id`, então lá o campo chega
+   * `undefined`. Se `orphanRows` tratasse ausência como órfão, toda linha de
+   * cartão viraria um falso alarme.
+   */
+  it("não confunde coluna não buscada (undefined) com conta vazia (null)", () => {
+    const semColuna = tx("2026-08-25", 54, "DEV PIX Rulhan Rafa25 08");
+
+    expect(semColuna.account_id).toBeUndefined();
+    expect(orphanRows(reconcileSpreadsheet(extrato, [semColuna]))).toHaveLength(0);
+  });
+
+  it("também aponta o órfão que casou com divergência de valor", () => {
+    const orfao = tx("2026-08-25", 50, "DEV PIX Rulhan Rafa25 08", { id: "orfao", account_id: null });
+
+    const r = reconcileSpreadsheet(extrato, [orfao]);
+
+    expect(r.valueDiscrepancies).toHaveLength(1);
+    expect(orphanRows(r).map((t) => t.id)).toEqual(["orfao"]);
+  });
+
+  /**
+   * O caso que gerou a duplicata em 14/09/2026: o órfão só é alcançável se a
+   * busca o trouxer. Se ele ficar de fora, o item do extrato cai em
+   * "apenas no banco" e a tela oferece INCLUIR o que já existe.
+   */
+  it("sem o órfão na busca, o item do extrato vira falso 'apenas no banco'", () => {
+    const semOrfao = reconcileSpreadsheet(extrato, []);
+
+    expect(semOrfao.onlyInSpreadsheet).toHaveLength(1);
+    expect(orphanRows(semOrfao)).toHaveLength(0);
+  });
+
+  it("leva todas as partes de uma divisão colapsada, não só a primária", () => {
+    const grupo = "g1";
+    const primaria = tx("2026-08-25", 30, "DEV PIX Rulhan Rafa25 08", {
+      id: "p", account_id: null, split_group_id: grupo, split_parent_id: null,
+    });
+    const parte = tx("2026-08-25", 24, "DEV PIX Rulhan Rafa25 08 - parte", {
+      id: "s", account_id: null, split_group_id: grupo, split_parent_id: "p",
+    });
+
+    const encontrados = orphanRows(reconcileSpreadsheet(extrato, [primaria, parte]));
+
+    expect(encontrados).toHaveLength(1);
+    expect(encontrados[0].splitMemberIds.sort()).toEqual(["p", "s"]);
   });
 });
