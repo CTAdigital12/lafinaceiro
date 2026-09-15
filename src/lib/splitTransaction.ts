@@ -154,3 +154,34 @@ export function validateParts(parts: SplitPart[], transactionAmount: number): st
   }
   return null;
 }
+
+/**
+ * Campos que descrevem a COBRANÇA, não a parte — quando mudam numa parte de
+ * uma divisão, valem para todas as irmãs.
+ *
+ * As partes NASCEM com o status do pai (a RPC `split_transaction` copia
+ * `v_tx.status` e `v_tx.is_provisional`), então a divisão em si sempre sai
+ * coerente. O que desencaixava era a edição DEPOIS: confirmar um lançamento
+ * atualiza por `id`, e a irmã ficava atrás.
+ *
+ * Medido em 14/09/2026 na parcela 3/4 do Airbnb, dividida entre pessoal e
+ * reembolsável: primária `completed` de R$ 688,48 e irmã `pending` de
+ * R$ 425,24. O total da fatura só conta `status = 'completed'`
+ * (`countsTowardInvoice`), então o ciclo 09/2026 subdeclarava exatamente os
+ * R$ 425,24 que o banco cobra — e a conciliação não acusava, porque ela soma
+ * as partes e casava o R$ 1.113,72 inteiro com a planilha.
+ *
+ * `is_reimbursable` e `reimbursement_status` NÃO entram aqui: quem te deve a
+ * parte é assunto de cada parte, e é justamente o motivo de a divisão existir.
+ */
+export interface SharedSplitPatch {
+  status?: string;
+  is_provisional?: boolean;
+}
+
+export function sharedSplitFields(patch: Record<string, unknown>): SharedSplitPatch | null {
+  const shared: SharedSplitPatch = {};
+  if (typeof patch.status === "string") shared.status = patch.status;
+  if (typeof patch.is_provisional === "boolean") shared.is_provisional = patch.is_provisional;
+  return Object.keys(shared).length > 0 ? shared : null;
+}

@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback } from "react";
 import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
 import { isMonthlyExpense, isMonthlyExpenseRefund, isMonthlyIncome } from "@/lib/transactionFilters";
+import { sharedSplitFields } from "@/lib/splitTransaction";
 import { competenceRangeFilter } from "@/lib/reportUtils";
 import { dateToYmd, endOfMonthYmd, invoicePeriodFromDueDate, startOfMonthYmd } from "@/lib/dateUtils";
 
@@ -447,7 +448,22 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
         .maybeSingle();
 
       if (error) throw error;
-      
+
+      // Divisão por categoria: `status` e a confirmação da provisória valem
+      // para a COBRANÇA inteira. Sem isto, confirmar uma parte deixava as
+      // irmãs em `pending` e o total do ciclo subdeclarava o valor delas —
+      // ver `sharedSplitFields`.
+      const compartilhado = sharedSplitFields(transaction);
+      if (compartilhado && data?.split_group_id) {
+        const { error: irmasError } = await supabase
+          .from("transactions")
+          .update(compartilhado)
+          .eq("split_group_id", data.split_group_id)
+          .neq("id", id);
+
+        if (irmasError) throw irmasError;
+      }
+
       // Return both old and new credit card IDs for syncing
       return {
         data,
