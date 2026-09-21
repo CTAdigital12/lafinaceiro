@@ -9,7 +9,8 @@ import { useProjects } from "@/hooks/useProjects";
 import { useCategories } from "@/hooks/useCategories";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { filterPureExpenses, getCompetenceDate } from "@/lib/reportUtils";
+import { getCompetenceDate } from "@/lib/reportUtils";
+import { isMonthlyExpense } from "@/lib/transactionFilters";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -102,7 +103,10 @@ export function ProjectsPlanningTab() {
 
   // Pure expenses grouped by month-key and category
   const expensesByMonthCat = useMemo(() => {
-    const pureExpenses = filterPureExpenses(transactions).filter((t) => !t.is_refund);
+    // Despesa pessoal paga, sem estorno: é exatamente `isMonthlyExpense`.
+    // Antes isto era `filterPureExpenses(...).filter(t => !t.is_refund)`, a
+    // mesma regra remontada à mão em cima de outra.
+    const pureExpenses = transactions.filter(isMonthlyExpense);
     const map: Record<string, Record<string, number>> = {};
     for (const t of pureExpenses) {
       const mk = getCompetenceDate(t).substring(0, 7);

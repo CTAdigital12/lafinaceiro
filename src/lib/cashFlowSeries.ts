@@ -1,9 +1,6 @@
 import type { Transaction } from "@/hooks/useTransactions";
-import {
-  filterPureExpenses,
-  filterPureIncome,
-  getCompetenceDate,
-} from "@/lib/reportUtils";
+import { getCompetenceDate } from "@/lib/reportUtils";
+import { filterPureExpenses, filterPureIncome } from "@/lib/transactionFilters";
 
 /**
  * Série mensal de receitas, despesas e saldo do Fluxo de Caixa.

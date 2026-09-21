@@ -10,6 +10,7 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useCategories } from "@/hooks/useCategories";
+import { isSettledExpense } from "@/lib/transactionFilters";
 import {
   Dialog,
   DialogContent,
@@ -82,10 +83,10 @@ export default function Dashboard() {
   // `expenseFilters` escrito à mão — que só por acaso era o gatilho certo. A
   // identidade agora muda exatamente quando os filtros mudam.
   const filterTransactionsByView = useCallback((t: Transaction) => {
-    if (t.type !== "expense" || t.is_refund) return false;
-    if (t.is_card_payment) return false; // Exclui pagamentos de fatura (transferência interna)
-    if (t.is_provisional) return false;
-    if (t.status === "pending") return false;
+    // As exclusões de sempre (efetivada e não-transferência-interna) vêm da
+    // regra única; aqui só sobra o que é próprio desta tela: o estorno e o
+    // recorte escolhido nos filtros.
+    if (!isSettledExpense(t) || t.is_refund) return false;
 
     const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
     const isCorporate = t.is_corporate_expense;
@@ -101,10 +102,7 @@ export default function Dashboard() {
   // Filter function for refunds of expenses (to subtract from category totals)
   const filterRefundsByView = useCallback((t: Transaction) => {
     // Refunds are expense type with is_refund = true, they should reduce the original category
-    if (t.type !== "expense" || !t.is_refund) return false;
-    if (t.is_card_payment) return false; // Exclui pagamentos de fatura
-    if (t.is_provisional) return false;
-    if (t.status === "pending") return false;
+    if (!isSettledExpense(t) || !t.is_refund) return false;
 
     const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
     const isCorporate = t.is_corporate_expense;
