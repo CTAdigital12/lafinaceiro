@@ -11,7 +11,8 @@ import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Landmark, CreditCard, TrendingUp, Wallet } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
-import { filterPureExpenses, filterPureIncome, getCompetenceDate } from "@/lib/reportUtils";
+import { getCompetenceDate } from "@/lib/reportUtils";
+import { filterPureExpenses, filterPureIncome } from "@/lib/transactionFilters";
 
 export function NetWorthTab() {
   const formatCurrency = useFormatCurrency();

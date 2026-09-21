@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
+  filterPureExpenses,
+  filterPureIncome,
   isForecastExpense,
   isMonthlyExpense,
   isMonthlyExpenseRefund,
   isMonthlyIncome,
+  isSettledExpense,
 } from "@/lib/transactionFilters";
 
 /**
@@ -17,6 +20,7 @@ const tx = (
     is_corporate_expense: boolean | null;
     is_refund: boolean | null;
     is_reimbursable: boolean | null;
+    is_reimbursement: boolean | null;
     is_card_payment: boolean | null;
     is_provisional: boolean | null;
     status: string | null;
@@ -26,6 +30,7 @@ const tx = (
   is_corporate_expense: false,
   is_refund: false,
   is_reimbursable: false,
+  is_reimbursement: false,
   is_card_payment: false,
   is_provisional: false,
   status: "completed",
@@ -174,5 +179,116 @@ describe("isMonthlyExpenseRefund", () => {
 
   it("retorna false para expense + is_refund=false", () => {
     expect(isMonthlyExpenseRefund(tx("expense", { is_refund: false }))).toBe(false);
+  });
+});
+
+describe("isSettledExpense (base compartilhada)", () => {
+  it("aceita despesa efetivada e recusa as três exclusões de sempre", () => {
+    expect(isSettledExpense(tx("expense"))).toBe(true);
+    expect(isSettledExpense(tx("expense", { is_card_payment: true }))).toBe(false);
+    expect(isSettledExpense(tx("expense", { is_provisional: true }))).toBe(false);
+    expect(isSettledExpense(tx("expense", { status: "pending" }))).toBe(false);
+  });
+
+  it("não olha estorno nem recorte — quem chama decide", () => {
+    expect(isSettledExpense(tx("expense", { is_refund: true }))).toBe(true);
+    expect(isSettledExpense(tx("expense", { is_corporate_expense: true }))).toBe(true);
+    expect(isSettledExpense(tx("expense", { is_reimbursable: true }))).toBe(true);
+  });
+
+  it("recusa receita", () => {
+    expect(isSettledExpense(tx("income"))).toBe(false);
+  });
+});
+
+describe("estorno de pagamento de fatura (a cópia que divergia — M17)", () => {
+  /**
+   * O pagamento de fatura NUNCA é contado como despesa (é transferência
+   * interna). Um estorno dele, se contasse, subtrairia do mês uma despesa que
+   * o mês não tem — e a despesa sairia MENOR que a real.
+   *
+   * Este teste FALHA com a versão anterior de `isMonthlyExpenseRefund`, que
+   * não olhava `is_card_payment` (conferido revertendo a função antes de
+   * entregar).
+   */
+  const estornoDeFatura = tx("expense", { is_refund: true, is_card_payment: true });
+
+  it("não conta como estorno do mês", () => {
+    expect(isMonthlyExpenseRefund(estornoDeFatura)).toBe(false);
+  });
+
+  it("não conta como despesa do mês nem entra nos relatórios", () => {
+    expect(isMonthlyExpense(estornoDeFatura)).toBe(false);
+    expect(filterPureExpenses([estornoDeFatura])).toEqual([]);
+  });
+});
+
+describe("filterPureExpenses / filterPureIncome (vindas de reportUtils)", () => {
+  it("filterPureExpenses mantém o estorno pessoal, que os relatórios somam pelo líquido", () => {
+    const comum = tx("expense");
+    const estorno = tx("expense", { is_refund: true });
+    expect(filterPureExpenses([comum, estorno])).toEqual([comum, estorno]);
+  });
+
+  it("filterPureExpenses descarta corporativa, reembolsável, provisória, pendente e pgto de fatura", () => {
+    const descartadas = [
+      tx("expense", { is_corporate_expense: true }),
+      tx("expense", { is_reimbursable: true }),
+      tx("expense", { is_provisional: true }),
+      tx("expense", { status: "pending" }),
+      tx("expense", { is_card_payment: true }),
+      tx("income"),
+    ];
+    expect(filterPureExpenses(descartadas)).toEqual([]);
+  });
+
+  it("filterPureIncome concorda com isMonthlyIncome lançamento a lançamento", () => {
+    const casos = [
+      tx("income"),
+      tx("income", { is_refund: true }),
+      tx("income", { is_card_payment: true }),
+      tx("income", { is_reimbursement: true }),
+      tx("income", { is_corporate_expense: true }),
+      tx("income", { is_provisional: true }),
+      tx("income", { status: "pending" }),
+      tx("expense"),
+    ];
+    expect(filterPureIncome(casos)).toEqual(casos.filter(isMonthlyIncome));
+  });
+
+  it("preserva os campos da transação que recebeu (genérica, não achata o tipo)", () => {
+    const [t] = filterPureExpenses([{ ...tx("expense"), id: "abc", amount: 10 }]);
+    expect(t.id).toBe("abc");
+  });
+
+  /**
+   * O invariante que substitui a cópia: o conjunto dos relatórios é
+   * EXATAMENTE a união das duas metades que o Dashboard e o resumo usam. Se
+   * alguém mexer numa das três funções sem mexer nas outras, isto quebra.
+   */
+  it("filterPureExpenses = isMonthlyExpense ∪ isMonthlyExpenseRefund, e as metades não se cruzam", () => {
+    const universo = [
+      tx("expense"),
+      tx("expense", { is_refund: true }),
+      tx("expense", { is_card_payment: true }),
+      tx("expense", { is_refund: true, is_card_payment: true }),
+      tx("expense", { is_corporate_expense: true }),
+      tx("expense", { is_refund: true, is_corporate_expense: true }),
+      tx("expense", { is_reimbursable: true }),
+      tx("expense", { is_refund: true, is_reimbursable: true }),
+      tx("expense", { is_provisional: true }),
+      tx("expense", { is_refund: true, is_provisional: true }),
+      tx("expense", { status: "pending" }),
+      tx("expense", { is_refund: true, status: "pending" }),
+      tx("income"),
+      tx("income", { is_refund: true }),
+    ];
+
+    expect(filterPureExpenses(universo)).toEqual(
+      universo.filter((t) => isMonthlyExpense(t) || isMonthlyExpenseRefund(t)),
+    );
+    universo.forEach((t) => {
+      expect(isMonthlyExpense(t) && isMonthlyExpenseRefund(t)).toBe(false);
+    });
   });
 });

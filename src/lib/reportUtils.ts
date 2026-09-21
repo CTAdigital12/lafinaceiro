@@ -1,37 +1,13 @@
 import type { Transaction } from "@/hooks/useTransactions";
 
 /**
- * Filters "pure" expenses for report calculations.
- * Excludes card payments, provisional, pending, corporate, reimbursable.
- * Does NOT exclude refunds — caller decides how to handle them.
+ * Este módulo cuida de COMPETÊNCIA e SOMA. Quem decide QUAIS lançamentos
+ * entram é `@/lib/transactionFilters`, a casa única da regra.
+ *
+ * `filterPureExpenses` e `filterPureIncome` moravam aqui, repetindo à mão as
+ * mesmas condições daquele módulo — era o achado M17, e foi de lá que a cópia
+ * do estorno divergiu. Mudaram de casa; importe-as de `transactionFilters`.
  */
-export function filterPureExpenses(transactions: Transaction[]): Transaction[] {
-  return transactions.filter(
-    (t) =>
-      t.type === "expense" &&
-      !t.is_card_payment &&
-      !t.is_provisional &&
-      t.status !== "pending" &&
-      !t.is_corporate_expense &&
-      !t.is_reimbursable
-  );
-}
-
-/**
- * Filters "pure" income for report calculations.
- */
-export function filterPureIncome(transactions: Transaction[]): Transaction[] {
-  return transactions.filter(
-    (t) =>
-      t.type === "income" &&
-      !t.is_refund &&
-      !t.is_card_payment &&
-      !t.is_reimbursement &&
-      !t.is_provisional &&
-      t.status !== "pending" &&
-      !t.is_corporate_expense
-  );
-}
 
 /**
  * Returns the competence date for a transaction:
