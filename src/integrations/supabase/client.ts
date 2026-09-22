@@ -27,7 +27,9 @@ const faltando = [
 if (faltando.length > 0) {
   throw new Error(
     `Configuração ausente: ${faltando.join(" e ")}. ` +
-      "Defina no `.env` (local) ou nas variáveis de ambiente do deploy e recarregue."
+      // Sem crase: isto é texto puro na tela, não Markdown — os acentos graves
+      // apareciam literais para quem lia a mensagem.
+      "Defina no arquivo .env (local) ou nas variáveis de ambiente do deploy, e recarregue."
   );
 }
 

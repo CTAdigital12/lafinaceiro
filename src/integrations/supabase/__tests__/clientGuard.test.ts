@@ -40,7 +40,16 @@ describe("guarda de ambiente do client do Supabase", () => {
 
   it("diz o que fazer, não só o que faltou", async () => {
     vi.stubEnv("VITE_SUPABASE_URL", "");
-    await expect(importar()).rejects.toThrow(/\.env/);
+    await expect(importar()).rejects.toThrow(/arquivo \.env/);
+  });
+
+  // A mensagem é lida por gente, em DOM puro: crase aqui aparece na tela como
+  // crase. Aconteceu — foi visto no navegador em 22/09/2026 e corrigido.
+  it("não tem marcação de Markdown vazando para a tela", async () => {
+    vi.stubEnv("VITE_SUPABASE_URL", "");
+    await expect(importar()).rejects.toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining("`") }),
+    );
   });
 
   it("com as duas presentes, o client sobe normalmente", async () => {
