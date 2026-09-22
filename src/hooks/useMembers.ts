@@ -33,19 +33,33 @@ export function useMembers() {
 
       if (accessError) throw accessError;
 
-      const membersWithProfiles = await Promise.all(
-        accessData.map(async (access) => {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name, email")
-            .eq("id", access.shared_with_user_id)
-            .maybeSingle();
+      if (accessData.length === 0) return [];
 
-          return { ...access, profiles: profile } as SharedAccess;
-        })
+      // Uma consulta para todos os perfis, não uma por membro. O laço antigo
+      // fazia N idas ao servidor e engolia o erro de cada uma em silêncio —
+      // e como a policy nunca deixava ler nada (M4), ninguém percebeu.
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in(
+          "id",
+          accessData.map((access) => access.shared_with_user_id)
+        );
+
+      // Aqui o erro SOBE. Se a policy voltar a barrar a leitura, a tela mostra
+      // "Erro ao carregar" em vez de uma lista de "Usuário" sem e-mail, que foi
+      // exatamente o que escondeu o defeito por tanto tempo.
+      if (profilesError) throw profilesError;
+
+      const porId = new Map(profiles?.map((p) => [p.id, p]) ?? []);
+
+      return accessData.map(
+        (access) =>
+          ({
+            ...access,
+            profiles: porId.get(access.shared_with_user_id) ?? null,
+          }) as SharedAccess
       );
-
-      return membersWithProfiles;
     },
     enabled: !!user,
   });

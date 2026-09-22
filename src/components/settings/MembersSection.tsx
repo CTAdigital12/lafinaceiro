@@ -163,9 +163,14 @@ export function MembersSection() {
                   </div>
                   <div>
                     <p className="font-medium text-foreground">
-                      {member.profiles?.full_name || member.profiles?.email || "Usuário"}
+                      {member.profiles?.full_name || member.profiles?.email || "Membro sem perfil"}
                     </p>
-                    <p className="text-xs text-muted-foreground">{member.profiles?.email}</p>
+                    {/* Só rende a linha se houver e-mail: sem isto, um perfil
+                        ausente deixava uma linha vazia sob o nome, que parece
+                        defeito de layout em vez de dado faltando. */}
+                    {member.profiles?.email && (
+                      <p className="text-xs text-muted-foreground">{member.profiles.email}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
