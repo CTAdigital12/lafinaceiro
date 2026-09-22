@@ -35,6 +35,22 @@ psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/recompute_card_invoic
 pg_ctl -D /tmp/lfpg stop
 ```
 
+## Teste de POLICY (não de RPC)
+
+`perfil_do_membro.sql` é diferente dos outros: ele exercita RLS, não uma
+função. É autocontido — monta os stubs de `auth`, as tabelas, as policies reais
+e o portão `require_aal2` do A1, roda a migration sem modificar e só então
+mede. Também é rerrodável: derruba as próprias tabelas no começo.
+
+```sh
+psql -h /tmp/lfs -p 54329 -U postgres -q -v ON_ERROR_STOP=1 \
+     -f supabase/tests/perfil_do_membro.sql
+```
+
+Cada cenário imprime `esperado`, `obtido` e um veredito; qualquer `FALHOU` na
+saída é regressão. O primeiro bloco roda ANTES da migration e reproduz o
+defeito — é o que prova que o teste mede alguma coisa.
+
 ## Duas armadilhas
 
 - **RLS não se aplica ao dono da tabela nem a superusuário.** Estes scripts
