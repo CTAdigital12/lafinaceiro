@@ -5,6 +5,32 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+/**
+ * Sem isto, faltar uma variável de ambiente virava `createClient(undefined,
+ * undefined)`: o client nascia apontando para lugar nenhum, toda consulta
+ * falhava de um jeito diferente e a tela ficava BRANCA E MUDA — o sintoma mais
+ * caro de diagnosticar que existe, porque não diz nada. Era o achado M10.
+ *
+ * Falhar aqui, no carregamento do módulo, troca isso por uma mensagem que diz
+ * exatamente o que fazer. Quem transforma esta exceção em tela legível é o
+ * `main.tsx`, que monta o App por import dinâmico só para poder capturá-la.
+ *
+ * A linha de cima diz que o arquivo é gerado; esta edição é deliberada e
+ * precisa sobreviver a uma regeneração — se o arquivo voltar sem a guarda,
+ * reponha-a.
+ */
+const faltando = [
+  !SUPABASE_URL && "VITE_SUPABASE_URL",
+  !SUPABASE_PUBLISHABLE_KEY && "VITE_SUPABASE_PUBLISHABLE_KEY",
+].filter(Boolean);
+
+if (faltando.length > 0) {
+  throw new Error(
+    `Configuração ausente: ${faltando.join(" e ")}. ` +
+      "Defina no `.env` (local) ou nas variáveis de ambiente do deploy e recarregue."
+  );
+}
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
