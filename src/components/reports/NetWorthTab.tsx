@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAccounts } from "@/hooks/useAccounts";
-import { useInvestments, getAssetPatrimony } from "@/hooks/useInvestments";
+import { useInvestments } from "@/hooks/useInvestments";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { usePendingInstallments } from "@/hooks/usePendingInstallments";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -9,16 +9,16 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import type { TooltipProps } from "recharts";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Landmark, CreditCard, TrendingUp, Wallet } from "lucide-react";
+import { Landmark, CreditCard, TrendingUp, Wallet, Info } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { getCompetenceDate } from "@/lib/reportUtils";
 import { filterPureExpenses, filterPureIncome } from "@/lib/transactionFilters";
 
 export function NetWorthTab() {
   const formatCurrency = useFormatCurrency();
-  const { accounts, totalBalance } = useAccounts();
-  const { assets, totalPatrimony: investmentTotal } = useInvestments();
-  const { creditCards, totalInvoice } = useCreditCards();
+  const { totalBalance } = useAccounts();
+  const { totalPatrimony: investmentTotal } = useInvestments();
+  const { totalInvoice } = useCreditCards();
   const { summary: pendingSummary } = usePendingInstallments();
   const { transactions, isLoading } = useTransactions(undefined, undefined, {
     showAll: true,
@@ -29,8 +29,18 @@ export function NetWorthTab() {
   const totalLiabilities = totalInvoice + pendingSummary.totalAmount;
   const netWorth = totalAssets - totalLiabilities;
 
-  // Evolution chart: approximate net worth over last 12 months
-  // by working backwards from current snapshot using monthly deltas
+  // Evolução patrimonial: RECONSTRUÍDA, não medida. O patrimônio de cada mês
+  // não é guardado em lugar nenhum, então o único ponto real é o de hoje e os
+  // anteriores saem dele para trás, descontando o fluxo do mês
+  // (`valor[i-1] = valor[i] - fluxo[i]`).
+  //
+  // O que isso deixa de fora, e que a ressalva na tela precisa dizer:
+  // `investmentTotal` é `quantity * current_price` (preço de HOJE, ver
+  // `getAssetPatrimony`), e `totalInvoice`/`pendingSummary` também são o estado
+  // de hoje. Como só o fluxo de caixa anda para trás, a variação de preço dos
+  // investimentos e a mudança das faturas e das parcelas nunca aparecem no
+  // passado: o retrato de hoje é aplicado a todos os 12 meses. O erro ainda se
+  // acumula para trás — o ponto mais antigo é o resultado de 11 subtrações.
   const chartData = useMemo(() => {
     if (!transactions.length) return [];
 
@@ -59,7 +69,6 @@ export function NetWorthTab() {
     }
 
     // Work backwards from current net worth
-    const currentMonthKey = months[months.length - 1];
     const data: { name: string; patrimonio: number }[] = [];
 
     let runningNetWorth = netWorth;
@@ -153,7 +162,18 @@ export function NetWorthTab() {
       {chartData.length > 0 && (
         <Card>
           <CardContent className="pt-4">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Evolução Patrimonial (12 meses)</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-1">
+              Evolução Patrimonial estimada (12 meses)
+            </h3>
+            <div className="flex items-start gap-2 mb-3 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <p>
+                Só o valor de hoje é medido. Os meses anteriores são reconstruídos para trás a
+                partir dele, descontando o fluxo de cada mês. Investimentos, faturas e parcelas
+                futuras entram pelo valor de <strong>hoje</strong>, então a variação deles não
+                aparece no passado.
+              </p>
+            </div>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 5 }}>
