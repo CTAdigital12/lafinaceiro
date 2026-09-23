@@ -20,6 +20,7 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { mensagemDeErro } from "@/lib/mensagemDeErro";
+import { edgeFunctionInvokeError } from "@/lib/edgeFunctionError";
 
 const emailSchema = z.string().email("E-mail inválido");
 
@@ -69,8 +70,10 @@ export function MembersSection() {
         body: { email, password: memberPassword || undefined },
       });
 
-      if (res.error) throw new Error(res.error.message);
-      if (res.data?.error) throw new Error(res.data.error);
+      // `res.error.message` é SEMPRE "Edge Function returned a non-2xx status
+      // code": o texto escrito para a pessoa vem no corpo da resposta.
+      const erro = await edgeFunctionInvokeError(res, "Não foi possível adicionar o membro");
+      if (erro) throw new Error(erro);
 
       toast({
         title: res.data?.created

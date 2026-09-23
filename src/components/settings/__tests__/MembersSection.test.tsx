@@ -101,3 +101,90 @@ describe("MembersSection — confirmação antes de conceder acesso", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * O que a edge function responde tem que APARECER.
+ *
+ * Para qualquer status fora do 2xx, o `functions-js` devolve um
+ * `FunctionsHttpError` cuja `message` é sempre "Edge Function returned a
+ * non-2xx status code" — o texto escrito para a pessoa fica no CORPO. O código
+ * fazia `throw new Error(res.error.message)`, então TODOS os avisos do
+ * `add-member` eram trocados por essa frase: o pedido de 2FA, a instrução de
+ * informar senha para criar a conta, "já tem acesso".
+ */
+describe("MembersSection — o erro da edge function chega à tela", () => {
+  const MENSAGEM_GENERICA = "Edge Function returned a non-2xx status code";
+
+  const respondeComErro = (corpo: unknown, status: number) =>
+    invoke.mockResolvedValue({
+      data: null,
+      error: Object.assign(new Error(MENSAGEM_GENERICA), {
+        context: new Response(JSON.stringify(corpo), { status }),
+      }),
+    });
+
+  const confirmar = async () => {
+    render(<MembersSection />);
+    const user = await preencherEEnviar("convidado@test.dev");
+    await user.click(await screen.findByRole("button", { name: /conceder acesso/i }));
+  };
+
+  it("mostra o pedido de 2FA, não a frase genérica", async () => {
+    respondeComErro(
+      { error: "Esta operação exige autenticação em dois fatores. Saia e entre novamente informando o código do aplicativo." },
+      403,
+    );
+
+    await confirmar();
+
+    expect(await screen.findByText(/exige autenticação em dois fatores/i)).toBeInTheDocument();
+    expect(screen.queryByText(MENSAGEM_GENERICA)).not.toBeInTheDocument();
+  });
+
+  it("mostra a instrução de informar senha quando a conta não existe", async () => {
+    respondeComErro(
+      { error: "Usuário não encontrado. Informe uma senha (mín. 6 caracteres) para criar a conta." },
+      404,
+    );
+
+    await confirmar();
+
+    expect(await screen.findByText(/Informe uma senha/i)).toBeInTheDocument();
+  });
+
+  // Estado novo: a busca em `auth.users` não respondeu. Dizer "não existe"
+  // aqui faria a função tentar criar uma conta que talvez exista.
+  it("mostra o aviso de que não deu para verificar a conta", async () => {
+    respondeComErro(
+      { error: "Não foi possível verificar se esta conta já existe. Tente novamente." },
+      503,
+    );
+
+    await confirmar();
+
+    expect(await screen.findByText(/não foi possível verificar/i)).toBeInTheDocument();
+  });
+
+  it("usa um texto de reserva quando a resposta não traz corpo legível", async () => {
+    invoke.mockResolvedValue({
+      data: null,
+      error: Object.assign(new Error(MENSAGEM_GENERICA), {
+        context: new Response("<html>502</html>", { status: 502 }),
+      }),
+    });
+
+    await confirmar();
+
+    expect(await screen.findByText("Não foi possível adicionar o membro")).toBeInTheDocument();
+    expect(screen.queryByText(MENSAGEM_GENERICA)).not.toBeInTheDocument();
+  });
+
+  it("o caminho feliz continua avisando que o membro entrou", async () => {
+    invoke.mockResolvedValue({ data: { success: true, id: "acesso-1", created: false }, error: null });
+
+    await confirmar();
+
+    await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Membro adicionado!" }));
+    expect(screen.queryByText(MENSAGEM_GENERICA)).not.toBeInTheDocument();
+  });
+});

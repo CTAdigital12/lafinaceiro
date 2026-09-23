@@ -18,6 +18,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders } from "../_shared/cors.ts";
 import { readAal } from "../_shared/jwt.ts";
+import { findUserByEmail, sameEmail } from "../_shared/findUserByEmail.ts";
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
@@ -77,7 +78,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (email === caller.email) {
+    // `===` deixava "EU@Casa.com" passar pela trava, e o GoTrue não diferencia
+    // caixa: o convite cairia sobre a própria conta de quem chamou.
+    if (sameEmail(email, caller.email)) {
       return new Response(JSON.stringify({ error: "Você não pode adicionar a si mesmo" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -86,19 +89,36 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Check if user exists in profiles
-    const { data: profile } = await adminClient
-      .from("profiles")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle();
+    // A conta existe? Quem responde é `auth.users`, NÃO `public.profiles`.
+    // `profiles` é espelho mantido por gatilho, e em 22/09/2026 apareceu vazia:
+    // o convite caía no ramo "criar conta" e o `createUser` falhava porque o
+    // e-mail já existia. Ver o cabeçalho de `_shared/findUserByEmail.ts`.
+    const lookup = await findUserByEmail(email, async (page, perPage) => {
+      const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+      return { users: data?.users ?? [], error };
+    });
+
+    // "Não consegui olhar" não é "não existe": seguir daqui tentaria criar uma
+    // conta que talvez exista, que é exatamente o defeito antigo.
+    if (lookup.status === "failed") {
+      console.error(`[add-member] busca de conta falhou: ${lookup.reason}`);
+      return new Response(
+        JSON.stringify({ error: "Não foi possível verificar se esta conta já existe. Tente novamente." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     let targetUserId: string;
+    let contaCriadaAgora = false;
+    // O e-mail como o GoTrue o guarda, não como veio do formulário: é ele que
+    // vai para o espelho, se o espelho precisar ser reposto.
+    let emailDaConta = email;
 
-    if (profile) {
-      targetUserId = profile.id;
+    if (lookup.status === "found") {
+      targetUserId = lookup.user.id;
+      emailDaConta = lookup.user.email ?? email;
     } else {
-      // User doesn't exist — create account
+      // A conta realmente não existe — criar.
       if (!password || password.length < 6) {
         return new Response(JSON.stringify({ error: "Usuário não encontrado. Informe uma senha (mín. 6 caracteres) para criar a conta." }), {
           status: 404,
@@ -113,13 +133,41 @@ Deno.serve(async (req) => {
       });
 
       if (createError) {
-        return new Response(JSON.stringify({ error: `Erro ao criar usuário: ${createError.message}` }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        // Se o GoTrue diz que o e-mail já existe DEPOIS de a busca ter dito que
+        // não, a listagem mentiu — e a mensagem precisa dizer isso, senão a
+        // investigação começa pelo lugar errado, como começou em 22/09/2026.
+        const jaExiste = /already|exist|registered/i.test(createError.message);
+        return new Response(
+          JSON.stringify({
+            error: jaExiste
+              ? "Esta conta já existe, mas não apareceu na busca. Tente de novo; se persistir, confira a conta no painel de autenticação."
+              : `Erro ao criar usuário: ${createError.message}`,
+          }),
+          { status: jaExiste ? 409 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
 
       targetUserId = newUser.user.id;
+      contaCriadaAgora = true;
+    }
+
+    // Repõe o espelho quando ele está faltando. Conta nova não passa por aqui:
+    // o gatilho `on_auth_user_created` já cria o perfil. Isto cobre o caso de
+    // 22/09/2026 — a conta existe, o perfil sumiu — para o convite não terminar
+    // com o membro aparecendo sem nome nem e-mail na lista.
+    if (!contaCriadaAgora) {
+      const { error: perfilError } = await adminClient
+        .from("profiles")
+        .upsert(
+          { id: targetUserId, email: emailDaConta },
+          { onConflict: "id", ignoreDuplicates: true },
+        );
+
+      // Falhar aqui não desfaz o convite: o acesso é o que importa, e a lista
+      // de membros é o único prejuízo.
+      if (perfilError) {
+        console.warn(`[add-member] não foi possível repor o perfil de ${targetUserId}: ${perfilError.message}`);
+      }
     }
 
     // Check if shared_access already exists
@@ -151,7 +199,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ success: true, id: access.id, created: !profile }), {
+    return new Response(JSON.stringify({ success: true, id: access.id, created: contaCriadaAgora }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
