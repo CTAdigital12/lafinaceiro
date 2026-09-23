@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock, Trash2, RotateCcw, AlertOctagon } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Briefcase, Copy, MessageSquare, ChevronsUpDown, Info, AlertTriangle, CalendarClock, Trash2, RotateCcw, AlertOctagon, RefreshCw } from "lucide-react";
 import { logError } from "@/lib/errorHandler";
 import { supabase } from "@/integrations/supabase/client";
 import { CATEGORY_COLOR_OPTIONS_COMPACT } from "@/lib/constants";
@@ -59,6 +59,13 @@ import {
   buildInstallmentDescription,
   stripInstallmentMarkers,
 } from "@/lib/installmentDescription";
+import {
+  runImportRows,
+  buildRowLabel,
+  type PreparedRow,
+  type FailedRow,
+} from "@/lib/invoiceImportRun";
+import { mensagemDeErro } from "@/lib/mensagemDeErro";
 
 // Duplicate status for imported items
 type DuplicateStatus = 'new' | 'duplicate' | 'rejected';
@@ -85,6 +92,34 @@ interface ReviewItem extends ImportedItem {
   original_description: string;
 }
 
+/**
+ * Um lançamento já montado para gravar. Tinha o tipo escrito à mão dentro de
+ * `handleImport`; virou nome próprio porque a lista de falhas o carrega para
+ * fora da função, para a retentativa regravar exatamente o mesmo objeto.
+ */
+type PreparedTransaction = {
+  description: string;
+  original_description: string | null;
+  amount: number;
+  date: string;
+  due_date: string | null;
+  imported_at: string;
+  type: "expense" | "income";
+  category_id: string | null;
+  credit_card_id: string;
+  account_id: string | null;
+  status: "completed" | "pending";
+  is_corporate_expense: boolean;
+  is_reimbursable: boolean;
+  is_refund: boolean;
+  is_card_payment: boolean;
+  refunded_transaction_id: string | null;
+  installment_group_id: string | null;
+  installment_number: number | null;
+  total_installments: number | null;
+  card_last_digits: string | null;
+};
+
 interface InvoiceReviewModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -109,6 +144,10 @@ export function InvoiceReviewModal({
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+  // As linhas que a gravação recusou, com a mensagem de cada uma. Enquanto
+  // houver alguma aqui o modal não fecha sozinho — é o que permite ver QUAIS
+  // falharam e repetir só elas.
+  const [failedRows, setFailedRows] = useState<FailedRow<PreparedTransaction>[]>([]);
   const [categorySearch, setCategorySearch] = useState("");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [openCategoryPopoverIndex, setOpenCategoryPopoverIndex] = useState<number | null>(null);
@@ -178,6 +217,7 @@ export function InvoiceReviewModal({
       setReviewItems(itemsWithCategories);
       setExpandedNotes(new Set());
       setShowPostClosingWarning(postClosingCount > 0);
+      setFailedRows([]);
     }
   }, [items, open, findCategoryForDescription, findCorporateForDescription, postClosingCount, importData?.due_date, existingInstallments, isLoadingExisting]);
 
@@ -412,8 +452,33 @@ export function InvoiceReviewModal({
     return futureInstallments;
   };
 
+  /**
+   * Grava uma leva de linhas, seguindo depois de um erro, e devolve o que
+   * falhou. É o mesmo caminho da primeira passada e da retentativa: `skipSync`
+   * em todas, porque a fatura é recalculada uma única vez no fim.
+   */
+  const gravarLinhas = async (linhas: readonly PreparedRow<PreparedTransaction>[]) => {
+    setImportProgress({ current: 0, total: linhas.length });
+
+    const resultado = await runImportRows(
+      linhas,
+      (transaction) => createTransaction.mutateAsync({ ...transaction, silent: true, skipSync: true }),
+      (current, total) => setImportProgress({ current, total }),
+    );
+
+    if (resultado.failed.length > 0) {
+      logError(
+        resultado.failed.map((linha) => `${linha.label}: ${linha.message}`),
+        "InvoiceReviewModal.gravarLinhas",
+      );
+    }
+
+    return resultado;
+  };
+
   const handleImport = async () => {
     setIsImporting(true);
+    setFailedRows([]);
 
     try {
       // Only import items that are included
@@ -446,28 +511,7 @@ export function InvoiceReviewModal({
       const importedAt = new Date().toISOString();
 
       // Collect all transactions to create (including future installments)
-      const allTransactions: Array<{
-        description: string;
-        original_description: string | null;
-        amount: number;
-        date: string;
-        due_date: string | null;
-        imported_at: string;
-        type: "expense" | "income";
-        category_id: string | null;
-        credit_card_id: string;
-        account_id: string | null;
-        status: "completed" | "pending";
-        is_corporate_expense: boolean;
-        is_reimbursable: boolean;
-        is_refund: boolean;
-        is_card_payment: boolean;
-        refunded_transaction_id: string | null;
-        installment_group_id: string | null;
-        installment_number: number | null;
-        total_installments: number | null;
-        card_last_digits: string | null;
-      }> = [];
+      const rows: PreparedRow<PreparedTransaction>[] = [];
 
       let futureInstallmentsCount = 0;
 
@@ -485,27 +529,39 @@ export function InvoiceReviewModal({
         // `type` — então o crédito abate a fatura por um caminho só.
         const isCredit = !!item.is_credit;
 
-        allTransactions.push({
-          description: item.notes ? `${item.description} - ${item.notes}` : item.description,
-          original_description: item.original_description,
-          amount: item.amount,
-          date: item.date,
-          due_date: item.due_date || null,
-          imported_at: importedAt,
-          type: isCredit ? "income" : "expense",
-          category_id: categoryId,
-          credit_card_id: creditCardId,
-          account_id: null,
-          status: "completed",
-          is_corporate_expense: item.is_corporate,
-          is_reimbursable: false,
-          is_refund: isCredit,
-          is_card_payment: false,
-          refunded_transaction_id: null,
-          installment_group_id: installmentGroupId,
-          installment_number: item.installment_current || null,
-          total_installments: item.installment_total || null,
-          card_last_digits: item.card_last_digits || null,
+        rows.push({
+          transaction: {
+            description: item.notes ? `${item.description} - ${item.notes}` : item.description,
+            original_description: item.original_description,
+            amount: item.amount,
+            date: item.date,
+            due_date: item.due_date || null,
+            imported_at: importedAt,
+            type: isCredit ? "income" : "expense",
+            category_id: categoryId,
+            credit_card_id: creditCardId,
+            account_id: null,
+            status: "completed",
+            is_corporate_expense: item.is_corporate,
+            is_reimbursable: false,
+            is_refund: isCredit,
+            is_card_payment: false,
+            refunded_transaction_id: null,
+            installment_group_id: installmentGroupId,
+            installment_number: item.installment_current || null,
+            total_installments: item.installment_total || null,
+            card_last_digits: item.card_last_digits || null,
+          },
+          // O rótulo usa a descrição SEM a anotação, a data e o valor: é a
+          // linha como ela aparece na lista de revisão, para a pessoa achá-la
+          // se a gravação falhar.
+          label: buildRowLabel({
+            description: item.description,
+            date: item.date,
+            amount: item.amount,
+            installmentNumber: item.installment_current,
+            totalInstallments: item.installment_total,
+          }),
         });
 
         // Add future installments if requested. Crédito nunca projeta parcela
@@ -520,55 +576,53 @@ export function InvoiceReviewModal({
             const futureCategoryId = future.category_id && future.category_id.trim() !== "" ? future.category_id : null;
             const futureInstallmentNumber = item.installment_current + i + 1;
             
-            allTransactions.push({
-              description: future.notes ? `${future.description} - ${future.notes}` : future.description,
-              original_description: item.original_description,
-              amount: future.amount,
-              date: future.date,
-              due_date: future.due_date,
-              imported_at: importedAt,
-              type: "expense",
-              category_id: futureCategoryId,
-              credit_card_id: creditCardId,
-              account_id: null,
-              status: "pending",
-              is_corporate_expense: future.is_corporate,
-              is_reimbursable: false,
-              is_refund: false,
-              is_card_payment: false,
-              refunded_transaction_id: null,
-              installment_group_id: installmentGroupId,
-              installment_number: futureInstallmentNumber,
-              total_installments: item.installment_total,
-              card_last_digits: item.card_last_digits || null,
+            rows.push({
+              transaction: {
+                description: future.notes ? `${future.description} - ${future.notes}` : future.description,
+                original_description: item.original_description,
+                amount: future.amount,
+                date: future.date,
+                due_date: future.due_date,
+                imported_at: importedAt,
+                type: "expense",
+                category_id: futureCategoryId,
+                credit_card_id: creditCardId,
+                account_id: null,
+                status: "pending",
+                is_corporate_expense: future.is_corporate,
+                is_reimbursable: false,
+                is_refund: false,
+                is_card_payment: false,
+                refunded_transaction_id: null,
+                installment_group_id: installmentGroupId,
+                installment_number: futureInstallmentNumber,
+                total_installments: item.installment_total,
+                card_last_digits: item.card_last_digits || null,
+              },
+              label: buildRowLabel({
+                description: future.description,
+                date: future.date,
+                amount: future.amount,
+                installmentNumber: futureInstallmentNumber,
+                totalInstallments: item.installment_total,
+              }),
             });
           }
         }
       }
 
-      // Create all transactions
-      let successCount = 0;
-      let errorCount = 0;
-      const totalTransactions = allTransactions.length;
-      setImportProgress({ current: 0, total: totalTransactions });
-      
-      for (let i = 0; i < allTransactions.length; i++) {
-        const transaction = allTransactions[i];
-        try {
-          await createTransaction.mutateAsync({ ...transaction, silent: true, skipSync: true });
-          successCount++;
-        } catch (error) {
-          console.error("Error creating transaction:", error);
-          errorCount++;
-        }
-        setImportProgress({ current: i + 1, total: totalTransactions });
-      }
+      const { succeeded: successCount, failed } = await gravarLinhas(rows);
 
       // Activate pending installments that were detected as duplicates
       const pendingIdsToActivate = reviewItems
         .filter(item => item.duplicate_status === 'duplicate' && !item.include_in_import && item.matched_transaction_id)
         .map(item => item.matched_transaction_id as string);
 
+      // A falha aqui também só ia para o console. Ela não entra na lista de
+      // retentativa (que regrava lançamentos, não ativa previstos), então o que
+      // dá para dizer é o estado em que ficou e a saída: reimportar o arquivo
+      // refaz esta etapa, que é idempotente pelo `.eq("status", "pending")`.
+      let activationWarning = "";
       if (pendingIdsToActivate.length > 0) {
         const { error: activateError } = await supabase
           .from("transactions")
@@ -577,9 +631,8 @@ export function InvoiceReviewModal({
           .eq("status", "pending");
 
         if (activateError) {
-          console.error("Error activating pending installments:", activateError);
-        } else {
-          console.log(`Activated ${pendingIdsToActivate.length} pending installments`);
+          logError(activateError, "InvoiceReviewModal.ativarPrevistas");
+          activationWarning = `${pendingIdsToActivate.length} ${pendingIdsToActivate.length === 1 ? "parcela já prevista continua pendente" : "parcelas já previstas continuam pendentes"} — reimportar o arquivo refaz esta etapa`;
         }
       }
 
@@ -600,8 +653,8 @@ export function InvoiceReviewModal({
         const futureCreated = successCount - itemsToImport.length;
         description += ` (${futureCreated} parcelas futuras)`;
       }
-      if (errorCount > 0) {
-        description += ` • ${errorCount} erros`;
+      if (failed.length > 0) {
+        description += ` • ${failed.length} não gravadas`;
       }
       if (corporateCount > 0) {
         description += ` • ${corporateCount} da empresa`;
@@ -612,19 +665,73 @@ export function InvoiceReviewModal({
       if (rulesCreated > 0) {
         description += ` • ${rulesCreated} regras criadas`;
       }
+      if (activationWarning) {
+        description += ` • ${activationWarning}`;
+      }
 
+      const houveProblema = failed.length > 0 || activationWarning !== "";
       toast({
-        title: errorCount > 0 ? "Fatura importada com erros" : "Fatura importada com sucesso!",
+        title: houveProblema ? "Fatura importada com erros" : "Fatura importada com sucesso!",
         description,
-        variant: errorCount > 0 ? "destructive" : "default",
+        variant: houveProblema ? "destructive" : "default",
       });
 
-      onOpenChange(false);
+      // Com falhas o modal FICA ABERTO: fechar aqui jogaria fora a revisão
+      // inteira (categorias, marcação de empresa, anotações, parcelas futuras)
+      // e a única saída seria reimportar o arquivo e refazer tudo.
+      if (failed.length > 0) {
+        setFailedRows(failed);
+      } else {
+        onOpenChange(false);
+      }
     } catch (error) {
-      console.error("Error importing invoice:", error);
+      logError(error, "InvoiceReviewModal.handleImport");
       toast({
         title: "Erro ao importar fatura",
-        description: error instanceof Error ? error.message : "Tente novamente",
+        description: mensagemDeErro(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  /**
+   * Regrava SÓ as linhas que falharam. Confirmar a fatura de novo duplicaria
+   * tudo o que já entrou — por isso, enquanto houver falha, é este o botão
+   * principal do rodapé.
+   */
+  const handleRetryFailed = async () => {
+    if (failedRows.length === 0) return;
+
+    setIsImporting(true);
+    try {
+      const { succeeded, failed } = await gravarLinhas(failedRows);
+
+      if (creditCardId) {
+        await syncInvoiceForCard(creditCardId);
+      }
+
+      setFailedRows(failed);
+
+      if (failed.length === 0) {
+        toast({
+          title: "Fatura importada com sucesso!",
+          description: `${succeeded} ${succeeded === 1 ? "transação gravada" : "transações gravadas"} na nova tentativa`,
+        });
+        onOpenChange(false);
+      } else {
+        toast({
+          title: `${failed.length} ${failed.length === 1 ? "linha continua" : "linhas continuam"} sem gravar`,
+          description: succeeded > 0 ? `${succeeded} gravadas nesta tentativa` : "Nenhuma linha entrou nesta tentativa",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      logError(error, "InvoiceReviewModal.handleRetryFailed");
+      toast({
+        title: "Erro ao tentar de novo",
+        description: mensagemDeErro(error),
         variant: "destructive",
       });
     } finally {
@@ -663,7 +770,7 @@ export function InvoiceReviewModal({
     : "";
 
   return (
-    <Dialog open={open} onOpenChange={isImporting ? () => {} : onOpenChange}>
+    <Dialog open={open} onOpenChange={isImporting || failedRows.length > 0 ? () => {} : onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
@@ -721,6 +828,33 @@ export function InvoiceReviewModal({
               {uncategorizedCount} {uncategorizedCount === 1 ? "item" : "itens"} sem categoria — você pode categorizar depois se preferir
             </span>
           </div>
+        )}
+
+        {failedRows.length > 0 && !isImporting && (
+          <Alert variant="destructive" className="flex-shrink-0">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>
+              {failedRows.length === 1
+                ? "1 lançamento não foi gravado"
+                : `${failedRows.length} lançamentos não foram gravados`}
+            </AlertTitle>
+            <AlertDescription className="text-sm space-y-2">
+              <p>
+                O resto da fatura entrou. Use <strong>Tentar novamente</strong> para regravar
+                só estes — confirmar a fatura de novo duplicaria o que já entrou.
+              </p>
+              <ScrollArea className="max-h-32">
+                <ul className="space-y-1.5 pr-3">
+                  {failedRows.map((linha, i) => (
+                    <li key={i} className="text-xs">
+                      <span className="font-medium block">{linha.label}</span>
+                      <span className="opacity-80">{linha.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
+            </AlertDescription>
+          </Alert>
         )}
 
         {isImporting && (
@@ -1276,21 +1410,37 @@ export function InvoiceReviewModal({
               onClick={() => onOpenChange(false)}
               disabled={isImporting}
             >
-              Cancelar
+              {failedRows.length > 0 ? "Fechar assim mesmo" : "Cancelar"}
             </Button>
-            <Button onClick={handleImport} disabled={isImporting || includedItems.length === 0}>
-              {isImporting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Importando...
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  Confirmar ({includedItems.length})
-                </>
-              )}
-            </Button>
+            {failedRows.length > 0 ? (
+              <Button onClick={handleRetryFailed} disabled={isImporting}>
+                {isImporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Tentando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Tentar novamente ({failedRows.length})
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button onClick={handleImport} disabled={isImporting || includedItems.length === 0}>
+                {isImporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Confirmar ({includedItems.length})
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
