@@ -21,6 +21,7 @@ import { useDate } from "@/contexts/DateContext";
 import { parseInvoiceRows, convertToImportedItems } from "@/lib/csvInvoiceParser";
 import { fileToRows } from "@/lib/fileToRows";
 import { edgeFunctionAuthHeaders } from "@/lib/edgeFunctionAuth";
+import { edgeFunctionErrorMessage } from "@/lib/edgeFunctionError";
 
 interface InvoiceImportModalProps {
   open: boolean;
@@ -252,7 +253,7 @@ export function InvoiceImportModal({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Erro ao processar fatura");
+        throw new Error(edgeFunctionErrorMessage(data, "Erro ao processar fatura"));
       }
 
       if (data.items && data.items.length > 0) {

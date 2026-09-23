@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+import { checkContentLength, checkUpload, SNIFF_BYTES } from "../_shared/uploadGuard.ts";
 
 // ----------------------------------------------------------------------------
 // Zod schemas for validating the JSON returned by Gemini (R23).
@@ -283,6 +284,17 @@ serve(async (req) => {
       );
     }
 
+    // SECURITY (M6): o corpo é recusado ANTES de `req.formData()` materializá-lo
+    // na memória. O limite exato é conferido logo abaixo, sobre o arquivo.
+    const oversizedBody = checkContentLength(req.headers.get('content-length'));
+    if (oversizedBody) {
+      console.warn(`[parse-invoice] ${requestId} corpo recusado por tamanho`);
+      return new Response(
+        JSON.stringify({ error: oversizedBody.error, message: oversizedBody.message }),
+        { status: oversizedBody.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const creditCardId = formData.get('credit_card_id') as string;
@@ -315,6 +327,20 @@ serve(async (req) => {
     // Convert file to base64
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
+
+    // SECURITY (M6): tamanho e formato decididos AQUI. O `mimeType` sai dos
+    // BYTES do arquivo, não de `file.type` — que é rótulo do cliente e, quando
+    // vinha vazio, era completado com um chute de 'application/pdf'.
+    const check = checkUpload({ size: file.size, head: uint8Array.subarray(0, SNIFF_BYTES) });
+    if (!check.ok) {
+      console.warn(`[parse-invoice] ${requestId} arquivo recusado: ${check.rejection.error}`);
+      return new Response(
+        JSON.stringify({ error: check.rejection.error, message: check.rejection.message }),
+        { status: check.rejection.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const mimeType = check.mimeType;
+
     let binaryString = '';
     const chunkSize = 8192;
     for (let i = 0; i < uint8Array.length; i += chunkSize) {
@@ -322,7 +348,6 @@ serve(async (req) => {
       binaryString += String.fromCharCode.apply(null, Array.from(chunk));
     }
     const base64 = btoa(binaryString);
-    const mimeType = file.type || 'application/pdf';
 
     const isAccountMode = mode === 'account';
     

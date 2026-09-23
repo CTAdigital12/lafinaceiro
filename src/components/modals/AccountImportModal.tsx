@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { edgeFunctionAuthHeaders } from "@/lib/edgeFunctionAuth";
+import { edgeFunctionErrorMessage } from "@/lib/edgeFunctionError";
 import { Upload, FileText, Loader2, X, Check, AlertCircle } from "lucide-react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
@@ -140,7 +141,7 @@ export function AccountImportModal({
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || "Erro ao processar extrato");
+          throw new Error(edgeFunctionErrorMessage(data, "Erro ao processar extrato"));
         }
 
         // O que a edge function devolve por lançamento do extrato. `amount`
