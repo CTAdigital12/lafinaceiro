@@ -7,6 +7,9 @@ import {
   isMonthlyExpenseRefund,
   isMonthlyIncome,
   isSettledExpense,
+  matchesExpenseView,
+  type ExpenseViewFilter,
+  type TransactionFlags,
 } from "@/lib/transactionFilters";
 
 /**
@@ -290,5 +293,97 @@ describe("filterPureExpenses / filterPureIncome (vindas de reportUtils)", () => 
     universo.forEach((t) => {
       expect(isMonthlyExpense(t) && isMonthlyExpenseRefund(t)).toBe(false);
     });
+  });
+});
+
+/**
+ * O recorte dos chips do Dashboard.
+ *
+ * Estava escrito DUAS vezes dentro do `Dashboard.tsx`, palavra por palavra, em
+ * `filterTransactionsByView` e `filterRefundsByView` — as duas metades da mesma
+ * regra, partidas por `is_refund`. Duas cópias idênticas é o estado anterior a
+ * todo defeito desta família aqui: uma ganha exclusão, a outra não.
+ *
+ * A equivalência com os callbacks antigos foi provada por um andaime temporário
+ * sobre 49.152 combinações (2 tipos × 3 status × 4^5 flags × 8 recortes), duas
+ * comparações cada, zero divergências. O andaime foi apagado; o que fica é o
+ * comportamento que importa.
+ */
+describe("matchesExpenseView", () => {
+  const despesa = (flags: Partial<TransactionFlags> = {}): TransactionFlags => ({
+    type: "expense",
+    status: "completed",
+    ...flags,
+  });
+
+  const pessoal = despesa();
+  const daEmpresa = despesa({ is_corporate_expense: true });
+  const reembolsavel = despesa({ is_reimbursable: true });
+
+  it("sem nenhum chip marcado, nada passa", () => {
+    expect(matchesExpenseView(pessoal, [])).toBe(false);
+    expect(matchesExpenseView(daEmpresa, [])).toBe(false);
+    expect(matchesExpenseView(reembolsavel, [])).toBe(false);
+  });
+
+  it("'personal' é o que não é da empresa NEM reembolsável", () => {
+    expect(matchesExpenseView(pessoal, ["personal"])).toBe(true);
+    expect(matchesExpenseView(daEmpresa, ["personal"])).toBe(false);
+    expect(matchesExpenseView(reembolsavel, ["personal"])).toBe(false);
+  });
+
+  it("cada chip seleciona a sua flag", () => {
+    expect(matchesExpenseView(daEmpresa, ["corporate"])).toBe(true);
+    expect(matchesExpenseView(reembolsavel, ["reimbursable"])).toBe(true);
+    expect(matchesExpenseView(pessoal, ["corporate"])).toBe(false);
+    expect(matchesExpenseView(pessoal, ["reimbursable"])).toBe(false);
+  });
+
+  it("os chips somam, não se excluem", () => {
+    const todos: ExpenseViewFilter[] = ["personal", "corporate", "reimbursable"];
+    expect(matchesExpenseView(pessoal, todos)).toBe(true);
+    expect(matchesExpenseView(daEmpresa, todos)).toBe(true);
+    expect(matchesExpenseView(reembolsavel, todos)).toBe(true);
+  });
+
+  // Uma despesa marcada como da empresa E reembolsável existe no banco; ela
+  // não pode sumir quando só um dos dois chips está ligado.
+  it("lançamento com as duas flags aparece em qualquer um dos dois chips", () => {
+    const ambas = despesa({ is_corporate_expense: true, is_reimbursable: true });
+
+    expect(matchesExpenseView(ambas, ["corporate"])).toBe(true);
+    expect(matchesExpenseView(ambas, ["reimbursable"])).toBe(true);
+    expect(matchesExpenseView(ambas, ["personal"])).toBe(false);
+  });
+
+  // As flags chegam do PostgREST como null quando nunca foram gravadas.
+  it("trata null e undefined como 'não marcado', devolvendo sempre boolean", () => {
+    const nulas = despesa({ is_corporate_expense: null, is_reimbursable: null });
+
+    expect(matchesExpenseView(nulas, ["personal"])).toBe(true);
+    expect(matchesExpenseView(nulas, ["corporate"])).toBe(false);
+    expect(matchesExpenseView(nulas, ["reimbursable"])).toBe(false);
+  });
+
+  // O recorte NÃO decide sobre estorno nem sobre a base: quem compõe é a tela.
+  // É isso que permite as duas metades do Dashboard usarem a mesma função.
+  it("ignora is_refund — a metade é escolhida por quem chama", () => {
+    const estorno = despesa({ is_refund: true });
+
+    expect(matchesExpenseView(estorno, ["personal"])).toBe(true);
+    expect(matchesExpenseView(pessoal, ["personal"])).toBe(true);
+  });
+
+  it("as duas metades do Dashboard são disjuntas e cobrem a base inteira", () => {
+    const filtros: ExpenseViewFilter[] = ["personal", "corporate", "reimbursable"];
+    const metadeDespesas = (t: TransactionFlags) =>
+      isSettledExpense(t) && !t.is_refund && matchesExpenseView(t, filtros);
+    const metadeEstornos = (t: TransactionFlags) =>
+      isSettledExpense(t) && !!t.is_refund && matchesExpenseView(t, filtros);
+
+    for (const t of [pessoal, daEmpresa, reembolsavel, despesa({ is_refund: true })]) {
+      expect(metadeDespesas(t) && metadeEstornos(t)).toBe(false);
+      expect(metadeDespesas(t) || metadeEstornos(t)).toBe(isSettledExpense(t));
+    }
   });
 });

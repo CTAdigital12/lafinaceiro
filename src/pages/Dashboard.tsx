@@ -10,7 +10,11 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useCreditCards } from "@/hooks/useCreditCards";
 import { useCategories } from "@/hooks/useCategories";
-import { isSettledExpense } from "@/lib/transactionFilters";
+import {
+  isSettledExpense,
+  matchesExpenseView,
+  type ExpenseViewFilter,
+} from "@/lib/transactionFilters";
 import {
   Dialog,
   DialogContent,
@@ -52,7 +56,6 @@ interface SubcategoryData {
   }[];
 }
 
-type ExpenseViewFilter = "personal" | "corporate" | "reimbursable";
 
 export default function Dashboard() {
   const fmt = useFormatCurrency();
@@ -82,38 +85,21 @@ export default function Dashboard() {
   // conseguem declarar a dependência que de fato usam, e sobra o
   // `expenseFilters` escrito à mão — que só por acaso era o gatilho certo. A
   // identidade agora muda exatamente quando os filtros mudam.
-  const filterTransactionsByView = useCallback((t: Transaction) => {
-    // As exclusões de sempre (efetivada e não-transferência-interna) vêm da
-    // regra única; aqui só sobra o que é próprio desta tela: o estorno e o
-    // recorte escolhido nos filtros.
-    if (!isSettledExpense(t) || t.is_refund) return false;
+  // As duas metades da mesma regra, partidas por `is_refund`: a base e o
+  // recorte dos chips vêm de `transactionFilters`, então nenhuma delas pode
+  // ganhar uma exclusão que a outra não tenha. Antes eram dois blocos iguais,
+  // escritos à mão.
+  const filterTransactionsByView = useCallback(
+    (t: Transaction) => isSettledExpense(t) && !t.is_refund && matchesExpenseView(t, expenseFilters),
+    [expenseFilters],
+  );
 
-    const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
-    const isCorporate = t.is_corporate_expense;
-    const isReimbursable = t.is_reimbursable;
-
-    return (
-      (expenseFilters.includes("personal") && isPersonal) ||
-      (expenseFilters.includes("corporate") && isCorporate) ||
-      (expenseFilters.includes("reimbursable") && isReimbursable)
-    );
-  }, [expenseFilters]);
-
-  // Filter function for refunds of expenses (to subtract from category totals)
-  const filterRefundsByView = useCallback((t: Transaction) => {
-    // Refunds are expense type with is_refund = true, they should reduce the original category
-    if (!isSettledExpense(t) || !t.is_refund) return false;
-
-    const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
-    const isCorporate = t.is_corporate_expense;
-    const isReimbursable = t.is_reimbursable;
-
-    return (
-      (expenseFilters.includes("personal") && isPersonal) ||
-      (expenseFilters.includes("corporate") && isCorporate) ||
-      (expenseFilters.includes("reimbursable") && isReimbursable)
-    );
-  }, [expenseFilters]);
+  // Estorno de despesa: mesma seleção, do outro lado do `is_refund`. Reduz o
+  // total da categoria de origem.
+  const filterRefundsByView = useCallback(
+    (t: Transaction) => isSettledExpense(t) && !!t.is_refund && matchesExpenseView(t, expenseFilters),
+    [expenseFilters],
+  );
 
   // Helper to calculate totals for a set of category IDs
   const calculateCategoryTotals = useCallback((categoryIds: string[]) => {

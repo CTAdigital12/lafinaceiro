@@ -103,6 +103,34 @@ export function isMonthlyIncome(t: TransactionFlags): boolean {
  *
  * Vieram de `reportUtils`, onde repetiam estas mesmas condições à mão.
  */
+/**
+ * O recorte que os chips do Dashboard oferecem: pessoal, da empresa,
+ * reembolsável. É seleção por FLAG, como o resto deste módulo, e mora aqui
+ * porque estava escrito duas vezes — igual, palavra por palavra — dentro de
+ * `filterTransactionsByView` e `filterRefundsByView`.
+ *
+ * Duas cópias idênticas é o estado anterior a todo defeito desta família neste
+ * repositório: uma ganha exclusão, a outra não, e as duas metades passam a
+ * discordar em silêncio. Aqui elas não têm como divergir.
+ *
+ * NÃO decide sobre estorno nem sobre a base (`isSettledExpense`): compõe-se
+ * com elas, não as substitui.
+ */
+export type ExpenseViewFilter = 'personal' | 'corporate' | 'reimbursable';
+
+export function matchesExpenseView(
+  t: TransactionFlags,
+  filters: readonly ExpenseViewFilter[],
+): boolean {
+  const isPersonal = !t.is_corporate_expense && !t.is_reimbursable;
+
+  return (
+    (filters.includes('personal') && isPersonal) ||
+    (filters.includes('corporate') && !!t.is_corporate_expense) ||
+    (filters.includes('reimbursable') && !!t.is_reimbursable)
+  );
+}
+
 export function filterPureExpenses<T extends TransactionFlags>(transactions: T[]): T[] {
   return transactions.filter(isPersonalExpense);
 }
