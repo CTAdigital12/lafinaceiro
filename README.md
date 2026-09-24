@@ -14,7 +14,6 @@ Construído com Vite + React 18 + TypeScript, shadcn/ui sobre Tailwind, e Supaba
 - **Backend:** Supabase (PostgreSQL, Auth, Storage, Edge Functions)
 - **OCR / IA:** Google Gemini 2.5 Pro (via Edge Function `parse-invoice`)
 - **PWA:** `vite-plugin-pwa`
-- **Integração bancária:** Pluggy Connect
 
 ## Setup local
 

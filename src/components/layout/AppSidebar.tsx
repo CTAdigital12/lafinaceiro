@@ -16,9 +16,6 @@ import {
   ReceiptText,
   History,
   RefreshCw,
-  // Link2 used by the disabled "Conexões" sidebar entry — restore alongside
-  // the menu line if Pluggy is re-enabled.
-  // Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -39,9 +36,6 @@ const navItems = [
   { icon: BarChart3, label: "Relatórios", path: "/reports" },
   { icon: Briefcase, label: "Despesas Empresa", path: "/corporate-expenses" },
   { icon: ReceiptText, label: "Reembolsos", path: "/reimbursements" },
-  // Pluggy integration disabled during the Vercel migration (Phase 5).
-  // Restore the line below to re-enable the Connections page.
-  // { icon: Link2, label: "Conexões", path: "/connections" },
   { icon: History, label: "Atividades", path: "/activities" },
   { icon: Settings, label: "Configurações", path: "/settings" },
 ];
