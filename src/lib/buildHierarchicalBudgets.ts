@@ -15,6 +15,16 @@ export interface HierarchicalBudget extends Budget {
   isCoveredByParentBudget: boolean;
   unbudgetedSubcategorySpent: number;
   subcategoriesWithoutBudget: string[];
+  /**
+   * Quanto a categoria PAI tem gravado de meta própria que a tela NÃO usa,
+   * porque os filhos têm meta e a soma deles manda (ver `totalPlanned` abaixo).
+   * Zero quando não se aplica.
+   *
+   * Existe para a tela poder DIZER isso. Sem o campo, quem digitou R$ 1.780 em
+   * "Gastos Extras" vê a linha trabalhar com R$ 500 e não tem como descobrir
+   * por quê — o número some sem aviso e a tela perde a credibilidade.
+   */
+  ownPlannedIgnored: number;
 }
 
 /**
@@ -32,6 +42,41 @@ export interface HierarchicalBudget extends Budget {
  * jan–ago/2026. Agora toda categoria com gasto vira linha (`isUnbudgeted`), com
  * meta zerada, para o total das linhas sempre fechar com o card.
  */
+/**
+ * Quantas linhas da árvore estouraram a meta, e quantas TÊM meta.
+ *
+ * Mora aqui porque a regra do que é "a meta de uma linha" mora aqui: para o
+ * pai com filhos orçados é a SOMA DOS FILHOS, não o `planned_amount` dele. O
+ * `Planning.tsx` contava sobre a lista CRUA de metas, comparando o gasto do pai
+ * (que inclui os filhos) contra a meta própria dele — a que a árvore ignora.
+ * Dois números na mesma tela, de duas regras diferentes.
+ *
+ * Linha sem meta não entra em nenhum dos dois lados: "sem meta" não é "meta
+ * excedida", e era isso que inflava a contagem (13 categorias têm meses com
+ * meta gravada como 0,00, e meta zero faz qualquer gasto parecer estouro).
+ */
+export function countOverBudget(tree: HierarchicalBudget[]): {
+  over: number;
+  total: number;
+} {
+  let over = 0;
+  let total = 0;
+
+  const visit = (row: HierarchicalBudget) => {
+    const planned = row.isParent ? row.totalPlanned : Number(row.planned_amount);
+
+    if (!row.isUnbudgeted && planned > 0) {
+      total++;
+      if (row.totalSpent > planned) over++;
+    }
+
+    row.children.forEach(visit);
+  };
+
+  tree.forEach(visit);
+  return { over, total };
+}
+
 export function buildHierarchicalBudgets(
   budgets: Budget[],
   spentByCategory: Record<string, number>,
@@ -69,6 +114,7 @@ export function buildHierarchicalBudgets(
     isCoveredByParentBudget: false,
     unbudgetedSubcategorySpent: 0,
     subcategoriesWithoutBudget: [],
+    ownPlannedIgnored: 0,
   });
 
   budgets.forEach((budget) => {
@@ -85,6 +131,7 @@ export function buildHierarchicalBudgets(
       isCoveredByParentBudget: false,
       unbudgetedSubcategorySpent: 0,
       subcategoriesWithoutBudget: [],
+      ownPlannedIgnored: 0,
     };
 
     if (parentId) {
@@ -195,6 +242,11 @@ export function buildHierarchicalBudgets(
         budgetedChildren.length > 0
           ? childrenPlanned
           : Number(parent.planned_amount);
+
+      // A meta própria do pai ficou de fora da conta. Guardamos QUANTO ficou,
+      // para a tela poder dizer — em vez de o número sumir em silêncio.
+      parent.ownPlannedIgnored =
+        budgetedChildren.length > 0 ? Number(parent.planned_amount) || 0 : 0;
 
       // Filho sem meta própria sob um pai que TEM meta não está fora do
       // orçamento: o gasto dele já entra na barra de progresso do pai.

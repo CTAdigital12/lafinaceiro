@@ -41,6 +41,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Currency } from "@/components/ui/currency";
 import {
   buildHierarchicalBudgets,
+  countOverBudget,
   type HierarchicalBudget,
 } from "@/lib/buildHierarchicalBudgets";
 import {
@@ -145,7 +146,13 @@ export default function Planning() {
   
   const totalRemaining = totalPlanned - totalSpent;
   const totalPercentage = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
-  const categoriesOverBudget = budgets.filter((b) => (spentByCategory[b.category_id || ""] || 0) > Number(b.planned_amount)).length;
+  // Contado sobre a ÁRVORE, que é o que a tela mostra. Antes era contado sobre
+  // a lista crua de metas, comparando o gasto do pai (que inclui os filhos)
+  // contra a meta própria dele — a que a própria árvore ignora.
+  const { over: categoriesOverBudget, total: budgetedRows } = useMemo(
+    () => countOverBudget(hierarchicalBudgets),
+    [hierarchicalBudgets],
+  );
 
   // Uncategorized transactions
   const uncategorizedTransactions = useMemo(() => {
@@ -561,7 +568,7 @@ export default function Planning() {
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center", categoriesOverBudget > 0 ? "bg-expense/10" : "bg-income/10")}>{categoriesOverBudget > 0 ? <AlertTriangle className="h-5 w-5 text-expense" /> : <CheckCircle className="h-5 w-5 text-income" />}</div>
-            <div><p className="text-xs text-muted-foreground">Categorias Excedidas</p><p className={cn("text-lg font-bold", categoriesOverBudget > 0 ? "text-expense" : "text-income")}>{categoriesOverBudget} de {budgets.length}</p></div>
+            <div><p className="text-xs text-muted-foreground">Categorias Excedidas</p><p className={cn("text-lg font-bold", categoriesOverBudget > 0 ? "text-expense" : "text-income")}>{categoriesOverBudget} de {budgetedRows}</p></div>
           </div>
         </div>
       </div>
@@ -752,6 +759,17 @@ export default function Planning() {
                       <div className="flex items-center gap-1 text-xs text-chart-4 mb-3 ml-11">
                         <Info className="h-3 w-3 shrink-0" />
                         <span className="truncate">Gasto fora do orçamento</span>
+                      </div>
+                    )}
+
+                    {parentBudget.ownPlannedIgnored > 0 && (
+                      <div className="flex items-start gap-1 text-xs text-muted-foreground mb-3 ml-11">
+                        <Info className="h-3 w-3 shrink-0 mt-0.5" />
+                        <span>
+                          Esta categoria tem meta própria de {fmt(parentBudget.ownPlannedIgnored)}, que
+                          não é usada: quando as subcategorias têm meta, o total vem da soma delas. Para
+                          mudar o valor, ajuste as subcategorias.
+                        </span>
                       </div>
                     )}
 

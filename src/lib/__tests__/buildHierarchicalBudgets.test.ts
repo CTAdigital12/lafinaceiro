@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildHierarchicalBudgets } from "@/lib/buildHierarchicalBudgets";
+import { buildHierarchicalBudgets, countOverBudget } from "@/lib/buildHierarchicalBudgets";
 import type { Budget } from "@/hooks/useBudgets";
 import type { Category } from "@/hooks/useCategories";
 
@@ -437,5 +437,163 @@ describe("buildHierarchicalBudgets", () => {
       expect(estetica.isUnbudgeted).toBe(true);
       expect(estetica.isCoveredByParentBudget).toBe(false);
     });
+  });
+});
+
+/**
+ * A meta gravada no PAI quando os filhos têm meta.
+ *
+ * Achado de 24/09/2026, ao calibrar as metas reais: oito categorias pai tinham
+ * meta própria que a tela nunca usa — "Gastos Extras" com R$ 1.780,00 gravados
+ * enquanto a linha trabalhava com R$ 500,00, a soma dos filhos. O número some
+ * em silêncio, e é a razão de o Planejamento parecer não obedecer o que se
+ * digita. Não é defeito de cálculo (o pai é um agrupador); é a tela não contar.
+ */
+describe("ownPlannedIgnored", () => {
+  const paiComFilhos = (metaDoPai: number, metasDosFilhos: number[]) => {
+    const categorias = [
+      cat({ id: "extras", name: "Gastos Extras" }),
+      ...metasDosFilhos.map((_, i) => cat({ id: `f${i}`, name: `Filho ${i}`, parent_id: "extras" })),
+    ];
+    const metas = [
+      budget({
+        id: "b-pai",
+        category_id: "extras",
+        planned_amount: metaDoPai,
+        categories: { id: "extras", name: "Gastos Extras", icon: "🎁", color: "#f00", parent_id: null },
+      }),
+      ...metasDosFilhos.map((valor, i) =>
+        budget({
+          id: `b-f${i}`,
+          category_id: `f${i}`,
+          planned_amount: valor,
+          categories: { id: `f${i}`, name: `Filho ${i}`, icon: "🎁", color: "#f00", parent_id: "extras" },
+        }),
+      ),
+    ];
+    return { categorias, metas };
+  };
+
+  it("guarda quanto do pai ficou de fora quando os filhos mandam", () => {
+    const { categorias, metas } = paiComFilhos(1780, [300, 200]);
+
+    const [pai] = buildHierarchicalBudgets(metas, {}, categorias);
+
+    expect(pai.totalPlanned).toBe(500);
+    expect(pai.ownPlannedIgnored).toBe(1780);
+  });
+
+  it("é zero quando o pai não tem filho com meta — aí a meta dele vale", () => {
+    const categorias = [cat({ id: "extras", name: "Gastos Extras" })];
+    const metas = [
+      budget({
+        id: "b-pai",
+        category_id: "extras",
+        planned_amount: 1780,
+        categories: { id: "extras", name: "Gastos Extras", icon: "🎁", color: "#f00", parent_id: null },
+      }),
+    ];
+
+    const [pai] = buildHierarchicalBudgets(metas, {}, categorias);
+
+    expect(pai.totalPlanned).toBe(1780);
+    expect(pai.ownPlannedIgnored).toBe(0);
+  });
+
+  it("é zero quando o pai não tem meta própria nenhuma", () => {
+    const { categorias, metas } = paiComFilhos(0, [300, 200]);
+
+    const [pai] = buildHierarchicalBudgets(metas, {}, categorias);
+
+    expect(pai.ownPlannedIgnored).toBe(0);
+  });
+});
+
+describe("countOverBudget", () => {
+  const monte = (linhas: { id: string; meta: number; gasto: number; pai?: string }[]) => {
+    const categorias = linhas.map((l) =>
+      cat({ id: l.id, name: l.id, parent_id: l.pai ?? null }),
+    );
+    const metas = linhas
+      .filter((l) => l.meta > 0)
+      .map((l) =>
+        budget({
+          id: `b-${l.id}`,
+          category_id: l.id,
+          planned_amount: l.meta,
+          categories: { id: l.id, name: l.id, icon: "x", color: "#000", parent_id: l.pai ?? null },
+        }),
+      );
+    const gasto: Record<string, number> = {};
+    for (const l of linhas) gasto[l.id] = l.gasto;
+    // O gasto do filho sobe para o pai, como a tela faz.
+    for (const l of linhas) if (l.pai) gasto[l.pai] = (gasto[l.pai] || 0) + l.gasto;
+    return { categorias, metas, gasto };
+  };
+
+  it("conta a linha simples que estourou", () => {
+    const { categorias, metas, gasto } = monte([
+      { id: "mercado", meta: 500, gasto: 700 },
+      { id: "lazer", meta: 300, gasto: 100 },
+    ]);
+
+    expect(countOverBudget(buildHierarchicalBudgets(metas, gasto, categorias))).toEqual({
+      over: 1,
+      total: 2,
+    });
+  });
+
+  // O motivo de a função existir, num caso em que as DUAS regras discordam —
+  // sem isso o teste passaria dos dois lados e não provaria nada.
+  //
+  // Meta própria do pai 400, soma dos filhos 600, gasto do pai (com os filhos
+  // dentro) 500. A regra antiga comparava 500 > 400 e dizia ESTOUROU; a linha
+  // na tela, que usa 600, dizia que não. O contador contradizia a própria
+  // barra logo abaixo dele.
+  it("mede o pai pela soma dos filhos, não pela meta própria dele", () => {
+    const { categorias, metas, gasto } = monte([
+      { id: "extras", meta: 400, gasto: 0 },
+      { id: "presentes", meta: 300, gasto: 250, pai: "extras" },
+      { id: "compras", meta: 300, gasto: 250, pai: "extras" },
+    ]);
+
+    const arvore = buildHierarchicalBudgets(metas, gasto, categorias);
+    const [pai] = arvore;
+
+    expect(pai.totalPlanned).toBe(600);
+    expect(pai.totalSpent).toBe(500);
+    expect(pai.ownPlannedIgnored).toBe(400);
+
+    // A regra ANTIGA, escrita à mão, para deixar a divergência à vista:
+    const regraAntiga = metas.filter((b) => (gasto[b.category_id || ""] || 0) > Number(b.planned_amount)).length;
+    expect(regraAntiga).toBe(1);
+
+    expect(countOverBudget(arvore)).toEqual({ over: 0, total: 3 });
+  });
+
+  it("linha sem meta não é 'excedida' nem entra no total", () => {
+    const { categorias, metas, gasto } = monte([
+      { id: "mercado", meta: 500, gasto: 700 },
+      { id: "pet", meta: 0, gasto: 900 },
+    ]);
+
+    // "pet" gasta e não tem meta: é "gasto fora do orçamento", outra coisa.
+    expect(countOverBudget(buildHierarchicalBudgets(metas, gasto, categorias))).toEqual({
+      over: 1,
+      total: 1,
+    });
+  });
+
+  it("gasto igual à meta não estourou", () => {
+    const { categorias, metas, gasto } = monte([{ id: "mercado", meta: 500, gasto: 500 }]);
+
+    expect(countOverBudget(buildHierarchicalBudgets(metas, gasto, categorias))).toEqual({
+      over: 0,
+      total: 1,
+    });
+  });
+
+  it("árvore vazia não quebra", () => {
+    expect(countOverBudget([])).toEqual({ over: 0, total: 0 });
   });
 });
