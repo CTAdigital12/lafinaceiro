@@ -92,7 +92,6 @@
     "globals": "^15.15.0",
     "husky": "^9.1.7",
     "jsdom": "^29.1.0",
-    "lint-staged": "^16.4.0",
     "png-to-ico": "^3.0.1",
     "postcss": "^8.5.6",
     "sharp": "^0.34.5",
