@@ -873,7 +873,7 @@ catch (error) {
 |---------|---------------|
 | Autenticação | `verify_jwt = true` em endpoints user-bound; validação manual de AAL/role onde aplicável |
 | CORS | Headers configurados via `_shared/cors.ts` com allowlist `ALLOWED_ORIGINS` |
-| Secrets | `GOOGLE_AI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `PLUGGY_*`, `ALLOWED_ORIGINS` |
+| Secrets | `GOOGLE_AI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_ORIGINS` |
 
 ### 6.5 Autenticação de dois fatores (2FA / TOTP)
 
