@@ -230,6 +230,15 @@ export default function CreditCards() {
     year: reconciliationYear,
   });
 
+  // Débitos em conta já ligados à fatura do cartão sendo paga, no mês da tela.
+  // O espelho de reembolso (sem conta) fica fora: ele é pagamento de quem
+  // devia, não seu.
+  const linkedPaymentsTotal = payingCard
+    ? transactions
+        .filter((t) => t.credit_card_id === payingCard.id && t.is_card_payment && t.account_id)
+        .reduce((sum, t) => sum + Number(t.amount), 0)
+    : 0;
+
   const handlePeriodChange = (month: number, year: number) => {
     setReconciliationMonth(month);
     setReconciliationYear(year);
@@ -461,10 +470,16 @@ export default function CreditCards() {
         creditCardName={reviewCardName}
       />
 
+      {/* Mesmo mês do card e da Conciliação. Sem isto a janela abria sempre no
+          mês corrente: com setembro selecionado, ia na fatura de outubro e o
+          débito de setembro nem aparecia para vincular. */}
       <PayInvoiceModal
         open={!!payingCard}
         onOpenChange={(open) => !open && setPayingCard(null)}
         creditCard={payingCard}
+        month={reconciliationMonth}
+        year={reconciliationYear}
+        linkedPaymentsTotal={linkedPaymentsTotal}
       />
 
       {/* Delete Confirmation Dialog */}

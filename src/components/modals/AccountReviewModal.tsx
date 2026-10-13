@@ -30,6 +30,15 @@ import {
 } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useCreditCards } from "@/hooks/useCreditCards";
+import { suggestCardForPayment } from "@/lib/cardPaymentMatch";
 import { useCategories, groupCategoriesByParent } from "@/hooks/useCategories";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -87,6 +96,8 @@ interface ReviewItem extends AccountImportedItem {
   remember_corporate: boolean;
   corporate_keyword: string;
   is_card_payment: boolean;
+  /** Cartão que o pagamento de fatura pagou — sugerido pelo nome, confirmado na revisão. */
+  paid_card_id: string | null;
   original_description: string;
   matchedPendingId: string | null;
   matchedPendingDescription: string | null;
@@ -114,6 +125,7 @@ export function AccountReviewModal({
   const { findCategoryForDescription, findCorporateForDescription, createRule } = useCategorizationRules();
   const { createTransaction } = useTransactions();
   const { updateAccount } = useAccounts();
+  const { creditCards } = useCreditCards();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -226,6 +238,9 @@ export function AccountReviewModal({
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
+            paid_card_id: isCardPaymentDescription(item.description)
+              ? suggestCardForPayment(item.description, creditCards)
+              : null,
             original_description: item.description,
             matchedPendingId,
             matchedPendingDescription,
@@ -250,6 +265,9 @@ export function AccountReviewModal({
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
+            paid_card_id: isCardPaymentDescription(item.description)
+              ? suggestCardForPayment(item.description, creditCards)
+              : null,
             original_description: item.description,
             matchedPendingId: null,
             matchedPendingDescription: null,
@@ -262,7 +280,7 @@ export function AccountReviewModal({
     };
 
     initializeItems();
-  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription, findCorporateForDescription]);
+  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription, findCorporateForDescription, creditCards]);
 
   // Reset initialization flag when modal closes
   useEffect(() => {
@@ -335,6 +353,12 @@ export function AccountReviewModal({
       prev.map((item, i) =>
         i === index ? { ...item, remember_corporate: remember } : item
       )
+    );
+  };
+
+  const handlePaidCardChange = (index: number, cardId: string | null) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, paid_card_id: cardId } : item))
     );
   };
 
@@ -425,6 +449,9 @@ export function AccountReviewModal({
               category_id: item.category_id || undefined,
               is_corporate_expense: item.is_corporate,
               is_card_payment: item.is_card_payment,
+              ...(item.is_card_payment && item.paid_card_id
+                ? { credit_card_id: item.paid_card_id }
+                : {}),
             })
             .eq("id", item.matchedPendingId!);
           
@@ -448,7 +475,10 @@ export function AccountReviewModal({
             type: item.type,
             category_id: item.category_id || null,
             account_id: accountId,
-            credit_card_id: null,
+            // Pagamento de fatura leva o cartão pago, como o de "Pagar Fatura →
+            // Vincular": a conta diz de onde saiu, o cartão diz o que foi pago.
+            // Sem ele o pagamento não existia para a fatura (ver cardPaymentMatch).
+            credit_card_id: item.is_card_payment ? item.paid_card_id : null,
             status: "completed",
             is_corporate_expense: item.is_corporate,
             is_reimbursable: false,
@@ -749,6 +779,27 @@ export function AccountReviewModal({
                         className="h-7 text-sm font-medium mt-1"
                         placeholder="Descrição"
                       />
+                      {item.is_card_payment && !item.isDuplicate && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">Cartão pago</span>
+                          <Select
+                            value={item.paid_card_id ?? "none"}
+                            onValueChange={(v) => handlePaidCardChange(index, v === "none" ? null : v)}
+                          >
+                            <SelectTrigger className="h-7 text-xs" aria-label="Cartão pago">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Não vincular (cartão não cadastrado)</SelectItem>
+                              {creditCards.map((card) => (
+                                <SelectItem key={card.id} value={card.id}>
+                                  💳 {card.name} (*{card.last_digits})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                     <p className={cn(
                       "text-sm font-semibold whitespace-nowrap",
