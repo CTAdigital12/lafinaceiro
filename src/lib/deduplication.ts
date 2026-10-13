@@ -2,7 +2,7 @@
  * Funções utilitárias para normalização e detecção de duplicatas em importações.
  */
 
-import { collapseSplitGroups } from "./splitTransaction";
+import { collapseSplitGroups, type CollapsedRow } from "./splitTransaction";
 import { stripInstallmentMarkers } from "./installmentDescription";
 
 /**
@@ -99,7 +99,11 @@ export interface ImportedItem {
  *    installment_number + total_installments e, quando o lado existente veio de
  *    importação (tem original_description), também da descrição-base.
  * 5. Divisão: as partes de uma transação dividida contam como UMA linha, com o
- *    valor somado — é assim que o gasto aparece na fatura importada.
+ *    valor somado — é assim que o gasto aparece na fatura importada. A linha
+ *    devolvida é a COLAPSADA: `id` é o da primária e `splitMemberIds` traz
+ *    todas. Quem age sobre a duplicata (ex.: confirmar a parcela prevista) usa
+ *    `splitMemberIds` — agir só pelo `id` deixava a irmã pendente, fora da
+ *    fatura.
  * 6. Sinal: crédito só casa com estorno e compra só casa com compra. Sem isso,
  *    um estorno de R$ 0,16 seria dado como duplicata da compra de R$ 0,16 no
  *    mesmo dia (a tolerância de valor compara módulos) e nunca seria importado.
@@ -108,8 +112,8 @@ export interface ImportedItem {
 export function detectDuplicates(
   importedItems: ImportedItem[],
   existingTransactions: ExistingTransaction[]
-): Map<number, ExistingTransaction> {
-  const duplicateMap = new Map<number, ExistingTransaction>();
+): Map<number, CollapsedRow<ExistingTransaction>> {
+  const duplicateMap = new Map<number, CollapsedRow<ExistingTransaction>>();
   const usedExistingIds = new Set<string>();
   const TOLERANCE = 0.05;
 

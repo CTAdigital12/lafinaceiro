@@ -14,8 +14,14 @@
 -- 3/4 do Airbnb dividida em 688,48 `completed` + 425,24 `pending`. A fatura
 -- marcava 9.143,35 contra 9.568,59 da planilha — exatamente os 425,24.
 --
--- O código já não deixa acontecer de novo (propagação em `updateTransaction`,
--- regra em `sharedSplitFields`). Isto aqui é para o dado que já existe.
+-- A propagação em `updateTransaction` (regra em `sharedSplitFields`) fechou a
+-- edição pela tela — mas NÃO era o único caminho. Em 13/10/2026 a parcela
+-- 4/4 do mesmo Airbnb repetiu o defeito no ciclo 10/2026 (fatura 8.438,22
+-- contra 8.863,46 do banco): a importação da fatura confirma a parcela
+-- prevista por um `update` direto, pelo id da PRIMÁRIA que a deduplicação
+-- devolve. Corrigido no InvoiceReviewModal (`matched_member_ids`); o import
+-- de extrato de conta, que nem confirmava previsto dividido, também.
+-- Isto aqui é para o dado que já existe.
 select
   t.split_group_id,
   count(*)                                            as partes,
