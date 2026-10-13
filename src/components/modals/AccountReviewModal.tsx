@@ -101,6 +101,8 @@ interface ReviewItem extends AccountImportedItem {
   original_description: string;
   matchedPendingId: string | null;
   matchedPendingDescription: string | null;
+  /** Previsto já DIVIDIDO que o extrato confirma: todas as partes. */
+  matchedPendingSplitIds: string[];
 }
 
 interface AccountReviewModalProps {
@@ -206,6 +208,7 @@ export function AccountReviewModal({
           // Try to match against pending/provisional transactions
           let matchedPendingId: string | null = null;
           let matchedPendingDescription: string | null = null;
+          let matchedPendingSplitIds: string[] = [];
           if (!isDuplicate) {
             const pendingMatch = pendingRows.find(tx => {
               if (usedPendingIds.has(tx.id)) return false;
@@ -214,10 +217,13 @@ export function AccountReviewModal({
               return sameDate && sameAmount;
             });
             if (pendingMatch?.isSplitGroup) {
-              // O gasto já está lançado e rateado. Confirmar vincularia só a
-              // parte primária (quebrando a soma), então tratamos como
-              // duplicata: nada novo é criado.
+              // O gasto já está lançado e rateado. Converter pela primária
+              // (descrição, categoria) quebraria a divisão, então nada novo é
+              // criado — mas as partes são CONFIRMADAS juntas no import. Antes
+              // ficavam pendentes para sempre: fora do saldo da conta, que só
+              // conta o realizado.
               isDuplicate = true;
+              matchedPendingSplitIds = pendingMatch.splitMemberIds;
               pendingMatch.splitMemberIds.forEach(id => usedPendingIds.add(id));
             } else if (pendingMatch) {
               matchedPendingId = pendingMatch.id;
@@ -244,6 +250,7 @@ export function AccountReviewModal({
             original_description: item.description,
             matchedPendingId,
             matchedPendingDescription,
+            matchedPendingSplitIds,
           };
         });
         
@@ -271,6 +278,7 @@ export function AccountReviewModal({
             original_description: item.description,
             matchedPendingId: null,
             matchedPendingDescription: null,
+            matchedPendingSplitIds: [],
           };
         });
         setReviewItems(itemsWithCategories);
@@ -461,6 +469,26 @@ export function AccountReviewModal({
         } catch (error) {
           console.error("Error converting pending transaction:", error);
           errorCount++;
+        }
+      }
+
+      // Previstos já divididos que o extrato confirmou: todas as partes juntas
+      // (o débito do extrato é a cobrança inteira). Só o status muda —
+      // descrição e categoria de cada parte são o motivo da divisão.
+      // "Importar mesmo assim" (forceImport) cria um lançamento novo e deixa
+      // o previsto como está, como já fazia.
+      for (const item of reviewItems) {
+        if (!item.isDuplicate || item.forceImport || item.matchedPendingSplitIds.length === 0) continue;
+        const { error } = await supabase
+          .from("transactions")
+          .update({ status: "completed", is_provisional: false })
+          .in("id", item.matchedPendingSplitIds);
+        if (error) {
+          console.error("Error confirming split pending transaction:", error);
+          errorCount++;
+        } else {
+          convertedCount++;
+          successCount++;
         }
       }
 
@@ -749,9 +777,15 @@ export function AccountReviewModal({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-muted-foreground">{item.date}</span>
-                        {item.isDuplicate && (
+                        {item.isDuplicate && item.matchedPendingSplitIds.length === 0 && (
                           <Badge variant="secondary" className="text-xs flex-shrink-0">
                             Já importada
+                          </Badge>
+                        )}
+                        {item.isDuplicate && item.matchedPendingSplitIds.length > 0 && !item.forceImport && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0 bg-accent text-accent-foreground border-accent">
+                            <ArrowRightLeft className="h-3 w-3 mr-1" />
+                            Previsto dividido — as {item.matchedPendingSplitIds.length} partes serão confirmadas
                           </Badge>
                         )}
                         {item.is_corporate && !item.isDuplicate && (

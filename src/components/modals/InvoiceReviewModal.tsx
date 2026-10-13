@@ -88,6 +88,8 @@ interface ReviewItem extends ImportedItem {
   // Deduplication fields
   duplicate_status: DuplicateStatus;
   matched_transaction_id: string | null;
+  /** Todas as partes do lançamento casado — mais de uma quando ele foi dividido. */
+  matched_member_ids: string[];
   // Original description from parser (before user edits)
   original_description: string;
 }
@@ -210,6 +212,7 @@ export function InvoiceReviewModal({
           // Deduplication fields
           duplicate_status: isDuplicate ? 'duplicate' as DuplicateStatus : 'new' as DuplicateStatus,
           matched_transaction_id: matchedTransaction?.id || null,
+          matched_member_ids: matchedTransaction?.splitMemberIds ?? [],
           // Preserve original description from parser
           original_description: item.description,
         };
@@ -613,10 +616,16 @@ export function InvoiceReviewModal({
 
       const { succeeded: successCount, failed } = await gravarLinhas(rows);
 
-      // Activate pending installments that were detected as duplicates
+      // Activate pending installments that were detected as duplicates.
+      //
+      // TODAS as partes de uma parcela dividida, não só a primária: a fatura
+      // traz a cobrança inteira e só conta o que está `completed`. Ativar pelo
+      // `matched_transaction_id` deixava a irmã pendente — a 4/4 do Airbnb
+      // (688,48 + 425,24) fez o ciclo 10/2026 do Itaú sair 425,24 abaixo do
+      // banco com a conciliação em 100%, porque ela soma as partes.
       const pendingIdsToActivate = reviewItems
-        .filter(item => item.duplicate_status === 'duplicate' && !item.include_in_import && item.matched_transaction_id)
-        .map(item => item.matched_transaction_id as string);
+        .filter(item => item.duplicate_status === 'duplicate' && !item.include_in_import)
+        .flatMap(item => item.matched_member_ids);
 
       // A falha aqui também só ia para o console. Ela não entra na lista de
       // retentativa (que regrava lançamentos, não ativa previstos), então o que
