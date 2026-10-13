@@ -862,6 +862,15 @@ export type Database = {
         }
         Returns: string
       }
+      settle_reimbursements: {
+        Args: {
+          p_account_id?: string
+          p_date?: string
+          p_income_id?: string
+          p_transaction_ids: string[]
+        }
+        Returns: undefined
+      }
       settle_transactions_with_payment: {
         Args: { p_payment_id: string; p_target_ids: string[] }
         Returns: string

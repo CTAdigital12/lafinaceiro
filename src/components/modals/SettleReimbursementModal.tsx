@@ -22,8 +22,8 @@ import { getCompetenceDate } from "@/lib/reportUtils";
 interface SettleReimbursementModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Despesa reembolsável a quitar. */
-  transaction: {
+  /** Despesas reembolsáveis a quitar — todas com o mesmo recebimento. */
+  transactions: {
     id: string;
     description: string;
     amount: number;
@@ -32,7 +32,7 @@ interface SettleReimbursementModalProps {
     due_date?: string | null;
     /** Decide se o `due_date` vale como âncora — ver `getCompetenceDate`. */
     credit_card_id?: string | null;
-  } | null;
+  }[] | null;
 }
 
 type Mode = "link" | "create";
@@ -40,14 +40,17 @@ type Mode = "link" | "create";
 /**
  * Modal para registrar o recebimento de um reembolso FORA da fatura (PIX /
  * transferência). Dois caminhos:
- *  - "link":   vincular uma receita já lançada (o PIX que entrou na conta)
- *  - "create": criar a receita do reembolso numa conta escolhida
+ *  - "link":   vincular uma receita já lançada (o PIX que entrou na conta).
+ *              Com várias despesas, todas ficam quitadas pelo MESMO PIX — o
+ *              caso comum de quem devolve várias despesas numa transferência.
+ *  - "create": criar a receita do reembolso numa conta escolhida (uma por
+ *              despesa)
  * Em ambos a receita é neutralizada dos KPIs (is_reimbursement) pelo backend.
  */
 export function SettleReimbursementModal({
   open,
   onOpenChange,
-  transaction,
+  transactions,
 }: SettleReimbursementModalProps) {
   const fmt = useFormatCurrency();
   const { accounts } = useAccounts();
@@ -63,11 +66,15 @@ export function SettleReimbursementModal({
   // garante: o TransactionModal mostra "Data de Vencimento (opcional)" para
   // pagamento em conta e grava o valor ANTES da guarda de cartão. Com um
   // vencimento manual distante, a janela saía do lugar e o PIX sumia da lista.
-  const refDate = transaction
+  //
+  // Com várias despesas, a primeira ancora: elas vêm da mesma tela do mês, e a
+  // janela de ±60 dias cobre a diferença entre elas.
+  const first = transactions?.[0];
+  const refDate = first
     ? getCompetenceDate({
-        credit_card_id: transaction.credit_card_id ?? null,
-        due_date: transaction.due_date ?? null,
-        date: transaction.date,
+        credit_card_id: first.credit_card_id ?? null,
+        due_date: first.due_date ?? null,
+        date: first.date,
       })
     : undefined;
   const { candidates, isLoading: loadingCandidates } =
@@ -77,28 +84,35 @@ export function SettleReimbursementModal({
   const [incomeId, setIncomeId] = useState("");
   const [accountId, setAccountId] = useState("");
 
+  const count = transactions?.length ?? 0;
+  const total = (transactions ?? []).reduce((s, t) => s + Number(t.amount), 0);
+  const selectedIncome = candidates.find((c) => c.id === incomeId);
+  // Em centavos: comparar float de reais direto acusa diferença que não existe.
+  const amountMismatch =
+    !!selectedIncome &&
+    Math.round(Number(selectedIncome.amount) * 100) !== Math.round(total * 100);
+
+  const targetKey = transactions?.map((t) => t.id).join(",");
   useEffect(() => {
     if (open) {
       setMode("link");
       setIncomeId("");
       setAccountId("");
     }
-  }, [open, transaction?.id]);
+  }, [open, targetKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!transaction) return;
+    if (!transactions?.length) return;
+    const transactionIds = transactions.map((t) => t.id);
 
     if (mode === "link") {
       if (!incomeId) return;
-      await settleExternal.mutateAsync({
-        transactionId: transaction.id,
-        incomeId,
-      });
+      await settleExternal.mutateAsync({ transactionIds, incomeId });
     } else {
       if (!accountId) return;
       await settleExternal.mutateAsync({
-        transactionId: transaction.id,
+        transactionIds,
         accountId,
         date: format(new Date(), "yyyy-MM-dd"),
       });
@@ -117,11 +131,25 @@ export function SettleReimbursementModal({
       title="Registrar reembolso recebido"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {transaction && (
+        {count === 1 && first && (
           <div className="rounded-lg bg-muted/50 border border-border p-3">
             <p className="text-sm text-muted-foreground">Despesa</p>
-            <p className="font-medium">{transaction.description}</p>
-            <p className="text-lg font-semibold">{fmt(Number(transaction.amount))}</p>
+            <p className="font-medium">{first.description}</p>
+            <p className="text-lg font-semibold">{fmt(Number(first.amount))}</p>
+          </div>
+        )}
+        {count > 1 && (
+          <div className="rounded-lg bg-muted/50 border border-border p-3">
+            <p className="text-sm text-muted-foreground">{count} despesas</p>
+            <ul className="mt-1 space-y-0.5">
+              {transactions?.map((t) => (
+                <li key={t.id} className="flex justify-between gap-3 text-sm">
+                  <span className="truncate">{t.description}</span>
+                  <span className="whitespace-nowrap">{fmt(Number(t.amount))}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-lg font-semibold">{fmt(total)}</p>
           </div>
         )}
 
@@ -183,9 +211,16 @@ export function SettleReimbursementModal({
                 </SelectContent>
               </Select>
             )}
+            {amountMismatch && selectedIncome && (
+              <p className="text-xs text-chart-4">
+                O valor desta receita ({fmt(Number(selectedIncome.amount))}) é diferente
+                do total das despesas ({fmt(total)}). Confira se é o recebimento certo.
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               A receita escolhida deixa de contar como entrada nos relatórios (vira
               reembolso), mas continua no saldo da conta.
+              {count > 1 && " As despesas ficam todas quitadas por ela."}
             </p>
           </div>
         ) : (
@@ -204,8 +239,10 @@ export function SettleReimbursementModal({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Cria uma receita de reembolso nesta conta com o valor da despesa. Ela
-              soma no saldo, mas não infla suas receitas.
+              {count > 1
+                ? "Cria uma receita de reembolso por despesa nesta conta, cada uma com o valor da sua despesa."
+                : "Cria uma receita de reembolso nesta conta com o valor da despesa."}{" "}
+              Ela soma no saldo, mas não infla suas receitas.
             </p>
           </div>
         )}

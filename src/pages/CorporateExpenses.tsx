@@ -51,6 +51,8 @@ import { useCreditCards } from "@/hooks/useCreditCards";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useReimbursementPayment } from "@/hooks/useReimbursementPayment";
+import { SettleReimbursementModal } from "@/components/modals/SettleReimbursementModal";
+import { ReimbursementOriginDialog } from "@/components/modals/ReimbursementOriginDialog";
 
 type ReimbursementStatus = "pending" | "requested" | "reimbursed";
 
@@ -90,12 +92,19 @@ export default function CorporateExpenses() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [reimbursementFilter, setReimbursementFilter] = useState<string>("all");
+  const [settleTarget, setSettleTarget] = useState<CorporateTransaction[] | null>(null);
+  // Despesa de cartão sendo quitada: a empresa pode ter pago o cartão direto
+  // ou devolvido por PIX — perguntamos antes de escolher o caminho.
+  const [originTarget, setOriginTarget] = useState<CorporateTransaction[] | null>(null);
 
   const startDate = format(startOfMonth(new Date(selectedYear, selectedMonth - 1)), "yyyy-MM-dd");
   const endDate = format(endOfMonth(new Date(selectedYear, selectedMonth - 1)), "yyyy-MM-dd");
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["corporate_expenses", user?.id, selectedMonth, selectedYear],
+    // Hífen, não sublinhado: é a chave que os hooks de reembolso, fatura e
+    // divisão invalidam. Com "corporate_expenses" a lista não se atualizava
+    // depois de uma baixa feita por eles.
+    queryKey: ["corporate-expenses", user?.id, selectedMonth, selectedYear],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
@@ -224,7 +233,14 @@ export default function CorporateExpenses() {
     if (newStatus === currentStatus) return;
 
     if (newStatus === "reimbursed") {
-      await markAsReimbursed.mutateAsync({ transactionId: transaction.id });
+      // Mesma regra de Reembolsos Diversos. Antes esta tela chamava sempre
+      // mark_reimbursed, que supõe que a empresa pagou o cartão: um PIX da
+      // empresa virava abatimento na fatura, menor do que o banco cobrou.
+      if (transaction.credit_card_id) {
+        setOriginTarget([transaction]);
+      } else {
+        setSettleTarget([transaction]);
+      }
     } else if (currentStatus === "reimbursed") {
       await unmarkAsReimbursed.mutateAsync({
         transactionId: transaction.id,
@@ -239,7 +255,7 @@ export default function CorporateExpenses() {
         toast({ title: "Erro ao atualizar status", description: error.message, variant: "destructive" });
         throw error;
       }
-      queryClient.invalidateQueries({ queryKey: ["corporate_expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["corporate-expenses"] });
       toast({ title: "Status atualizado!" });
     }
   };
@@ -248,10 +264,47 @@ export default function CorporateExpenses() {
 
   const updateSelectedStatus = async (status: ReimbursementStatus) => {
     const selectedItems = filteredTransactions.filter((t) => selectedIds.has(t.id));
+
+    // Quitar em massa: perguntamos a origem UMA vez para todas as despesas de
+    // cartão — o caso comum é a empresa devolver várias num PIX só. As sem
+    // cartão exigem vincular o recebimento individualmente.
+    if (status === "reimbursed") {
+      const toSettle = selectedItems.filter((t) => t.reimbursement_status !== "reimbursed");
+      const withCard = toSettle.filter((t) => t.credit_card_id);
+      const withoutCard = toSettle.filter((t) => !t.credit_card_id);
+
+      if (withoutCard.length > 0) {
+        toast({
+          title: "Quite uma a uma",
+          description: `${withoutCard.length} despesa(s) fora do cartão precisam do recebimento vinculado individualmente.`,
+        });
+      }
+      if (withCard.length > 0) {
+        setOriginTarget(withCard);
+      }
+      setSelectedIds(new Set());
+      return;
+    }
+
     for (const item of selectedItems) {
       await handleStatusChange(item, status);
     }
     setSelectedIds(new Set());
+  };
+
+  /** A empresa pagou o cartão direto — espelho que abate a fatura. */
+  const handleOriginInvoice = async () => {
+    const targets = originTarget ?? [];
+    setOriginTarget(null);
+    for (const item of targets) {
+      await markAsReimbursed.mutateAsync({ transactionId: item.id });
+    }
+  };
+
+  /** A empresa devolveu por PIX/transferência — vira receita neutra na conta. */
+  const handleOriginAccount = () => {
+    setSettleTarget(originTarget);
+    setOriginTarget(null);
   };
 
   const getExportData = () => {
@@ -744,6 +797,19 @@ export default function CorporateExpenses() {
           </>
         )}
       </div>
+
+      <SettleReimbursementModal
+        open={!!settleTarget}
+        onOpenChange={(open) => !open && setSettleTarget(null)}
+        transactions={settleTarget}
+      />
+
+      <ReimbursementOriginDialog
+        targets={originTarget}
+        onClose={() => setOriginTarget(null)}
+        onInvoice={handleOriginInvoice}
+        onAccount={handleOriginAccount}
+      />
     </div>
   );
 }

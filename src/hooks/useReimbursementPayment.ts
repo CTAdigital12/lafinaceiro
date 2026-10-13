@@ -78,26 +78,30 @@ export function useReimbursementPayment() {
   });
 
   /**
-   * Quita uma despesa reembolsável com recebimento EXTERNO (PIX / transferência
+   * Quita despesas reembolsáveis com recebimento EXTERNO (PIX / transferência
    * numa conta), em vez de baixa na fatura do cartão. Dois caminhos:
-   *  - incomeId  : vincula uma receita já existente (o PIX lançado pelo usuário)
-   *  - accountId : cria a receita do reembolso nessa conta (usa `date`)
+   *  - incomeId  : vincula uma receita já existente (o PIX lançado pelo
+   *                usuário) — TODAS as despesas apontam para ela, porque um PIX
+   *                só costuma cobrir várias
+   *  - accountId : cria uma receita de reembolso por despesa nessa conta
    * A receita resultante é marcada como is_reimbursement (neutra nos KPIs).
+   * O lote é atômico no banco (`settle_reimbursements`): ou quita todas, ou
+   * nenhuma — vinculadas uma a uma, uma falha no meio deixava o PIX preso.
    */
   const settleExternal = useMutation({
     mutationFn: async ({
-      transactionId,
+      transactionIds,
       incomeId,
       accountId,
       date,
     }: {
-      transactionId: string;
+      transactionIds: string[];
       incomeId?: string;
       accountId?: string;
       date?: string;
     }) => {
-      const { error } = await supabase.rpc("settle_reimbursement", {
-        p_transaction_id: transactionId,
+      const { error } = await supabase.rpc("settle_reimbursements", {
+        p_transaction_ids: transactionIds,
         p_income_id: incomeId ?? undefined,
         p_account_id: accountId ?? undefined,
         p_date: date ?? undefined,
