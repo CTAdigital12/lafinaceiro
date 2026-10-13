@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { startOfMonth, endOfMonth, format } from "date-fns";
+import { isReimbursedOutsideInvoice } from "@/lib/reimbursementOrigin";
 
 export interface InvoiceTransaction {
   id: string;
@@ -15,6 +16,8 @@ export interface InvoiceTransaction {
   is_card_payment: boolean | null;
   status: string;
   reimbursement_status: string | null;
+  /** Reembolsada por PIX/transferência, não por crédito no cartão. */
+  reimbursed_outside_invoice: boolean;
   split_group_id: string | null;
   category_name: string | null;
   category_icon: string | null;
@@ -56,6 +59,8 @@ export function useInvoiceTransactions({
           is_card_payment,
           status,
           reimbursement_status,
+          reimbursement_income_id,
+          reimbursement_payment_id,
           split_group_id,
           categories(name, icon)
         `
@@ -85,6 +90,29 @@ export function useInvoiceTransactions({
 
       if (error) throw error;
 
+      // O lançamento do reembolso é o que diz se ele veio pelo cartão (espelho,
+      // `is_card_payment`) ou por fora (receita criada na conta). Consulta à
+      // parte, por id, e não embed: a FK aponta para a própria `transactions`,
+      // e o embed é ambíguo na direção — pode devolver as linhas que apontam
+      // PARA esta, um `[]` que passaria por "lançamento encontrado".
+      const paymentIds = (data || [])
+        .filter(
+          (t) =>
+            t.reimbursement_status === "reimbursed" &&
+            t.reimbursement_payment_id &&
+            !t.reimbursement_income_id
+        )
+        .map((t) => t.reimbursement_payment_id as string);
+      const payments = new Map<string, { is_card_payment: boolean | null }>();
+      if (paymentIds.length > 0) {
+        const { data: rows, error: paymentsError } = await supabase
+          .from("transactions")
+          .select("id, is_card_payment")
+          .in("id", paymentIds);
+        if (paymentsError) throw paymentsError;
+        for (const p of rows ?? []) payments.set(p.id, p);
+      }
+
       return (data || []).map((t) => ({
         id: t.id,
         description: t.description,
@@ -97,6 +125,12 @@ export function useInvoiceTransactions({
         is_card_payment: t.is_card_payment ?? null,
         status: t.status,
         reimbursement_status: t.reimbursement_status ?? null,
+        reimbursed_outside_invoice: isReimbursedOutsideInvoice({
+          ...t,
+          reimbursement_payment: t.reimbursement_payment_id
+            ? payments.get(t.reimbursement_payment_id) ?? null
+            : null,
+        }),
         split_group_id: t.split_group_id ?? null,
         category_name: (t.categories as { name: string } | null)?.name || null,
         category_icon: (t.categories as { icon: string } | null)?.icon || null,
@@ -119,6 +153,8 @@ export function useInvoiceTransactions({
   // invoice modal: a mirror payment was created by mark_reimbursed and is
   // reducing current_invoice on the card row. We exclude them from corporate
   // and reimbursable totals so PayInvoiceModal does not double-count.
+  // That premise only holds for the mirror path — the ones paid back by PIX
+  // come back below, in `reimbursedOutsideTotal`.
   const isPendingReimbursement = (t: InvoiceTransaction) =>
     t.reimbursement_status !== "reimbursed";
 
@@ -154,9 +190,28 @@ export function useInvoiceTransactions({
     .reduce((sum, t) => sum + t.amount, 0);
   const personalTotal = personalNormal - personalRefunds;
 
-  // My total to pay = reimbursable + personal (both come out of my pocket)
-  const myTotalToPay = reimbursableTotal + personalTotal;
-  const transactionsTotal = corporateTotal + reimbursableTotal + personalTotal;
+  // Reembolsadas POR FORA (PIX/transferência numa conta). O filtro acima as
+  // tira de corporativo e reembolsável, como se o espelho tivesse abatido o
+  // cartão — mas não há espelho: o banco cobrou a fatura cheia e quem pagou
+  // foi você, o dinheiro voltou para a conta. Elas continuam no seu total a
+  // pagar. Sem isto, o ciclo do Itaú de 09/2026 saía 753,58 abaixo do banco
+  // depois de quitar três corporativas com um PIX da empresa.
+  //
+  // Não voltam para `corporateTotal`: o PayInvoiceModal trata esse valor como
+  // o que a empresa paga direto no cartão, e `paySplitInvoice` cria espelho
+  // para ele.
+  const reimbursedOutside = invoiceContent.filter(
+    (t) => (t.is_corporate_expense || t.is_reimbursable) && t.reimbursed_outside_invoice
+  );
+  const reimbursedOutsideTotal = reimbursedOutside.reduce(
+    (sum, t) => sum + (t.is_refund ? -t.amount : t.amount),
+    0
+  );
+
+  // My total to pay = reimbursable + personal + the ones paid back outside the
+  // card (all of them come out of my pocket on this invoice)
+  const myTotalToPay = reimbursableTotal + personalTotal + reimbursedOutsideTotal;
+  const transactionsTotal = corporateTotal + myTotalToPay;
 
   // Fetch invoice cycle for this card/month/year to get closedAmount
   const { data: invoiceCycleData } = useQuery({
@@ -185,6 +240,7 @@ export function useInvoiceTransactions({
     corporateTotal,
     reimbursableTotal,
     personalTotal,
+    reimbursedOutsideTotal,
     myTotalToPay,
     transactionsTotal,
     closedAmount,

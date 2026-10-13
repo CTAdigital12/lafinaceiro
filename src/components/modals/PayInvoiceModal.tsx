@@ -81,6 +81,7 @@ export function PayInvoiceModal({
     corporateTotal,
     reimbursableTotal,
     personalTotal,
+    reimbursedOutsideTotal,
     myTotalToPay,
     transactionsTotal: invoiceTransactionsTotal,
     closedAmount,
@@ -359,6 +360,26 @@ export function PayInvoiceModal({
                   </span>
                 </div>
 
+                {/* Corporativas/reembolsáveis devolvidas por PIX: você pagou o
+                    banco e o dinheiro voltou para a conta. Sem esta linha a
+                    composição não fecha com o "Meu Total a Pagar". */}
+                {reimbursedOutsideTotal > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Wallet className="h-3 w-3" />
+                      Já reembolsadas por PIX
+                    </span>
+                    <span className="text-sm font-medium text-income">
+                      {formatCurrency(reimbursedOutsideTotal)}
+                      {totalInvoice > 0 && (
+                        <span className="text-xs text-muted-foreground ml-1">
+                          ({Math.round((reimbursedOutsideTotal / totalInvoice) * 100)}%)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+
                 <Separator />
                 
                 <div className="flex justify-between items-center">
@@ -369,7 +390,9 @@ export function PayInvoiceModal({
                     {formatCurrency(myTotalToPay)}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground">(Reembolsáveis + Pessoais)</p>
+                <p className="text-xs text-muted-foreground">
+                  (Reembolsáveis + Pessoais{reimbursedOutsideTotal > 0 && " + Reembolsadas por PIX"})
+                </p>
               </div>
 
               {/* Review Items Button */}
