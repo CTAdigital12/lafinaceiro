@@ -56,6 +56,7 @@ import {
   type SystemRow,
   type ReconciliationResult,
 } from "@/lib/spreadsheetReconciliation";
+import { isPreviousInvoicePayment } from "@/lib/invoicePaymentLine";
 
 interface SpreadsheetReconciliationModalProps {
   open: boolean;
@@ -90,6 +91,9 @@ export function SpreadsheetReconciliationModal({
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [refundItems, setRefundItems] = useState<Set<number>>(new Set());
   const [ignoredKeys, setIgnoredKeys] = useState<Set<string>>(new Set());
+  // Pagamento da fatura anterior que a planilha lista como crédito: fica fora
+  // da conferência (ver `invoicePaymentLine`), mas à vista.
+  const [previousPayments, setPreviousPayments] = useState<SpreadsheetItem[]>([]);
 
   // Fetch system transactions for this card/month
   const fetchSystemTransactions = useCallback(async (): Promise<SystemTransaction[]> => {
@@ -126,11 +130,19 @@ export function SpreadsheetReconciliationModal({
         return;
       }
 
-      const reconciliation = reconcileSpreadsheet(spreadsheetItems, systemTx, { matchCreditSign: true });
+      // O pagamento da fatura anterior não é conteúdo desta: já está lançado
+      // pelo extrato da conta, e o sistema nem o compara aqui (o fetch acima
+      // exclui `is_card_payment`). Deixado na conferência, caía em "Apenas
+      // Banco" todo mês marcado como estorno, a um clique de virar crédito falso.
+      const previous = spreadsheetItems.filter(isPreviousInvoicePayment);
+      const content = spreadsheetItems.filter((i) => !isPreviousInvoicePayment(i));
+
+      const reconciliation = reconcileSpreadsheet(content, systemTx, { matchCreditSign: true });
       // Linha negativa no arquivo já chega marcada como estorno. Antes o sinal
       // era descartado na leitura e só restava marcar na mão, item a item —
       // quem não marcasse criava o crédito como despesa, somando na fatura.
-      setRefundItems(new Set(spreadsheetItems.filter((i) => i.isCredit).map((i) => i.rowIndex)));
+      setRefundItems(new Set(content.filter((i) => i.isCredit).map((i) => i.rowIndex)));
+      setPreviousPayments(previous);
       setResult(reconciliation);
     } catch (err) {
       toast({ title: "Erro ao processar arquivo", description: mensagemDeErro(err), variant: "destructive" });
@@ -335,6 +347,19 @@ export function SpreadsheetReconciliationModal({
                   <Badge variant="secondary" className="bg-expense/10 text-expense gap-1">
                     <Trash2 className="h-3 w-3" />
                     {tabCounts.extra} apenas no sistema
+                  </Badge>
+                )}
+                {previousPayments.length > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="gap-1"
+                    title="O banco lista o pagamento da fatura anterior como crédito. Ele já está lançado pelo extrato da conta e não entra na conferência."
+                  >
+                    <EyeOff className="h-3 w-3" />
+                    {previousPayments.length === 1
+                      ? "1 pagamento da fatura anterior"
+                      : `${previousPayments.length} pagamentos da fatura anterior`}{" "}
+                    fora da conferência ({formatCurrency(previousPayments.reduce((s, i) => s + i.amount, 0))})
                   </Badge>
                 )}
               </div>

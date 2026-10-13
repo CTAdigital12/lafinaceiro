@@ -19,6 +19,9 @@ import {
 import { cn } from "@/lib/utils";
 import { useDate } from "@/contexts/DateContext";
 import { parseInvoiceRows, convertToImportedItems } from "@/lib/csvInvoiceParser";
+import { isPreviousInvoicePayment } from "@/lib/invoicePaymentLine";
+import { useToast } from "@/hooks/use-toast";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { fileToRows } from "@/lib/fileToRows";
 import { edgeFunctionAuthHeaders } from "@/lib/edgeFunctionAuth";
 import { edgeFunctionErrorMessage } from "@/lib/edgeFunctionError";
@@ -89,6 +92,8 @@ export function InvoiceImportModal({
   onImportComplete,
 }: InvoiceImportModalProps) {
   const { currentDate } = useDate();
+  const { toast } = useToast();
+  const fmt = useFormatCurrency();
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,11 +168,24 @@ export function InvoiceImportModal({
     const year = parseInt(invoiceYear);
 
     const rows = await fileToRows(file);
-    const transactions = parseInvoiceRows(rows, {
+    const parsed = parseInvoiceRows(rows, {
       invoiceMonth: month,
       invoiceYear: year,
       closingDay: closingDay,
     });
+
+    // O pagamento da fatura anterior, que o banco lista como crédito, não é
+    // conteúdo desta fatura: importado, viraria estorno e abateria a fatura
+    // pelo valor de um pagamento que já está lançado pelo extrato da conta.
+    const asLine = (t: (typeof parsed)[number]) => ({ description: t.description, isCredit: !!t.is_credit });
+    const previousPayments = parsed.filter((t) => isPreviousInvoicePayment(asLine(t)));
+    const transactions = parsed.filter((t) => !isPreviousInvoicePayment(asLine(t)));
+    if (previousPayments.length > 0) {
+      toast({
+        title: "Pagamento da fatura anterior deixado de fora",
+        description: `${previousPayments.map((t) => `${t.description} (${fmt(t.amount)})`).join(", ")} — já está lançado pelo extrato da conta.`,
+      });
+    }
 
     if (transactions.length === 0) {
       throw new Error("Nenhuma transação encontrada na planilha. Verifique se o formato está correto.");
