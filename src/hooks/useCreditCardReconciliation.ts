@@ -48,6 +48,8 @@ export interface ReconciliationTransaction {
   imported_at: string | null;
   is_card_payment: boolean | null;
   reimbursement_status: string | null;
+  /** Preenchido no pagamento debitado em conta; nulo no espelho de reembolso. */
+  account_id: string | null;
 }
 
 interface UseCreditCardReconciliationOptions {

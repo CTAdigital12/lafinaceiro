@@ -57,6 +57,12 @@ interface PayInvoiceModalProps {
   creditCard: CreditCardType | null;
   month?: number;
   year?: number;
+  /**
+   * Pagamentos debitados em conta JÁ vinculados a esta fatura — o extrato
+   * importado agora chega ligado ao cartão, e o débito some da lista de
+   * "Vincular". Sem o aviso, registrar de novo duplicaria o pagamento.
+   */
+  linkedPaymentsTotal?: number;
 }
 
 export function PayInvoiceModal({
@@ -65,6 +71,7 @@ export function PayInvoiceModal({
   creditCard,
   month,
   year,
+  linkedPaymentsTotal = 0,
 }: PayInvoiceModalProps) {
   const formatCurrency = useFormatCurrency();
   const { accounts } = useAccounts();
@@ -296,11 +303,24 @@ export function PayInvoiceModal({
             Pagar Fatura
           </span>
         }
-        description={`${creditCard?.name} - ${creditCard?.brand}`}
+        description={`${creditCard?.name} - ${creditCard?.brand} · fatura de ${format(
+          new Date(invoiceYear, invoiceMonth - 1),
+          "MMMM 'de' yyyy",
+          { locale: ptBR }
+        )}`}
         className="sm:max-w-lg"
       >
 
           <div className="space-y-4 py-2">
+            {linkedPaymentsTotal > 0 && (
+              <div className="rounded-lg border border-chart-4/30 bg-chart-4/10 p-3 text-sm">
+                Esta fatura já tem <strong>{formatCurrency(linkedPaymentsTotal)}</strong> em
+                pagamento debitado em conta e vinculado a ela
+                {linkedPaymentsTotal >= totalInvoice - 0.01
+                  ? " — ela já está paga. Registrar outro pagamento duplica."
+                  : ". Registre só o que falta."}
+              </div>
+            )}
             {/* Invoice Composition Section */}
             <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
               <h3 className="font-medium text-sm flex items-center gap-2">

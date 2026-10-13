@@ -178,7 +178,12 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         setOriginalCardId(null);
         setOriginalDueDate(null);
       }
-      setPaymentMethod(sourceData.credit_card_id ? "credit_card" : "account");
+      // Pagamento de fatura debitado em conta tem conta E cartão: a conta é de
+      // onde o dinheiro saiu, o cartão é o que foi pago. Aberto pelo cartão,
+      // como uma compra, e salvo, ele perdia a conta e o `is_card_payment` —
+      // virava compra no cartão e sumia do saldo da conta.
+      const isAccountCardPayment = !!(sourceData.is_card_payment && sourceData.account_id);
+      setPaymentMethod(sourceData.credit_card_id && !isAccountCardPayment ? "credit_card" : "account");
       setIsCorporateExpense(sourceData.is_corporate_expense || false);
       setIsReimbursable(sourceData.is_reimbursable || false);
       setIsRefund(sourceData.is_refund || false);
@@ -354,14 +359,21 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         type,
         category_id: categoryId || null,
         account_id: paymentMethod === "account" ? (accountId || null) : null,
-        credit_card_id: paymentMethod === "credit_card" ? (creditCardId || null) : null,
+        // Em conta, o cartão só vai junto quando o lançamento PAGA a fatura
+        // dele ("Cartão pago"). Sem isso o pagamento não existe para a fatura.
+        credit_card_id:
+          paymentMethod === "credit_card" || isCardPayment ? (creditCardId || null) : null,
         date: format(date, "yyyy-MM-dd"),
         due_date: calculateDueDate(),
         status,
         is_corporate_expense: isCorporateExpense,
         is_reimbursable: isReimbursable,
         is_refund: isRefund,
-        is_card_payment: paymentMethod === "account" ? isCardPayment : false,
+        // No cartão, só uma RECEITA pode ser pagamento (o espelho de reembolso,
+        // o "Pagamento Externo"); editá-la a transformava em receita comum, que
+        // deixa de abater a fatura. Compra no cartão nunca é pagamento.
+        is_card_payment:
+          paymentMethod === "account" ? isCardPayment : type === "income" && isCardPayment,
         refunded_transaction_id: refundedTransactionId,
         installment_group_id: isEditing && transaction ? transaction.installment_group_id : null,
         installment_number: isEditing && transaction ? transaction.installment_number : null,
@@ -913,23 +925,49 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
 
           {/* Card Payment - Only show for expenses paid via account */}
           {type === "expense" && paymentMethod === "account" && (
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <CreditCard className="h-4 w-4 text-purple-600" />
+            <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                    <CreditCard className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <Label htmlFor="card-payment" className="text-sm font-medium cursor-pointer">
+                      Pagamento de Fatura
+                    </Label>
+                    <p className="text-xs text-muted-foreground">Marcar como pagamento de fatura de cartão</p>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="card-payment" className="text-sm font-medium cursor-pointer">
-                    Pagamento de Fatura
-                  </Label>
-                  <p className="text-xs text-muted-foreground">Marcar como pagamento de fatura de cartão</p>
-                </div>
+                <Switch
+                  id="card-payment"
+                  checked={isCardPayment}
+                  onCheckedChange={setIsCardPayment}
+                />
               </div>
-              <Switch
-                id="card-payment"
-                checked={isCardPayment}
-                onCheckedChange={setIsCardPayment}
-              />
+              {isCardPayment && (
+                <div className="space-y-1">
+                  <Label htmlFor="paid-card" className="text-xs">Cartão pago</Label>
+                  <Select
+                    value={creditCardId || "none"}
+                    onValueChange={(v) => setCreditCardId(v === "none" ? "" : v)}
+                  >
+                    <SelectTrigger id="paid-card">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não vincular (cartão não cadastrado)</SelectItem>
+                      {creditCards.map((card) => (
+                        <SelectItem key={card.id} value={card.id}>
+                          💳 {card.name} (*{card.last_digits})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Sem o cartão, a fatura não fica paga e o limite não é liberado.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
