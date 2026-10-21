@@ -1,7 +1,3 @@
-import { useState } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from "recharts";
-import { Button } from "@/components/ui/button";
-import { ChevronRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Currency } from "@/components/ui/currency";
 import { useListSearchSort } from "@/hooks/useListSearchSort";

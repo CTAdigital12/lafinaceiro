@@ -54,7 +54,6 @@ interface CategoryDetailSheetProps {
   transactions: TransactionDisplay[];
   allCategories?: CategoryData[];
   onCategoryChange?: (category: CategoryData) => void;
-  categoryType?: "expense" | "income";
 }
 
 export function CategoryDetailSheet({
@@ -66,7 +65,6 @@ export function CategoryDetailSheet({
   transactions,
   allCategories = [],
   onCategoryChange,
-  categoryType = "expense",
 }: CategoryDetailSheetProps) {
   const isMobile = useIsMobile();
   const fmt = useFormatCurrency();

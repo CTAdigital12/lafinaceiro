@@ -478,7 +478,6 @@ export function AccountReviewModal({
         await createRule.mutateAsync(rule);
       }
 
-      let balanceChange = 0;
       let successCount = 0;
       let errorCount = 0;
       let convertedCount = 0;
@@ -579,12 +578,6 @@ export function AccountReviewModal({
             silent: true,
           });
           successCount++;
-
-          if (item.type === "income") {
-            balanceChange += item.amount;
-          } else {
-            balanceChange -= item.amount;
-          }
         } catch (error) {
           console.error("Error creating transaction:", error);
           errorCount++;

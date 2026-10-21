@@ -797,7 +797,6 @@ export function InvoiceReviewModal({
   const futureInstallmentsToAdd = includedItems
     .filter((item) => item.add_future_installments && item.installment_current && item.installment_total)
     .reduce((sum, item) => sum + (item.installment_total! - item.installment_current!), 0);
-  const postClosingItems = reviewItems.filter(item => item.is_post_closing);
   const excludedCount = reviewItems.filter(item => !item.include_in_import).length;
 
   // Status counts for UI

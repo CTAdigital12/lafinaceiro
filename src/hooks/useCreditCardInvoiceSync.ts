@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { logError } from "@/lib/errorHandler";
 import { sumInvoice } from "@/lib/invoiceTotal";
 
@@ -14,7 +13,6 @@ import { sumInvoice } from "@/lib/invoiceTotal";
  */
 export function useCreditCardInvoiceSync() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const recalculateInvoice = useMutation({
     mutationFn: async (creditCardId: string) => {

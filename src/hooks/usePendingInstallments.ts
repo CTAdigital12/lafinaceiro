@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCreditCards } from "./useCreditCards";
-import { addMonths, format, parse, differenceInDays, isBefore, isAfter } from "date-fns";
+import { addMonths, format, parse, differenceInDays, isAfter } from "date-fns";
 
 export interface PendingInstallment {
   id: string;
@@ -41,7 +40,6 @@ export interface InstallmentSummary {
 
 export function usePendingInstallments() {
   const { user } = useAuth();
-  const { creditCards } = useCreditCards();
 
   const { data: pendingInstallments = [], isLoading } = useQuery({
     queryKey: ["pending-installments", user?.id],

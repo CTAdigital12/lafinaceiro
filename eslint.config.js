@@ -20,7 +20,14 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      // Código morto escondia defeito: dado buscado e nunca exibido (M15),
+      // import sobrando depois de refatoração. Prefixo `_` marca o que fica
+      // sem uso de propósito (parâmetro exigido pela assinatura, por exemplo);
+      // irmão de `...rest` é a forma de omitir um campo de um objeto.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true, caughtErrors: "none" },
+      ],
     },
   },
   {

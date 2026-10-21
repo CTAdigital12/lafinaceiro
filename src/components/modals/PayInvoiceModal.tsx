@@ -90,7 +90,6 @@ export function PayInvoiceModal({
     personalTotal,
     reimbursedOutsideTotal,
     myTotalToPay,
-    transactionsTotal: invoiceTransactionsTotal,
     closedAmount,
     isLoading: isLoadingTransactions,
   } = useInvoiceTransactions({

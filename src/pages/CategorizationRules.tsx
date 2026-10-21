@@ -7,8 +7,6 @@ import {
   BookMarked,
   Building2,
   Wand2,
-  CheckSquare,
-  Square,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";

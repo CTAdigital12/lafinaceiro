@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
+import { format, subMonths, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, RotateCcw, Download, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";

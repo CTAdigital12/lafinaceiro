@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Building2, Wallet, PiggyBank, TrendingUp, MoreVertical, Loader2, Upload, FileDown, ArrowRightLeft } from "lucide-react";
+import { Plus, Wallet, MoreVertical, Loader2, Upload, FileDown, ArrowRightLeft } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,13 +31,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useCategories } from "@/hooks/useCategories";
 import { mensagemDeErro } from "@/lib/mensagemDeErro";
 
-const iconComponents = {
-  bank: Building2,
-  wallet: Wallet,
-  savings: PiggyBank,
-  investment: TrendingUp,
-};
-
 const typeLabels = {
   bank: "Conta Corrente",
   wallet: "Carteira",
@@ -55,8 +48,6 @@ interface AccountCardProps {
 }
 
 function AccountCard({ account, onEdit, onDelete, onImport, onExport, onReconcile }: AccountCardProps) {
-  const Icon = iconComponents[account.type] || Building2;
-
   return (
     <div className="bg-card rounded-xl border border-border shadow-card hover:shadow-card-hover transition-all duration-300 overflow-hidden animate-scale-in">
       {/* Card Header with Gradient */}

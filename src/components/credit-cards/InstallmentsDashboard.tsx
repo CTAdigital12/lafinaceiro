@@ -3,11 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +19,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { ChartContainer } from "@/components/ui/chart";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { usePrivacyMode } from "@/contexts/PrivacyContext";
 
@@ -203,8 +198,6 @@ function InstallmentsEvolutionChart({ byMonth }: { byMonth: { month: string; amo
     cursor = addMonths(cursor, 1);
   }
 
-  // Calculate when debt will be zero
-  const zeroDebtMonth = chartData.find((d) => d.cumulativeReduction === 0);
   const monthsUntilFree = chartData.length;
 
   const chartConfig = {

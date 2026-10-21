@@ -21,12 +21,11 @@ interface LinkableTransaction {
 interface LinkTransactionsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  projectId: string;
   onLink: (transactionIds: string[]) => Promise<void>;
   isPending: boolean;
 }
 
-export function LinkTransactionsModal({ open, onOpenChange, projectId, onLink, isPending }: LinkTransactionsModalProps) {
+export function LinkTransactionsModal({ open, onOpenChange, onLink, isPending }: LinkTransactionsModalProps) {
   const { user } = useAuth();
   const formatCurrency = useFormatCurrency();
   const [transactions, setTransactions] = useState<LinkableTransaction[]>([]);
