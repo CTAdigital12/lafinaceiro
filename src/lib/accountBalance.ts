@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { todayYmd } from "@/lib/dateUtils";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 /**
  * Saldo realizado por conta.
@@ -12,7 +13,8 @@ import { todayYmd } from "@/lib/dateUtils";
  * AccountReconciliationModal) e os três tinham o mesmo defeito (auditoria C2):
  * buscavam as transações sem paginar. O PostgREST corta a resposta no limite
  * de linhas do projeto (o padrão do Supabase é 1000) **sem devolver erro**, e a
- * soma saía truncada.
+ * soma saía truncada. Uma quarta cópia, no "Sincronizar" da revisão do extrato
+ * (AccountReviewModal), escapou daquela passada e só veio para cá em out/2026.
  *
  * No `useAccounts` isso só exibia saldo errado. Em `AccountModal` e no
  * "Sincronizar saldo" da conciliação era pior: eles calculam
@@ -20,24 +22,8 @@ import { todayYmd } from "@/lib/dateUtils";
  * uma soma truncada virava um `initial_balance` errado persistido, e a partir
  * daí todo saldo do app ficava errado, inclusive depois de corrigir o bug.
  *
- * Aqui a busca é paginada até o fim, com ordenação estável.
+ * Aqui a busca é paginada até o fim (`fetchAllRows`), com ordenação estável.
  */
-
-/** Tamanho de página do fetch. Fica abaixo de qualquer teto usual do PostgREST. */
-const PAGE_SIZE = 500;
-
-/**
- * Trava de segurança: impede laço infinito caso a paginação se comporte de
- * forma inesperada. 200k lançamentos é ordens de grandeza acima de finanças
- * pessoais — se alguém chegar lá, é melhor falhar alto do que somar errado.
- */
-const MAX_ROWS = 200_000;
-
-interface RealizedRow {
-  account_id: string | null;
-  type: string;
-  amount: number | string;
-}
 
 /**
  * Soma líquida das transações realizadas, agrupada por `account_id`.
@@ -54,50 +40,27 @@ export async function fetchRealizedNetByAccount(
   const today = todayYmd();
   const netByAccount: Record<string, number> = {};
 
-  let from = 0;
-
-  for (;;) {
+  const rows = await fetchAllRows((from, to) => {
     let query = supabase
       .from("transactions")
       .select("account_id, type, amount")
       .eq("status", "completed")
       .eq("is_provisional", false)
       .lte("date", today)
-      .not("account_id", "is", null)
-      // Ordenação estável é obrigatória: sem ORDER BY o Postgres não garante a
-      // mesma ordem entre páginas, e a paginação passaria a repetir e pular
-      // linhas silenciosamente.
-      .order("id", { ascending: true });
+      .not("account_id", "is", null);
 
     if (accountId) {
       query = query.eq("account_id", accountId);
     }
 
-    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
+    return query.order("id", { ascending: true }).range(from, to);
+  });
 
-    const rows = (data ?? []) as RealizedRow[];
-    if (rows.length === 0) break;
-
-    for (const row of rows) {
-      if (!row.account_id) continue;
-      const sign = row.type === "income" ? 1 : -1;
-      netByAccount[row.account_id] =
-        (netByAccount[row.account_id] || 0) + sign * Number(row.amount);
-    }
-
-    // Avança pelo que REALMENTE veio, não por PAGE_SIZE: se o projeto tiver um
-    // teto de linhas menor que PAGE_SIZE, avançar pelo tamanho pedido pularia
-    // registros. Parar só em página vazia custa uma requisição a mais e é
-    // correto sob qualquer teto.
-    from += rows.length;
-
-    if (from > MAX_ROWS) {
-      throw new Error(
-        "Volume de transações acima do previsto para o cálculo de saldo. " +
-          "Nenhum valor foi gravado.",
-      );
-    }
+  for (const row of rows) {
+    if (!row.account_id) continue;
+    const sign = row.type === "income" ? 1 : -1;
+    netByAccount[row.account_id] =
+      (netByAccount[row.account_id] || 0) + sign * Number(row.amount);
   }
 
   return netByAccount;

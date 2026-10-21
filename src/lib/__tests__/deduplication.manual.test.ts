@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findAccountDuplicates, matchManualEntries } from "@/lib/deduplication";
+import { accountLookupRange, findAccountDuplicates, matchManualEntries } from "@/lib/deduplication";
 
 /**
  * Lançamento feito à mão antes de importar o extrato.
@@ -74,5 +74,35 @@ describe("matchManualEntries", () => {
     ];
     const m = matchManualEntries([PIX], partes, NADA);
     expect(m.get(0)?.splitMemberIds.sort()).toEqual(["p1", "p2"]);
+  });
+});
+
+describe("accountLookupRange", () => {
+  it("cobre do primeiro ao último dia do extrato, com a folga do casamento manual", () => {
+    const extrato = [{ date: "2026-10-13" }, { date: "2026-10-01" }, { date: "2026-10-20" }];
+    expect(accountLookupRange(extrato)).toEqual({ from: "2026-09-28", to: "2026-10-23" });
+  });
+
+  it("atravessa a virada de ano", () => {
+    expect(accountLookupRange([{ date: "2026-01-02" }, { date: "2026-12-30" }])).toEqual({
+      from: "2025-12-30",
+      to: "2027-01-02",
+    });
+  });
+
+  it("ignora data ilegível e devolve null quando nenhuma é legível", () => {
+    expect(accountLookupRange([{ date: "lixo" }, { date: "2026-10-13" }])).toEqual({ from: "2026-10-10", to: "2026-10-16" });
+    expect(accountLookupRange([{ date: "" }])).toBeNull();
+    expect(accountLookupRange([])).toBeNull();
+  });
+
+  it("lê exatamente o que o casamento manual aceita: nem um dia a menos", () => {
+    // Se a janela de matchManualEntries crescer e esta não, o manual fica fora
+    // da busca e a linha do extrato volta a entrar duplicada.
+    const r = accountLookupRange([PIX])!;
+    for (const date of ["2026-10-09", "2026-10-10", "2026-10-13", "2026-10-16", "2026-10-17"]) {
+      const casa = matchManualEntries([PIX], [manual({ date })], NADA).size === 1;
+      expect(date >= r.from && date <= r.to, date).toBe(casa);
+    }
   });
 });

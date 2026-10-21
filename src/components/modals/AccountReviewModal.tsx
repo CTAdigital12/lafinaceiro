@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard, RefreshCw, ArrowRightLeft } from "lucide-react";
-import { findAccountDuplicates, matchManualEntries } from "@/lib/deduplication";
+import { accountLookupRange, findAccountDuplicates, matchManualEntries } from "@/lib/deduplication";
 import { collapseSplitGroups } from "@/lib/splitTransaction";
+import { fetchAllRows } from "@/lib/fetchAllRows";
+import { fetchRealizedNetForAccount } from "@/lib/accountBalance";
+import { anchorInitialBalance } from "@/lib/accountAnchor";
 import {
   Dialog,
   DialogContent,
@@ -172,16 +175,25 @@ export function AccountReviewModal({
       setIsCheckingDuplicates(true);
       
       try {
-        // Fetch existing transactions for this account
-        const { data: existingTransactions } = await supabase
-          .from("transactions")
-          // split_group_id/split_parent_id: uma despesa dividida ocupa várias
-          // linhas aqui, mas o extrato traz o lançamento cheio — a dedup soma
-          // as partes antes de comparar.
-          .select("id, date, amount, type, description, original_description, status, is_provisional, split_group_id, split_parent_id")
-          .eq("account_id", accountId);
-
-        const existing = existingTransactions || [];
+        // Só o período do extrato (com a folga das regras de casamento) e
+        // paginado: a conta inteira numa consulta só esbarrava no teto de 1000
+        // linhas do PostgREST, e o que ficava de fora entrava de novo como novo.
+        const range = accountLookupRange(items);
+        const existing = range
+          ? await fetchAllRows((from, to) =>
+              supabase
+                .from("transactions")
+                // split_group_id/split_parent_id: uma despesa dividida ocupa
+                // várias linhas aqui, mas o extrato traz o lançamento cheio — a
+                // dedup soma as partes antes de comparar.
+                .select("id, date, amount, type, description, original_description, status, is_provisional, split_group_id, split_parent_id")
+                .eq("account_id", accountId)
+                .gte("date", range.from)
+                .lte("date", range.to)
+                .order("id", { ascending: true })
+                .range(from, to),
+            )
+          : [];
 
         // Separate pending/provisional transactions for matching
         const pendingTransactions = existing.filter(tx => tx.status === 'pending' || tx.is_provisional);
@@ -275,6 +287,14 @@ export function AccountReviewModal({
         }));
       } catch (error) {
         console.error("Error checking duplicates:", error);
+        // Sem a checagem, toda linha aparece como nova — inclusive as que já
+        // estão no sistema. Antes o erro da consulta era ignorado e isso
+        // acontecia em silêncio.
+        toast({
+          title: "Não foi possível verificar duplicatas",
+          description: "Todas as linhas aparecem como novas. Feche e importe de novo antes de confirmar.",
+          variant: "destructive",
+        });
         const itemsWithCategories = items.map((item) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
           const isCorporate = findCorporateForDescription(item.description);
@@ -307,7 +327,7 @@ export function AccountReviewModal({
     };
 
     initializeItems();
-  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription, findCorporateForDescription, creditCards]);
+  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription, findCorporateForDescription, creditCards, toast]);
 
   // Reset initialization flag when modal closes
   useEffect(() => {
@@ -630,28 +650,17 @@ export function AccountReviewModal({
   const handleSyncBalance = async () => {
     if (bankBalance == null) return;
     try {
-      // To sync: we need initial_balance such that initial_balance + sum(realized_tx) = bankBalance
-      // So: new_initial_balance = bankBalance - sum(realized_tx)
-      // Fetch realized tx sum for this account
-      const today = new Date().toISOString().split("T")[0];
-      const { data: txData } = await supabase
-        .from("transactions")
-        .select("type, amount, status, is_provisional, date")
-        .eq("account_id", accountId)
-        .eq("status", "completed")
-        .eq("is_provisional", false)
-        .lte("date", today);
-
-      const txNet = (txData || []).reduce((sum, tx) => {
-        const sign = tx.type === "income" ? 1 : -1;
-        return sum + sign * Number(tx.amount);
-      }, 0);
-
-      const newInitialBalance = bankBalance - txNet;
+      // A soma vem de fetchRealizedNetForAccount, a mesma das outras telas que
+      // gravam âncora. Esta era uma quarta cópia, e errava de três jeitos, todos
+      // GRAVADOS em initial_balance: não paginava (soma truncada acima de 1000
+      // lançamentos), ignorava o erro da consulta (soma 0, âncora = saldo do
+      // banco inteiro) e cortava "hoje" em UTC (depois das 21h, o lançamento
+      // de amanhã já entrava).
+      const txNet = await fetchRealizedNetForAccount(accountId);
 
       await updateAccount.mutateAsync({
         id: accountId,
-        initial_balance: newInitialBalance,
+        initial_balance: anchorInitialBalance(bankBalance, txNet),
       });
       toast({
         title: "Saldo sincronizado!",
