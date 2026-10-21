@@ -14,6 +14,9 @@ export interface ExistingInstallment {
   split_group_id: string | null;
   split_parent_id: string | null;
   is_refund: boolean | null;
+  /** matchManualInvoiceEntries só casa lançamento realizado. */
+  status: string;
+  is_provisional: boolean;
 }
 
 interface UseExistingInstallmentsParams {
@@ -45,7 +48,7 @@ export function useExistingInstallments({
         .from("transactions")
         // split_group_id/split_parent_id: detectDuplicates colapsa as partes de
         // uma transação dividida para casar com a linha única da fatura.
-        .select("id, description, original_description, amount, date, installment_number, total_installments, split_group_id, split_parent_id, is_refund")
+        .select("id, description, original_description, amount, date, installment_number, total_installments, split_group_id, split_parent_id, is_refund, status, is_provisional")
         .eq("credit_card_id", creditCardId)
         // Estorno entra, mesmo gravado como receita: um crédito da fatura é
         // `type='income' + is_refund=true`, e filtrar só por despesa fazia o

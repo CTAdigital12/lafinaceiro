@@ -182,6 +182,54 @@ export function detectDuplicates(
   return duplicateMap;
 }
 
+/**
+ * Lançamento de cartão feito à mão que a fatura confirma.
+ *
+ * O mesmo defeito que `matchManualEntries` (abaixo) resolveu no extrato, no
+ * outro caminho de importação: `detectDuplicates` compara a descrição da
+ * fatura com `original_description`, que lançamento manual não tem. Em
+ * 19/10/2026 "Recanto Do Djalma - Marmitas peões" (R$ 142,00) foi lançado à mão
+ * no cartão, e a fatura de novembro o traria como novo.
+ *
+ * A regra é a de `matchManualEntries` — direção, valor e data a até
+ * `MANUAL_MATCH_WINDOW_DAYS`, ganha o mais próximo —, com três recortes:
+ * - Só linha da fatura que NÃO é parcela. Parcela já aceita o manual em
+ *   `detectDuplicates` (o índice da parcela faz o papel da descrição), e
+ *   parcela manual fica de fora pelo mesmo motivo.
+ * - Só lançamento realizado (`completed` e não provisório), como no extrato.
+ *   Previsto casado é ATIVADO pela importação, e esse caminho só muda o
+ *   status. Sem `status` na linha, nada casa.
+ * - A direção é o sinal da regra 6 (crédito × estorno), não o `type`: o
+ *   estorno é gravado como receita OU como despesa.
+ */
+export function matchManualInvoiceEntries<
+  T extends ExistingTransaction & { status?: string | null; is_provisional?: boolean | null },
+>(
+  importedItems: ImportedItem[],
+  existingTransactions: T[],
+  skip: { items: ReadonlySet<number>; existingIds: ReadonlySet<string> },
+): Map<number, CollapsedRow<T & { type: string }>> {
+  const direction = (credit: boolean | null | undefined) => (credit ? "credito" : "compra");
+
+  const candidates = existingTransactions
+    .filter((tx) => tx.status === "completed" && !tx.is_provisional && tx.installment_number == null)
+    .map((tx) => ({ ...tx, type: direction(tx.is_refund) }));
+
+  const installmentItems = importedItems.flatMap((item, index) =>
+    item.installment_current && item.installment_total ? [index] : [],
+  );
+
+  return matchManualEntries(
+    importedItems.map((item) => ({
+      date: item.purchase_date ?? "",
+      amount: item.transaction_value,
+      type: direction(item.is_credit),
+    })),
+    candidates,
+    { items: new Set([...skip.items, ...installmentItems]), existingIds: skip.existingIds },
+  );
+}
+
 interface ExistingAccountTransaction {
   id?: string;
   date: string;
