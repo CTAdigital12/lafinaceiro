@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard, RefreshCw, ArrowRightLeft } from "lucide-react";
-import { detectAccountDuplicates } from "@/lib/deduplication";
+import { findAccountDuplicates, matchManualEntries } from "@/lib/deduplication";
 import { collapseSplitGroups } from "@/lib/splitTransaction";
 import {
   Dialog,
@@ -103,6 +103,8 @@ interface ReviewItem extends AccountImportedItem {
   matchedPendingDescription: string | null;
   /** Previsto já DIVIDIDO que o extrato confirma: todas as partes. */
   matchedPendingSplitIds: string[];
+  /** Lançamento feito à mão que esta linha do extrato confirma (ver matchManualEntries). */
+  matchedManual: { ids: string[]; description: string; date: string } | null;
 }
 
 interface AccountReviewModalProps {
@@ -176,19 +178,21 @@ export function AccountReviewModal({
           // split_group_id/split_parent_id: uma despesa dividida ocupa várias
           // linhas aqui, mas o extrato traz o lançamento cheio — a dedup soma
           // as partes antes de comparar.
-          .select("id, date, amount, description, original_description, status, is_provisional, split_group_id, split_parent_id")
+          .select("id, date, amount, type, description, original_description, status, is_provisional, split_group_id, split_parent_id")
           .eq("account_id", accountId);
 
         const existing = existingTransactions || [];
 
         // Separate pending/provisional transactions for matching
         const pendingTransactions = existing.filter(tx => tx.status === 'pending' || tx.is_provisional);
-        const completedTransactions = existing.filter(tx => tx.status === 'completed' && !tx.is_provisional);
+        const completedTransactions = existing
+          .filter(tx => tx.status === 'completed' && !tx.is_provisional)
+          .map(tx => ({ id: tx.id, date: tx.date, amount: Number(tx.amount), type: tx.type, description: tx.description, original_description: tx.original_description, split_group_id: tx.split_group_id, split_parent_id: tx.split_parent_id }));
 
         // Use robust deduplication against completed transactions only
-        const duplicateIndices = detectAccountDuplicates(
+        const duplicateRows = findAccountDuplicates(
           items.map(i => ({ date: i.date, description: i.description, amount: i.amount })),
-          completedTransactions.map(tx => ({ id: tx.id, date: tx.date, amount: Number(tx.amount), description: tx.description, original_description: tx.original_description, split_group_id: tx.split_group_id, split_parent_id: tx.split_parent_id }))
+          completedTransactions,
         );
 
         // Track which pending transactions have already been matched
@@ -203,7 +207,7 @@ export function AccountReviewModal({
         const itemsWithCategories = items.map((item, index) => {
           const suggestedCategoryId = findCategoryForDescription(item.description);
           const isCorporate = findCorporateForDescription(item.description);
-          let isDuplicate = duplicateIndices.has(index);
+          let isDuplicate = duplicateRows.has(index);
 
           // Try to match against pending/provisional transactions
           let matchedPendingId: string | null = null;
@@ -251,10 +255,24 @@ export function AccountReviewModal({
             matchedPendingId,
             matchedPendingDescription,
             matchedPendingSplitIds,
+            matchedManual: null as ReviewItem["matchedManual"],
           };
         });
-        
-        setReviewItems(itemsWithCategories);
+
+        // Lançado à mão antes do extrato: a regra exata não o reconhece (não
+        // tem o texto do banco) e a linha entraria de novo. Só para o que
+        // nenhuma regra anterior resolveu.
+        const manualMatches = matchManualEntries(items, completedTransactions, {
+          items: new Set(itemsWithCategories.flatMap((it, i) => (it.isDuplicate || it.matchedPendingId ? [i] : []))),
+          existingIds: new Set([...duplicateRows.values()].flatMap(row => row.splitMemberIds)),
+        });
+
+        setReviewItems(itemsWithCategories.map((item, index) => {
+          const manual = manualMatches.get(index);
+          return manual
+            ? { ...item, isDuplicate: true, matchedManual: { ids: manual.splitMemberIds, description: manual.description, date: manual.date } }
+            : item;
+        }));
       } catch (error) {
         console.error("Error checking duplicates:", error);
         const itemsWithCategories = items.map((item) => {
@@ -279,6 +297,7 @@ export function AccountReviewModal({
             matchedPendingId: null,
             matchedPendingDescription: null,
             matchedPendingSplitIds: [],
+            matchedManual: null,
           };
         });
         setReviewItems(itemsWithCategories);
@@ -492,6 +511,26 @@ export function AccountReviewModal({
         }
       }
 
+      // Lançamento manual reconhecido no extrato: nada novo é criado, e ele
+      // passa a carregar o texto e a data do banco. Sem isso, a próxima
+      // importação de um extrato que cubra o mesmo dia não o reconheceria — a
+      // regra exata compara os dois, e como importado ele deixa de ser
+      // candidato manual — e a linha voltaria como nova.
+      let manualLinkedCount = 0;
+      for (const item of reviewItems) {
+        if (!item.matchedManual || item.forceImport) continue;
+        const { error } = await supabase
+          .from("transactions")
+          .update({ original_description: item.original_description, date: item.date })
+          .in("id", item.matchedManual.ids);
+        if (error) {
+          console.error("Error linking manual transaction:", error);
+          errorCount++;
+        } else {
+          manualLinkedCount++;
+        }
+      }
+
       // Create new transactions
       for (const item of newItems) {
         try {
@@ -542,13 +581,16 @@ export function AccountReviewModal({
         queryClient.invalidateQueries({ queryKey: ["accounts"] });
       }
 
-      const skippedCount = reviewItems.length - itemsToImport.length;
+      const skippedCount = reviewItems.length - itemsToImport.length - manualLinkedCount;
       const corporateCount = itemsToImport.filter((item) => item.is_corporate).length;
       const totalRules = rulesToCreate.length + corporateRulesToCreate.length;
 
       let description = `${successCount} transações importadas`;
       if (convertedCount > 0) {
         description += ` • ${convertedCount} previstos convertidos`;
+      }
+      if (manualLinkedCount > 0) {
+        description += ` • ${manualLinkedCount} lançados à mão vinculados ao extrato`;
       }
       if (errorCount > 0) {
         description += ` • ${errorCount} erros`;
@@ -643,7 +685,8 @@ export function AccountReviewModal({
     (item) => !item.category_id && (!item.isDuplicate || item.forceImport)
   ).length;
 
-  const duplicateCount = reviewItems.filter((item) => item.isDuplicate && !item.forceImport).length;
+  const duplicateCount = reviewItems.filter((item) => item.isDuplicate && !item.forceImport && !item.matchedManual).length;
+  const manualMatchCount = reviewItems.filter((item) => item.matchedManual && !item.forceImport).length;
   
   const corporateCount = reviewItems.filter(
     (item) => item.is_corporate && item.type === "expense" && (!item.isDuplicate || item.forceImport)
@@ -722,6 +765,15 @@ export function AccountReviewModal({
           </div>
         )}
 
+        {!isCheckingDuplicates && manualMatchCount > 0 && (
+          <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-accent/50 text-accent-foreground text-sm">
+            <ArrowRightLeft className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>
+              {manualMatchCount} {manualMatchCount === 1 ? "lançamento feito à mão confere com o extrato e será vinculado a ele" : "lançamentos feitos à mão conferem com o extrato e serão vinculados a ele"}, sem duplicar. Confira o par; se for outro lançamento, marque “Importar mesmo assim”.
+            </span>
+          </div>
+        )}
+
         {!isCheckingDuplicates && pendingMatchCount > 0 && (
           <div className="flex-shrink-0 flex items-start gap-2 p-3 rounded-lg bg-accent/50 text-accent-foreground text-sm">
             <ArrowRightLeft className="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -777,9 +829,16 @@ export function AccountReviewModal({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-muted-foreground">{item.date}</span>
-                        {item.isDuplicate && item.matchedPendingSplitIds.length === 0 && (
+                        {item.isDuplicate && item.matchedPendingSplitIds.length === 0 && !item.matchedManual && (
                           <Badge variant="secondary" className="text-xs flex-shrink-0">
                             Já importada
+                          </Badge>
+                        )}
+                        {item.matchedManual && !item.forceImport && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0 bg-accent text-accent-foreground border-accent">
+                            <ArrowRightLeft className="h-3 w-3 mr-1" />
+                            Lançado à mão: {item.matchedManual.description}
+                            {item.matchedManual.date !== item.date && ` (${item.matchedManual.date})`}
                           </Badge>
                         )}
                         {item.isDuplicate && item.matchedPendingSplitIds.length > 0 && !item.forceImport && (

@@ -2,7 +2,7 @@
  * Funções utilitárias para normalização e detecção de duplicatas em importações.
  */
 
-import { collapseSplitGroups, type CollapsedRow } from "./splitTransaction";
+import { collapseSplitGroups, type CollapsedRow, type SplitAwareRow } from "./splitTransaction";
 import { stripInstallmentMarkers } from "./installmentDescription";
 
 /**
@@ -182,6 +182,16 @@ export function detectDuplicates(
   return duplicateMap;
 }
 
+interface ExistingAccountTransaction {
+  id?: string;
+  date: string;
+  description: string;
+  original_description: string | null;
+  amount: number;
+  split_group_id?: string | null;
+  split_parent_id?: string | null;
+}
+
 /**
  * Detecta duplicatas para importação de extratos bancários (contas).
  * Similar a detectDuplicates mas com interface adaptada para AccountImportedItem.
@@ -192,17 +202,21 @@ export function detectDuplicates(
  */
 export function detectAccountDuplicates(
   importedItems: Array<{ date: string; description: string; amount: number }>,
-  existingTransactions: Array<{
-    id?: string;
-    date: string;
-    description: string;
-    original_description: string | null;
-    amount: number;
-    split_group_id?: string | null;
-    split_parent_id?: string | null;
-  }>
+  existingTransactions: ExistingAccountTransaction[],
 ): Set<number> {
-  const duplicateIndices = new Set<number>();
+  return new Set(findAccountDuplicates(importedItems, existingTransactions).keys());
+}
+
+/**
+ * Mesma regra de `detectAccountDuplicates`, devolvendo também a linha casada.
+ * Quem precisa saber QUAIS lançamentos o extrato já consumiu (para não
+ * casá-los de novo em `matchManualEntries`) usa esta.
+ */
+export function findAccountDuplicates<T extends ExistingAccountTransaction>(
+  importedItems: Array<{ date: string; description: string; amount: number }>,
+  existingTransactions: T[],
+): Map<number, CollapsedRow<T & { id: string }>> {
+  const duplicates = new Map<number, CollapsedRow<T & { id: string }>>();
   const usedExistingIds = new Set<string>();
   const TOLERANCE = 0.05;
 
@@ -231,10 +245,93 @@ export function detectAccountDuplicates(
     });
 
     if (match) {
-      duplicateIndices.add(index);
+      duplicates.set(index, match);
       match.splitMemberIds.forEach((id) => usedExistingIds.add(id));
     }
   });
 
-  return duplicateIndices;
+  return duplicates;
+}
+
+/**
+ * Quantos dias a data digitada num lançamento manual pode distar da data do
+ * extrato. Cobre o fim de semana entre o PIX e o lançamento no banco, e quem
+ * lança no dia em que lembra; não chega ao mês seguinte, onde mora a próxima
+ * ocorrência de um PIX recorrente de mesmo valor.
+ */
+export const MANUAL_MATCH_WINDOW_DAYS = 3;
+
+export interface ManualCandidate extends SplitAwareRow {
+  date: string;
+  description: string;
+  original_description: string | null;
+  type: string;
+}
+
+/** Dias desde a época, para medir distância entre datas YYYY-MM-DD sem fuso. */
+function dayNumber(date: string): number {
+  const [y, m, d] = normalizeDate(date).split("-").map(Number);
+  return Date.UTC(y, m - 1, d) / 86_400_000;
+}
+
+/**
+ * Lançamento feito à mão que o extrato confirma.
+ *
+ * `findAccountDuplicates` só reconhece o que veio de importação: compara o
+ * texto do extrato com `original_description`, que lançamento manual não tem
+ * (a descrição é a digitada). Em 13/10/2026 a PIX do Rulhan de R$ 425,24 foi
+ * lançada à mão como "Airbnb - Rulhan", já vinculada ao reembolso da parcela;
+ * o OFX trouxe "PIX TRANSF Rulhan 13 10", a revisão mostrou como nova e ela
+ * entrou de novo — saldo da conta R$ 425,24 acima do banco.
+ *
+ * Sem descrição para comparar, sobra direção + valor + data próxima. Isso é
+ * suposição, não prova: quem chama mostra o par na revisão e deixa
+ * "Importar mesmo assim".
+ *
+ * - Só é candidato quem NÃO tem `original_description`. Um importado já tem a
+ *   sua linha de extrato; casar outra linha com ele esconderia um lançamento
+ *   real (dois PIX de mesmo valor em dias seguidos).
+ * - `skip.items`: linhas já resolvidas (duplicata exata, previsto casado).
+ * - `skip.existingIds`: lançamentos que a regra exata já consumiu.
+ * - Empate: ganha o de data mais próxima.
+ * - Divisão conta como uma linha com o valor somado, como nas outras regras.
+ */
+export function matchManualEntries<T extends ManualCandidate>(
+  importedItems: Array<{ date: string; amount: number; type: string }>,
+  existingTransactions: T[],
+  skip: { items: ReadonlySet<number>; existingIds: ReadonlySet<string> },
+): Map<number, CollapsedRow<T>> {
+  const matches = new Map<number, CollapsedRow<T>>();
+  const usedExistingIds = new Set(skip.existingIds);
+  const TOLERANCE = 0.05;
+
+  const manualRows = collapseSplitGroups(existingTransactions).filter((row) => !row.original_description);
+
+  importedItems.forEach((item, index) => {
+    if (skip.items.has(index)) return;
+    const itemDay = dayNumber(item.date);
+
+    let best: CollapsedRow<T> | null = null;
+    let bestDistance = Infinity;
+    for (const row of manualRows) {
+      if (row.splitMemberIds.some((id) => usedExistingIds.has(id))) continue;
+      if (row.type !== item.type) continue;
+      if (Math.abs(Number(row.amount) - item.amount) > TOLERANCE) continue;
+
+      const distance = Math.abs(dayNumber(row.date) - itemDay);
+      // `!(<=)` e não `>`: data ilegível dá NaN, e NaN nunca casa.
+      if (!(distance <= MANUAL_MATCH_WINDOW_DAYS)) continue;
+      if (distance < bestDistance) {
+        best = row;
+        bestDistance = distance;
+      }
+    }
+
+    if (best) {
+      matches.set(index, best);
+      best.splitMemberIds.forEach((id) => usedExistingIds.add(id));
+    }
+  });
+
+  return matches;
 }
