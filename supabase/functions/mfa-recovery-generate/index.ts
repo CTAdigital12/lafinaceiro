@@ -76,6 +76,11 @@ Deno.serve(async (req) => {
     }
 
     // Validate JWT via Supabase auth (verified signature, fresh).
+    // getUser(), NOT getClaims() (issue #5): with the project's asymmetric
+    // signing key, getClaims() only checks the signature locally. getUser()
+    // asks Auth whether the SESSION still exists, so a token from a logged-out
+    // or revoked session is refused instead of staying valid until it expires.
+    // It is the only revocation check on this service-role path.
     const anonClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });

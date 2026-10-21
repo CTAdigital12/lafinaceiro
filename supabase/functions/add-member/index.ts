@@ -41,7 +41,13 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify caller
+    // Verify caller.
+    // `getUser()` e não `getClaims()` (issue #5): com a chave de assinatura
+    // assimétrica do projeto, o getClaims só confere a assinatura, localmente.
+    // O getUser pergunta ao Auth se a SESSÃO ainda existe — depois de um logout
+    // ou revogação o token assinado seguiria valendo até expirar. É a única
+    // checagem de revogação neste caminho service-role (nem o `verify_jwt` do
+    // gateway a faz), e esta função concede acesso permanente.
     const anonClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
