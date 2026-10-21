@@ -27,9 +27,9 @@ const regras = vi.hoisted(() => ({
 
 vi.mock("@/integrations/supabase/client", () => {
   const chain: Record<string, unknown> = {};
-  chain.select = () => chain;
+  for (const nome of ["select", "eq", "gte", "lte", "order"]) chain[nome] = () => chain;
   // Lançamentos já existentes na conta (dedup): nenhum.
-  chain.eq = () => Promise.resolve({ data: [], error: null });
+  chain.range = () => Promise.resolve({ data: [], error: null });
   return { supabase: { from: () => chain } };
 });
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));

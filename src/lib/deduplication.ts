@@ -335,3 +335,29 @@ export function matchManualEntries<T extends ManualCandidate>(
 
   return matches;
 }
+
+/**
+ * Intervalo de datas que a revisão do extrato precisa ler do banco.
+ *
+ * Toda regra que casa uma linha do extrato com um lançamento existente é presa
+ * à data: `findAccountDuplicates` e o casamento com previsto exigem o MESMO
+ * dia, e `matchManualEntries` aceita até `MANUAL_MATCH_WINDOW_DAYS` de
+ * distância. Lançamento fora deste intervalo não casa com linha nenhuma, então
+ * não precisa vir — e ler a conta inteira esbarrava no teto de linhas do
+ * PostgREST. **Se uma regra ganhar janela maior, este intervalo acompanha.**
+ *
+ * @returns `null` quando nenhuma data do extrato é legível.
+ */
+export function accountLookupRange(
+  importedItems: Array<{ date: string }>,
+): { from: string; to: string } | null {
+  const days = importedItems.map((item) => dayNumber(item.date)).filter(Number.isFinite);
+  if (days.length === 0) return null;
+
+  // UTC nas duas pontas (dayNumber também é UTC), então não há fuso no meio.
+  const toYmd = (day: number) => new Date(day * 86_400_000).toISOString().slice(0, 10);
+  return {
+    from: toYmd(Math.min(...days) - MANUAL_MATCH_WINDOW_DAYS),
+    to: toYmd(Math.max(...days) + MANUAL_MATCH_WINDOW_DAYS),
+  };
+}

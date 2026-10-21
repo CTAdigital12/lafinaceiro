@@ -36,8 +36,9 @@ const PREVISTO_DIVIDIDO = vi.hoisted(() => [
 
 vi.mock("@/integrations/supabase/client", () => {
   const chain: Record<string, unknown> = {};
-  chain.select = () => chain;
-  chain.eq = () => Promise.resolve({ data: PREVISTO_DIVIDIDO, error: null });
+  for (const nome of ["select", "eq", "gte", "lte", "order"]) chain[nome] = () => chain;
+  // A busca pagina: a 1ª página traz o previsto dividido, a 2ª vem vazia.
+  chain.range = (from: number) => Promise.resolve({ data: from === 0 ? PREVISTO_DIVIDIDO : [], error: null });
   chain.update = (patch: unknown) => ({
     in: (_col: string, ids: string[]) => {
       updates.push({ patch, ids });
