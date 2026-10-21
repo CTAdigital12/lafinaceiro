@@ -51,6 +51,7 @@ import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCreditCardInvoiceSync } from "@/hooks/useCreditCardInvoiceSync";
 import { useExistingInstallments, detectDuplicates } from "@/hooks/useExistingInstallments";
+import { matchManualInvoiceEntries } from "@/lib/deduplication";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ImportedItem, ImportCompleteData } from "./InvoiceImportModal";
@@ -90,6 +91,8 @@ interface ReviewItem extends ImportedItem {
   matched_transaction_id: string | null;
   /** Todas as partes do lançamento casado — mais de uma quando ele foi dividido. */
   matched_member_ids: string[];
+  /** Lançamento feito à mão que esta linha da fatura confirma (ver matchManualInvoiceEntries). */
+  matched_manual: { ids: string[]; description: string; date: string } | null;
   // Original description from parser (before user edits)
   original_description: string;
 }
@@ -183,15 +186,24 @@ export function InvoiceReviewModal({
       
       // Detect duplicates
       const duplicateMap = detectDuplicates(items, existingInstallments);
-      
+
+      // Lançado à mão antes da fatura: a regra exata não o reconhece (não tem
+      // o texto do banco) e a linha entraria de novo. Só para o que a regra
+      // exata não resolveu.
+      const manualMatches = matchManualInvoiceEntries(items, existingInstallments, {
+        items: new Set(duplicateMap.keys()),
+        existingIds: new Set([...duplicateMap.values()].flatMap((row) => row.splitMemberIds)),
+      });
+
       const itemsWithCategories = items.map((item, index) => {
         const suggestedCategoryId = findCategoryForDescription(item.description);
         const suggestedCorporate = findCorporateForDescription(item.description);
         const isInstallment = !!(item.installment_current && item.installment_total && item.installment_current < item.installment_total) && !item.is_credit;
-        
+
         // Check if this item is a duplicate
         const matchedTransaction = duplicateMap.get(index);
-        const isDuplicate = !!matchedTransaction;
+        const manual = manualMatches.get(index);
+        const isDuplicate = !!matchedTransaction || !!manual;
         
         return {
           ...item,
@@ -213,6 +225,7 @@ export function InvoiceReviewModal({
           duplicate_status: isDuplicate ? 'duplicate' as DuplicateStatus : 'new' as DuplicateStatus,
           matched_transaction_id: matchedTransaction?.id || null,
           matched_member_ids: matchedTransaction?.splitMemberIds ?? [],
+          matched_manual: manual ? { ids: manual.splitMemberIds, description: manual.description, date: manual.date } : null,
           // Preserve original description from parser
           original_description: item.description,
         };
@@ -321,7 +334,7 @@ export function InvoiceReviewModal({
       prev.map((item, i) => {
         if (i !== index) return item;
         // Return to original status (new or duplicate)
-        const wasOriginallyDuplicate = !!item.matched_transaction_id;
+        const wasOriginallyDuplicate = !!item.matched_transaction_id || !!item.matched_manual;
         return {
           ...item,
           duplicate_status: wasOriginallyDuplicate ? 'duplicate' as DuplicateStatus : 'new' as DuplicateStatus,
@@ -645,6 +658,27 @@ export function InvoiceReviewModal({
         }
       }
 
+      // Lançamento manual reconhecido na fatura: nada novo é criado, e ele
+      // passa a carregar o texto e a data da fatura. Sem isso, reimportar a
+      // mesma fatura não o reconheceria — a regra exata compara os dois, e
+      // como importado ele deixa de ser candidato manual — e a linha voltaria
+      // como nova. Linha ignorada (rejected) não vincula nada.
+      let manualLinkedCount = 0;
+      let manualLinkWarning = "";
+      for (const item of reviewItems) {
+        if (!item.matched_manual || item.include_in_import || item.duplicate_status !== 'duplicate') continue;
+        const { error: linkError } = await supabase
+          .from("transactions")
+          .update({ original_description: item.original_description, date: item.date })
+          .in("id", item.matched_manual.ids);
+        if (linkError) {
+          logError(linkError, "InvoiceReviewModal.vincularManual");
+          manualLinkWarning = "lançamento feito à mão não foi vinculado à fatura — reimportar o arquivo refaz esta etapa";
+        } else {
+          manualLinkedCount++;
+        }
+      }
+
       // Recalcula a fatura do cartão UMA vez ao final (as criações em massa
       // passam skipSync). É a fonte de verdade: soma todas as transações
       // completed/não-provisórias do cartão e reabre o status para "open"
@@ -655,7 +689,7 @@ export function InvoiceReviewModal({
       }
 
       const corporateCount = itemsToImport.filter((item) => item.is_corporate).length;
-      const excludedCount = reviewItems.filter(item => !item.include_in_import).length;
+      const excludedCount = reviewItems.filter(item => !item.include_in_import).length - manualLinkedCount;
 
       let description = `${successCount} transações criadas`;
       if (futureInstallmentsCount > 0 && successCount > itemsToImport.length) {
@@ -664,6 +698,9 @@ export function InvoiceReviewModal({
       }
       if (failed.length > 0) {
         description += ` • ${failed.length} não gravadas`;
+      }
+      if (manualLinkedCount > 0) {
+        description += ` • ${manualLinkedCount} lançados à mão vinculados à fatura`;
       }
       if (corporateCount > 0) {
         description += ` • ${corporateCount} da empresa`;
@@ -676,6 +713,9 @@ export function InvoiceReviewModal({
       }
       if (activationWarning) {
         description += ` • ${activationWarning}`;
+      }
+      if (manualLinkWarning) {
+        description += ` • ${manualLinkWarning}`;
       }
 
       const houveProblema = failed.length > 0 || activationWarning !== "";
@@ -1077,10 +1117,18 @@ export function InvoiceReviewModal({
                   {isDuplicate && (
                     <div className="flex items-start gap-2 text-xs text-chart-4 bg-chart-4/5 rounded-md px-2 py-1.5">
                       <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Possível duplicata:</strong> Encontrada transação similar já cadastrada neste período.
-                        {item.include_in_import && " Você escolheu importar mesmo assim."}
-                      </span>
+                      {item.matched_manual ? (
+                        <span>
+                          <strong>Lançado à mão:</strong> {item.matched_manual.description}
+                          {item.matched_manual.date !== item.date && ` (${item.matched_manual.date})`}. Será vinculado a esta linha da fatura, sem duplicar. Se for outra compra, use “Forçar importação”.
+                          {item.include_in_import && " Você escolheu importar mesmo assim."}
+                        </span>
+                      ) : (
+                        <span>
+                          <strong>Possível duplicata:</strong> Encontrada transação similar já cadastrada neste período.
+                          {item.include_in_import && " Você escolheu importar mesmo assim."}
+                        </span>
+                      )}
                     </div>
                   )}
 
