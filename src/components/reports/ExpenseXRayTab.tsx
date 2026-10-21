@@ -6,7 +6,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { useDate } from "@/contexts/DateContext";
 import { Treemap, ResponsiveContainer, Tooltip } from "recharts";
 import type { TooltipProps } from "recharts";
-import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, TrendingDown, TrendingUp, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import { filterPureExpenses } from "@/lib/transactionFilters";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { RefundReport } from "./RefundReport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatYmd } from "@/lib/dateUtils";
 
 export function ExpenseXRayTab() {

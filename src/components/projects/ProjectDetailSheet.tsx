@@ -242,7 +242,6 @@ export function ProjectDetailSheet({
       <LinkTransactionsModal
         open={linkModalOpen}
         onOpenChange={setLinkModalOpen}
-        projectId={project.id}
         onLink={onLinkTransactions}
         isPending={isLinking}
       />

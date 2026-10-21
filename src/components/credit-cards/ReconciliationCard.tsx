@@ -13,7 +13,7 @@ import { CloseInvoiceModal } from "./CloseInvoiceModal";
 import { ReopenInvoiceModal } from "./ReopenInvoiceModal";
 import { ClosedInvoiceBanner } from "./ClosedInvoiceBanner";
 import { SpreadsheetReconciliationModal } from "./SpreadsheetReconciliationModal";
-import { useInvoiceCycles, type InvoiceStatus } from "@/hooks/useInvoiceCycles";
+import { useInvoiceCycles } from "@/hooks/useInvoiceCycles";
 
 interface ReconciliationCardProps {
   reconciliation: ReconciliationSummary;

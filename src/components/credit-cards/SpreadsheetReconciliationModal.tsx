@@ -47,7 +47,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   parseSpreadsheetFile,
   reconcileSpreadsheet,
@@ -82,7 +81,6 @@ export function SpreadsheetReconciliationModal({
   const formatCurrency = (value: number) => fmt(Math.abs(value));
   const { user } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const { createTransaction, deleteTransaction, updateTransaction } = useTransactions(month, year);
 
   const [isLoading, setIsLoading] = useState(false);

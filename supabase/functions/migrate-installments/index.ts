@@ -148,7 +148,7 @@ serve(async (req) => {
 
     let updatedCount = 0;
 
-    for (const [key, group] of groups) {
+    for (const group of groups.values()) {
       // Only process groups with more than one transaction (actual groups)
       if (group.transactions.length >= 1) {
         const firstTransaction = group.transactions[0];

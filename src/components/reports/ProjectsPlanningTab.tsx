@@ -1,7 +1,4 @@
-import { useMemo, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useMemo } from "react";
 import { useDate } from "@/contexts/DateContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -11,14 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { getCompetenceDate } from "@/lib/reportUtils";
 import { isMonthlyExpense } from "@/lib/transactionFilters";
-import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Target, FolderKanban, AlertCircle, CheckCircle2, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
-  ResponsiveContainer, Legend,
-} from "recharts";
 import { BudgetCurrentMonth } from "./planning/BudgetCurrentMonth";
 import { BudgetChart } from "./planning/BudgetChart";
 import { BudgetAccumulatedCard } from "./planning/BudgetAccumulatedCard";
@@ -43,7 +34,6 @@ interface CategoriaFilha {
 }
 
 export function ProjectsPlanningTab() {
-  const formatCurrency = useFormatCurrency();
   const { month, year } = useDate();
   const { user } = useAuth();
   const { categories } = useCategories();
@@ -209,7 +199,7 @@ export function ProjectsPlanningTab() {
   const chartData = useMemo(() => {
     const catMap = new Map(categories.map((c) => [c.id, c]));
 
-    return monthKeys.map((mk, idx) => {
+    return monthKeys.map((mk) => {
       const monthBudgets = allBudgets.filter(
         (b) => b.month === mk.month && b.year === mk.year
       );

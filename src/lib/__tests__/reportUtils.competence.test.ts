@@ -22,6 +22,7 @@ const tx = (over: Partial<Transaction>): Transaction =>
     type: "expense",
     description: "x",
     status: "completed",
+    ...over,
   }) as Transaction;
 
 describe("getCompetenceDate", () => {

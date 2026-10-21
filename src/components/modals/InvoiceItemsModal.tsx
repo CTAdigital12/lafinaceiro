@@ -60,7 +60,7 @@ export function InvoiceItemsModal({
     }
   };
 
-  const { corporateSelected, reimbursableSelected, personalSelected, myTotalSelected, totalSelected } = useMemo(() => {
+  const { corporateSelected, reimbursableSelected, personalSelected, myTotalSelected } = useMemo(() => {
     const selectedTxs = transactions.filter((t) => selected.has(t.id));
     const corporate = selectedTxs
       .filter((t) => t.is_corporate_expense && !t.is_refund)
@@ -76,7 +76,6 @@ export function InvoiceItemsModal({
       reimbursableSelected: reimbursable,
       personalSelected: personal,
       myTotalSelected: reimbursable + personal,
-      totalSelected: corporate + reimbursable + personal,
     };
   }, [transactions, selected]);
 

@@ -40,7 +40,6 @@ import { useCreditCards } from "@/hooks/useCreditCards";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useProjects } from "@/hooks/useProjects";
-import { FolderKanban } from "lucide-react";
 
 interface TransactionModalProps {
   open: boolean;

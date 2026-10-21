@@ -70,7 +70,6 @@ export default function Dashboard() {
 
   const [selectedParentCategory, setSelectedParentCategory] = useState<ParentCategoryData | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryData | null>(null);
-  const [categoryType, setCategoryType] = useState<"expense" | "income">("expense");
   const [expenseSheetOpen, setExpenseSheetOpen] = useState(false);
   const [incomeSheetOpen, setIncomeSheetOpen] = useState(false);
   const [allCategoriesDialogOpen, setAllCategoriesDialogOpen] = useState(false);
@@ -304,7 +303,6 @@ export default function Dashboard() {
   const handleIncomeCategoryClick = (category: CategoryData) => {
     if (category.name === "Sem dados") return;
     setSelectedCategory(category);
-    setCategoryType("income");
     setIncomeSheetOpen(true);
   };
 
@@ -465,7 +463,6 @@ export default function Dashboard() {
           transactions={incomeTransactions}
           allCategories={sortedIncomeCategories}
           onCategoryChange={handleCategoryChange}
-          categoryType="income"
         />
       )}
 

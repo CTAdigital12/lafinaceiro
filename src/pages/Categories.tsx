@@ -275,7 +275,7 @@ function DroppableParentCategory({
 }
 
 export default function Categories() {
-  const { categories, expenseCategories, isLoading, createCategory, updateCategory } = useCategories();
+  const { expenseCategories, isLoading, createCategory, updateCategory } = useCategories();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);

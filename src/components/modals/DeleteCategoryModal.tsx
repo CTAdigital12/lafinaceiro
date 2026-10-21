@@ -43,13 +43,6 @@ export function DeleteCategoryModal({
   const [isDeleting, setIsDeleting] = useState(false);
   const [subcategoryIds, setSubcategoryIds] = useState<string[]>([]);
 
-  // Get subcategories of the category being deleted (if it's a parent)
-  const getSubcategoryIds = (categoryId: string): string[] => {
-    return expenseCategories
-      .filter((c) => c.parent_id === categoryId)
-      .map((c) => c.id);
-  };
-
   // Só o ID entra no efeito. Depender do objeto `category` inteiro faria as duas
   // consultas rodarem de novo (e limpariam a categoria de destino já escolhida)
   // a cada vez que a lista de categorias fosse recarregada e devolvesse um
@@ -211,7 +204,7 @@ export function DeleteCategoryModal({
                       <SelectValue placeholder="Selecione uma categoria..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {groupedCategories.map((group, index) =>
+                      {groupedCategories.map((group) =>
                         group.parent ? (
                           <SelectGroup key={group.parent.id}>
                             <SelectLabel className="flex items-center gap-1">

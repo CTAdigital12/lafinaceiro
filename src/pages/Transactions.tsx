@@ -109,7 +109,6 @@ export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [duplicatingTransaction, setDuplicatingTransaction] = useState<Transaction | null>(null);
-  const [refundingTransaction, setRefundingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -165,8 +164,6 @@ export default function Transactions() {
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   
-  const pageSize = 20;
-  
   const { month, year } = useDate();
   const { toast } = useToast();
   const fmt = useFormatCurrency();
@@ -179,8 +176,6 @@ export default function Transactions() {
   const { 
     transactions, 
     isLoading, 
-    totalIncome, 
-    totalExpense, 
     totalCount,
     hasMore,
     deleteTransaction,
@@ -503,21 +498,12 @@ export default function Transactions() {
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setDuplicatingTransaction(null);
-    setRefundingTransaction(null);
     setIsModalOpen(true);
   };
 
   const handleDuplicate = (transaction: Transaction) => {
     setDuplicatingTransaction(transaction);
     setEditingTransaction(null);
-    setRefundingTransaction(null);
-    setIsModalOpen(true);
-  };
-
-  const handleCreateRefund = (transaction: Transaction) => {
-    setRefundingTransaction(transaction);
-    setEditingTransaction(null);
-    setDuplicatingTransaction(null);
     setIsModalOpen(true);
   };
 
@@ -543,7 +529,6 @@ export default function Transactions() {
     if (!open) {
       setEditingTransaction(null);
       setDuplicatingTransaction(null);
-      setRefundingTransaction(null);
     }
   };
 
@@ -1340,7 +1325,6 @@ export default function Transactions() {
         onOpenChange={handleModalClose} 
         transaction={editingTransaction}
         duplicateFrom={duplicatingTransaction}
-        refundFrom={refundingTransaction}
       />
 
       {/* Bulk Delete Confirmation Dialog */}

@@ -4,7 +4,6 @@ import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDate } from "@/contexts/DateContext";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useCallback } from "react";
 import { useCreditCardInvoiceSync } from "./useCreditCardInvoiceSync";
 import { isMonthlyExpense, isMonthlyExpenseRefund, isMonthlyIncome } from "@/lib/transactionFilters";
 import { sharedSplitFields } from "@/lib/splitTransaction";

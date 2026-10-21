@@ -12,6 +12,9 @@ type ToasterToast = ToastProps & {
   action?: ToastActionElement;
 };
 
+// Usado só como tipo (`typeof actionTypes`): é o desenho do shadcn, mantido
+// como vem do upstream (ver eslint.config.js).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
   UPDATE_TOAST: "UPDATE_TOAST",

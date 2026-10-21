@@ -87,7 +87,7 @@ export function CategoryChart({ title, data, onCategoryClick, onViewAllClick }: 
     return null;
   };
 
-  const handlePieClick = (entry: CategoryData, index: number) => {
+  const handlePieClick = (entry: CategoryData) => {
     if (onCategoryClick && hasData) {
       // Use entry directly - Recharts passes the actual data item
       onCategoryClick(entry);
