@@ -44,7 +44,15 @@ export function useProjects() {
 
       if (txError) throw txError;
 
-      // Calculate spent per project
+      // Gasto do projeto = o que já está COMPROMETIDO, não o que saiu no mês.
+      // Por isso NÃO usa transactionFilters (isSettledExpense e cia.), que
+      // respondem "quanto saiu este mês" e deixam o pendente de fora. Aqui a
+      // parcela futura de uma compra já feita conta: o sofá em 10x para a
+      // reforma tirou os 10x do orçamento do projeto, e contar só o pago
+      // mostraria uma folga que não existe. Previsão de recorrência
+      // (is_provisional) fica fora — é palpite, não compra —, e pagamento de
+      // fatura também, porque só move dinheiro. Decidido em 21/10/2026; todas
+      // as telas de projeto leem este número (spent_amount).
       const spentByProject: Record<string, number> = {};
       for (const tx of txData || []) {
         if (!tx.project_id) continue;
