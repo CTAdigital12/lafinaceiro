@@ -122,6 +122,48 @@ describe("detectDuplicates — parcela", () => {
     expect(dup.get(0)?.id).toBe("manual");
   });
 
+  it("reconhece a parcela quando o banco muda o nome da loja entre faturas", () => {
+    // Fatura de nov/2026 do Black: as 2/n foram gravadas com o nome que veio na
+    // fatura de out, e a de nov trouxe o nome mais longo (cidade, sem truncar).
+    const existing = [
+      parcela({ id: "tstore", amount: 280.55, installment_number: 2, total_installments: 6, original_description: "Tstore Curitiba Parcela 1 de 6", date: "2026-10-03" }),
+      parcela({ id: "servopa", amount: 480.75, installment_number: 2, total_installments: 4, original_description: "Servopa Parcela 1 de 4", date: "2026-09-10" }),
+      parcela({ id: "amazon", amount: 100.05, installment_number: 5, total_installments: 5, original_description: "Amazonmktplc*amazo Parcela 1 de 5", date: "2026-07-02" }),
+    ];
+
+    const dup = detectDuplicates(
+      [
+        { transaction_value: 280.55, installment_current: 2, installment_total: 6, description: "Tstore Curitiba Curitiba Bra Parcela 2 de 6", purchase_date: "2026-10-03" },
+        { transaction_value: 480.75, installment_current: 2, installment_total: 4, description: "Servopa Curitiba Bra Parcela 2 de 4", purchase_date: "2026-09-10" },
+        { transaction_value: 100.05, installment_current: 5, installment_total: 5, description: "Amazonmktplc*amazocoe Pauk Parcela 5 de 5", purchase_date: "2026-07-02" },
+      ],
+      existing,
+    );
+
+    expect(dup.get(0)?.id).toBe("tstore");
+    expect(dup.get(1)?.id).toBe("servopa");
+    expect(dup.get(2)?.id).toBe("amazon");
+  });
+
+  it("descrição-base vazia não serve de prefixo para qualquer loja", () => {
+    const existing = [parcela({ id: "vazia", original_description: "3/12" })];
+
+    const dup = detectDuplicates(
+      [
+        {
+          transaction_value: 89.9,
+          installment_current: 3,
+          installment_total: 12,
+          description: "SPOTIFY BR 3/12",
+          purchase_date: "2026-01-05",
+        },
+      ],
+      existing,
+    );
+
+    expect(dup.get(0)).toBeUndefined();
+  });
+
   it("reconhece a última parcela de um plano de 12x apesar do ano inferido errado", () => {
     // Compra de 06/10/2025 em 12x: a 12/12 cai na fatura de out/2026, o parser
     // infere 2026 para a data da compra e a linha gravada tem 2025.
