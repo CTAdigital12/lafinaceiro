@@ -63,6 +63,23 @@ function baseDescription(text: string | null | undefined): string {
   return normalizeString(stripInstallmentMarkers(text || ""));
 }
 
+/**
+ * Mesma loja, mesmo que o banco escreva o nome de outro jeito de uma fatura
+ * para a outra: basta uma descrição-base começar com a outra.
+ *
+ * Igualdade exata falhou em 31/10/2026 na fatura de nov do Black: as parcelas
+ * gravadas em set/out tinham "Tstore Curitiba", "Servopa" e
+ * "Amazonmktplc*amazo", e a fatura nova trouxe "Tstore Curitiba Curitiba Bra",
+ * "Servopa Curitiba Bra" e "Amazonmktplc*amazocoe ..." — o nome truncado
+ * cresceu e ganhou a cidade. As três 2/n entraram como novas.
+ *
+ * Descrição vazia só casa com vazia: senão o prefixo "" aceitaria qualquer loja.
+ */
+function sameMerchant(a: string, b: string): boolean {
+  if (!a || !b) return a === b;
+  return a.startsWith(b) || b.startsWith(a);
+}
+
 export interface ExistingTransaction {
   id: string;
   description: string;
@@ -97,7 +114,8 @@ export interface ImportedItem {
  * 3. String: compara importado normalizado com original_description (fallback description)
  * 4. Parcela: se importado tem installment_current, exige match de
  *    installment_number + total_installments e, quando o lado existente veio de
- *    importação (tem original_description), também da descrição-base.
+ *    importação (tem original_description), também da descrição-base — uma
+ *    começando com a outra, porque o banco muda o nome da loja entre faturas.
  * 5. Divisão: as partes de uma transação dividida contam como UMA linha, com o
  *    valor somado — é assim que o gasto aparece na fatura importada. A linha
  *    devolvida é a COLAPSADA: `id` é o da primária e `splitMemberIds` traz
@@ -151,7 +169,7 @@ export function detectDuplicates(
         // ("NETFLIX.COM*ASSINATURA") — exigir descrição ali trocaria este bug
         // por duplicata garantida em todo parcelamento manual.
         if (!existing.original_description) return true;
-        return baseDescription(existing.original_description) === baseDescription(item.description);
+        return sameMerchant(baseDescription(existing.original_description), baseDescription(item.description));
       } else {
         // Rule 1: Date match (normalized)
         const dateMatch = normalizeDate(existing.date) === normalizeDate(item.purchase_date);
