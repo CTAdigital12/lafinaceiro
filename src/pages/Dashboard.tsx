@@ -15,6 +15,7 @@ import {
   matchesExpenseView,
   type ExpenseViewFilter,
 } from "@/lib/transactionFilters";
+import { groupIncomeByCategory } from "@/lib/incomeByCategory";
 import {
   Dialog,
   DialogContent,
@@ -250,18 +251,12 @@ export default function Dashboard() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
-  // Calculate income by category (exclude expense refunds - they are now deducted from expense categories)
-  const incomeByCategory = incomeCategories.map((cat) => {
-    const total = transactions
-      .filter((t) => t.type === "income" && t.category_id === cat.id && !t.is_refund && !t.is_reimbursement)
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-    return {
-      name: cat.fullName || cat.name,
-      value: total,
-      color: cat.color || "hsl(var(--chart-2))",
-      id: cat.id,
-    };
-  }).filter((c) => c.value > 0);
+  // Mesma seleção do card "Receitas" (`isMonthlyIncome`), com a receita sem
+  // categoria de receita numa fatia própria: a soma das fatias é o card.
+  const incomeByCategory = useMemo(
+    () => groupIncomeByCategory(transactions, incomeCategories),
+    [transactions, incomeCategories],
+  );
 
   // Default data for empty states
   const defaultExpenseData = expensesByParentCategory.length > 0 ? expensesByParentCategory : [
@@ -272,24 +267,16 @@ export default function Dashboard() {
     { name: "Sem dados", value: 1, color: "hsl(210, 20%, 80%)", id: "" },
   ];
 
-  // Get transactions for selected income category
-  const getTransactionsForCategory = (categoryName: string, type: "expense" | "income") => {
-    const categories = type === "expense" ? expenseCategories : incomeCategories;
-    const category = categories.find(c => (c.fullName || c.name) === categoryName);
-    
-    if (!category) return [];
-    
-    return transactions
-      .filter(t => t.category_id === category.id && t.type === type)
+  // As transações listadas na gaveta são as que compõem a fatia — mesma
+  // seleção, então o total do topo e a lista não têm como discordar.
+  const getIncomeTransactionsForCategory = (categoryId: string | undefined) =>
+    (incomeByCategory.find((s) => s.id === categoryId)?.transactions ?? [])
+      .slice()
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .map(t => ({
+      .map((t) => ({
         ...t,
         category_id: t.category_id || undefined,
       }));
-  };
-
-  // Get sorted categories for navigation
-  const sortedIncomeCategories = [...incomeByCategory].sort((a, b) => b.value - a.value);
 
   const handleExpenseCategoryClick = (category: CategoryData) => {
     if (category.name === "Sem dados") return;
@@ -327,8 +314,8 @@ export default function Dashboard() {
     );
   }
 
-  const incomeTransactions = selectedCategory 
-    ? getTransactionsForCategory(selectedCategory.name, "income")
+  const incomeTransactions = selectedCategory
+    ? getIncomeTransactionsForCategory(selectedCategory.id)
     : [];
 
   const handleFilterChange = (value: string[]) => {
@@ -461,7 +448,7 @@ export default function Dashboard() {
           categoryColor={selectedCategory.color}
           totalAmount={selectedCategory.value}
           transactions={incomeTransactions}
-          allCategories={sortedIncomeCategories}
+          allCategories={incomeByCategory}
           onCategoryChange={handleCategoryChange}
         />
       )}
