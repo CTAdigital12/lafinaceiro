@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logError } from "@/lib/errorHandler";
 import { sumInvoice } from "@/lib/invoiceTotal";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 /**
  * Hook to sync credit card current_invoice based on transactions
@@ -16,21 +17,27 @@ export function useCreditCardInvoiceSync() {
 
   const recalculateInvoice = useMutation({
     mutationFn: async (creditCardId: string) => {
-      // Fetch all transactions for this credit card (expenses + payments)
-      const { data: transactions, error: txError } = await supabase
-        .from("transactions")
-        .select("amount, type, status, is_refund, is_card_payment, is_provisional")
-        .eq("credit_card_id", creditCardId)
-        .eq("is_provisional", false);
-
-      if (txError) throw txError;
+      // Todo o histórico do cartão (despesas + pagamentos), em páginas. Sem
+      // paginação o PostgREST devolvia só 1000 linhas, sem ordem e sem erro:
+      // o cartão Itaú passou desse teto em 21/10/2026 e os pagamentos — as
+      // linhas mais editadas, que ficam no fim — caíram fora do corte. O
+      // "Saldo em aberto" foi gravado como R$ 209.222,63 contra 13.048,56 real.
+      const transactions = await fetchAllRows((from, to) =>
+        supabase
+          .from("transactions")
+          .select("id, amount, type, status, is_refund, is_card_payment, is_provisional")
+          .eq("credit_card_id", creditCardId)
+          .eq("is_provisional", false)
+          .order("id")
+          .range(from, to),
+      );
 
       // Regra única, compartilhada com o CASE dos RPCs SQL. Antes esta soma
       // era escrita à mão aqui e só reconhecia estorno dentro de
       // `type === 'expense'`, divergindo do SQL para estorno lançado como
       // receita (A10). `sumInvoice` já aplica o filtro de completed/provisória
       // e o piso em zero.
-      const invoiceTotal = sumInvoice(transactions || []);
+      const invoiceTotal = sumInvoice(transactions);
 
       // Update the credit card.
       // `status` é um flag GLOBAL do cartão. Quando entram novas despesas (ex.:
