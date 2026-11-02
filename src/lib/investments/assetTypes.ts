@@ -5,8 +5,8 @@
  * Supabase, e para virar a fonte única de quais tipos EXISTEM (`ASSET_TYPES`)
  * versus quais podem ser ESCOLHIDOS no cadastro (`SELECTABLE_ASSET_TYPES`).
  *
- * A separação existe porque a coluna `asset_type` no banco é `text` livre: ela
- * aceita qualquer string, inclusive uma que nenhuma tela conheça. Antes disso,
+ * A separação existe porque a coluna `asset_type` no banco pode ter valor que
+ * nenhuma tela conheça (`fiis`, por exemplo, que a CHECK aceita). Antes disso,
  * `acoes`, `etfs` e `bdrs` estavam na união mas fora dos rótulos e fora da
  * tabela — um ativo desses contava no patrimônio total e no gráfico de pizza,
  * mas não aparecia em nenhuma linha da tabela. O total não batia com a soma
