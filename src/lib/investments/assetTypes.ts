@@ -55,6 +55,21 @@ export const SELECTABLE_ASSET_TYPES: readonly AssetType[] = [
   "saldo_corretora",
 ];
 
+/**
+ * Tipos acompanhados pelo SALDO total (`pricing_method = "total_balance"`), e
+ * não por quantidade × cotação. É o que decide, nas telas, se o cadastro pede
+ * aplicado + saldo e se "Atualizar cotações" pede saldo ou preço.
+ *
+ * `fundos` entrou em 02/11/2026: a corretora informa fundo por saldo e valor
+ * aplicado, sem cotas. Antes, os fundos de ações da XP só ficavam atualizáveis
+ * se cadastrados como "Renda Fixa", e o gráfico de alocação mostrava 100% em
+ * renda fixa numa carteira com ~5% em ações globais.
+ */
+const TOTAL_BALANCE_TYPES: readonly string[] = ["renda_fixa", "fundos", "saldo_corretora"];
+
+export const usesTotalBalancePricing = (assetType: string): boolean =>
+  TOTAL_BALANCE_TYPES.includes(assetType);
+
 /** Rótulo para exibição, caindo no valor cru quando o tipo é desconhecido. */
 export const assetTypeLabel = (type: string): string => ASSET_TYPE_LABELS[type] || type;
 

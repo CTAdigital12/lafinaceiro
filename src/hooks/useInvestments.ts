@@ -24,6 +24,7 @@ export {
   assetTypeLabel,
   listAssetTypes,
   selectableTypesFor,
+  usesTotalBalancePricing,
 } from "@/lib/investments/assetTypes";
 export type { AssetType } from "@/lib/investments/assetTypes";
 
@@ -45,11 +46,6 @@ export interface InvestmentAsset {
   created_at: string;
   updated_at: string;
 }
-
-// Helper to determine if asset uses total_balance pricing
-export const usesTotalBalancePricing = (assetType: string): boolean => {
-  return ["renda_fixa", "saldo_corretora"].includes(assetType);
-};
 
 // Helper to get the patrimony value of an asset
 export const getAssetPatrimony = (asset: InvestmentAsset): number => {

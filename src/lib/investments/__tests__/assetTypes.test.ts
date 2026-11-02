@@ -6,7 +6,25 @@ import {
   assetTypeLabel,
   listAssetTypes,
   selectableTypesFor,
+  usesTotalBalancePricing,
 } from "@/lib/investments/assetTypes";
+
+describe("usesTotalBalancePricing", () => {
+  it("fundo é acompanhado por saldo, como a corretora informa", () => {
+    expect(usesTotalBalancePricing("fundos")).toBe(true);
+  });
+
+  it("renda fixa e saldo em corretora seguem por saldo", () => {
+    expect(usesTotalBalancePricing("renda_fixa")).toBe(true);
+    expect(usesTotalBalancePricing("saldo_corretora")).toBe(true);
+  });
+
+  it("ação, cripto e renda variável seguem por quantidade × cotação", () => {
+    for (const tipo of ["renda_variavel", "acoes", "etfs", "bdrs", "crypto", "desconhecido"]) {
+      expect(usesTotalBalancePricing(tipo), tipo).toBe(false);
+    }
+  });
+});
 
 const comAtivos = (tipos: Record<string, number>) =>
   Object.fromEntries(Object.entries(tipos).map(([t, n]) => [t, Array.from({ length: n }, () => ({}))]));
