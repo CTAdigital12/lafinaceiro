@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import {
   ASSET_TYPES,
   ASSET_TYPE_LABELS,
@@ -8,6 +10,31 @@ import {
   selectableTypesFor,
   usesTotalBalancePricing,
 } from "@/lib/investments/assetTypes";
+
+describe("tipos aceitos pelo banco", () => {
+  /**
+   * A CHECK `investment_assets_asset_type_check` ficou para trás do código: a
+   * tela oferecia "fundos" e o banco o recusava com 23514. Este teste lê a
+   * migração mais recente que (re)define a CHECK e exige todo tipo da união.
+   */
+  it("todo tipo de ASSET_TYPES é aceito pela CHECK mais recente", () => {
+    const dir = path.resolve(__dirname, "../../../../supabase/migrations");
+    const ultima = readdirSync(dir)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .reverse()
+      .map((f) => readFileSync(path.join(dir, f), "utf8"))
+      // A original declara a CHECK junto da coluna; as seguintes, por nome.
+      .find((sql) => /investment_assets_asset_type_check|asset_type\s+text\s+not\s+null\s+check/i.test(sql));
+    expect(ultima, "nenhuma migração define a CHECK de asset_type").toBeDefined();
+
+    const lista = ultima!.match(/check\s*\(\s*asset_type\s+in\s*\(([^)]*)\)/i)?.[1] ?? "";
+    const aceitos = [...lista.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    for (const tipo of ASSET_TYPES) {
+      expect(aceitos, `o banco recusa "${tipo}"`).toContain(tipo);
+    }
+  });
+});
 
 describe("usesTotalBalancePricing", () => {
   it("fundo é acompanhado por saldo, como a corretora informa", () => {
