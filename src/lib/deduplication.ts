@@ -176,9 +176,22 @@ export function detectDuplicates(
         if (!dateMatch) return false;
 
         // Rule 3: String match (original_description fallback to description)
-        const existingStr = normalizeString(existing.original_description || existing.description);
         const importedStr = normalizeString(item.description || "");
-        return existingStr === importedStr;
+
+        // Mesma tolerância de nome da parcela: a planilha parcial da fatura traz
+        // "Auto Posto Tacs" e a final, "Auto Posto Tacs Maringa Bra". Com
+        // igualdade exata, a fatura de nov/2026 do Black duplicou 24 compras
+        // (R$ 4.606,21) já lançadas pelas importações de 13/10 e 21/10.
+        //
+        // Só quando os dois lados vieram do banco. Lançamento feito à mão não
+        // tem `original_description` e vai para `matchManualInvoiceEntries`,
+        // que grava nele o texto e a data da fatura — casá-lo aqui por prefixo
+        // ("Recanto Do Djalma - Marmitas" × "RECANTO DO DJALMA") o pularia
+        // como duplicata comum e ele nunca receberia o texto do banco.
+        if (existing.original_description) {
+          return sameMerchant(normalizeString(existing.original_description), importedStr);
+        }
+        return normalizeString(existing.description) === importedStr;
       }
     });
 
