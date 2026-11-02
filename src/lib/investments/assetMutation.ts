@@ -24,8 +24,9 @@ export type AssetMutationInput = Pick<
  * Payload pronto para `supabase.from("investment_assets").update(...)`.
  *
  * Quando `pricing_method = "total_balance"` (renda fixa, saldo em corretora),
- * apenas `current_balance` é mutado — `quantity` é semanticamente fixo
- * (1 unidade representando "o saldo total").
+ * mudam `current_balance` e o valor aplicado — guardado em `average_price`,
+ * porque `quantity` é semanticamente fixo (1 unidade representando "o saldo
+ * total") e o aplicado é `quantity * average_price`. `quantity` nunca entra.
  *
  * Quando `pricing_method = "unit_price"` (ações, ETFs, fundos, crypto),
  * `quantity` e `average_price` é que carregam o estado.
@@ -33,14 +34,31 @@ export type AssetMutationInput = Pick<
 export type AssetUpdatePayload =
   | { quantity: number; average_price: number }
   | { quantity: number }
-  | { current_balance: number };
+  | { current_balance: number; average_price: number };
+
+/**
+ * Valor aplicado de um ativo por saldo total.
+ *
+ * Antes, aplicação e resgate só mexiam no saldo, e o aplicado ficava parado no
+ * número do cadastro. O Trend Cash da XP seguiu com R$ 19.702,00 aplicados
+ * depois de dois resgates, quando a XP já mostrava R$ 13.218,91, e a tela
+ * exibia um prejuízo de R$ 3.071 num fundo que rendia.
+ */
+function appliedOf(asset: AssetMutationInput): number {
+  return asset.quantity * asset.average_price;
+}
+
+/** `average_price` que faz `quantity * average_price` dar `applied`. */
+function averageFor(asset: AssetMutationInput, applied: number): number {
+  if (asset.quantity <= 0) return 0;
+  return Math.round((Math.max(0, applied) / asset.quantity) * 100) / 100;
+}
 
 /**
  * Calcula o estado pós-compra do ativo.
  *
- * - `total_balance`: o aporte aumenta `current_balance` em `total_value` do
- *   investimento (`quantity * unit_price + fees`). `quantity`/`average_price`
- *   não são afetados.
+ * - `total_balance`: o aporte (`quantity * unit_price + fees`) soma ao
+ *   `current_balance` e ao valor aplicado. `quantity` não é afetado.
  * - `unit_price`: recalcula preço médio ponderado por todas as posições.
  *
  * @param asset estado atual do ativo
@@ -52,7 +70,10 @@ export function computeAssetUpdateOnBuy(
 ): AssetUpdatePayload {
   if (asset.pricing_method === "total_balance") {
     const aporte = incoming.quantity * incoming.unit_price + incoming.fees;
-    return { current_balance: (asset.current_balance || 0) + aporte };
+    return {
+      current_balance: (asset.current_balance || 0) + aporte,
+      average_price: averageFor(asset, appliedOf(asset) + aporte),
+    };
   }
 
   if (asset.pricing_method === "unit_price") {
@@ -81,8 +102,15 @@ export function computeAssetUpdateOnBuy(
  * de um CDB nunca diminuía após resgate, ficando inflado.
  *
  * - `total_balance`: reduz `current_balance` pelo `total_value` da venda
- *   (clampado em 0).
+ *   (clampado em 0) e o valor aplicado NA MESMA PROPORÇÃO do saldo resgatado
+ *   — a regra da corretora. No Trend Cash, em abr/2026, a XP abateu
+ *   R$ 4.248,78 do aplicado num resgate de ~21,5% do saldo.
  * - `unit_price`: reduz `quantity` pela quantidade vendida (clampado em 0).
+ *
+ * O `total_value` registrado costuma ser o líquido que caiu na conta, depois
+ * do IR; a corretora proporcionaliza pelo bruto. A diferença no aplicado é
+ * pequena (dezenas de reais num resgate de milhares) e o aplicado continua
+ * editável no cadastro do ativo.
  *
  * @param asset estado atual do ativo
  * @param sold dados da operação de venda
@@ -92,8 +120,12 @@ export function computeAssetUpdateOnSell(
   sold: { quantity: number; total_value: number },
 ): AssetUpdatePayload {
   if (asset.pricing_method === "total_balance") {
-    const newBalance = (asset.current_balance || 0) - sold.total_value;
-    return { current_balance: Math.max(0, newBalance) };
+    const balance = asset.current_balance || 0;
+    const fraction = balance > 0 ? Math.min(1, sold.total_value / balance) : 1;
+    return {
+      current_balance: Math.max(0, balance - sold.total_value),
+      average_price: averageFor(asset, appliedOf(asset) * (1 - fraction)),
+    };
   }
 
   if (asset.pricing_method === "unit_price") {
@@ -123,7 +155,10 @@ export function computeAssetUpdateOnBuyReverse(
   if (asset.pricing_method === "total_balance") {
     const aporte = original.quantity * original.unit_price + original.fees;
     const newBalance = (asset.current_balance || 0) - aporte;
-    return { current_balance: Math.max(0, newBalance) };
+    return {
+      current_balance: Math.max(0, newBalance),
+      average_price: averageFor(asset, appliedOf(asset) - aporte),
+    };
   }
 
   if (asset.pricing_method === "unit_price") {
@@ -146,13 +181,26 @@ export function computeAssetUpdateOnBuyReverse(
  * Inverso de `computeAssetUpdateOnSell`. Restaura a posição vendida ao
  * ativo. Para `unit_price`, `average_price` não é tocado (vendas não
  * alteram preço médio na operação direta, então o reverso também não).
+ *
+ * Para `total_balance`, o aplicado volta pela proporção inversa: o resgate
+ * levou a fração `total_value / saldo_antes`, e `saldo_antes` é o saldo de
+ * agora mais o resgate. Resgate TOTAL zerou o aplicado e não há de onde
+ * recuperá-lo — o aplicado fica como está, para ser corrigido no cadastro. O
+ * mesmo caveat de `computeAssetUpdateOnBuyReverse` vale aqui: com operações
+ * posteriores no meio, o resultado é aproximado.
  */
 export function computeAssetUpdateOnSellReverse(
   asset: AssetMutationInput,
   sold: { quantity: number; total_value: number },
 ): AssetUpdatePayload {
   if (asset.pricing_method === "total_balance") {
-    return { current_balance: (asset.current_balance || 0) + sold.total_value };
+    const balanceBefore = (asset.current_balance || 0) + sold.total_value;
+    const fraction = balanceBefore > 0 ? sold.total_value / balanceBefore : 0;
+    const applied = fraction < 1 ? appliedOf(asset) / (1 - fraction) : appliedOf(asset);
+    return {
+      current_balance: balanceBefore,
+      average_price: averageFor(asset, applied),
+    };
   }
 
   if (asset.pricing_method === "unit_price") {

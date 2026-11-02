@@ -14,9 +14,10 @@ const acaoBase: AssetMutationInput = {
   current_balance: 0,
 };
 
+// Renda fixa: quantity = 1 e o valor aplicado vive em average_price.
 const cdbBase: AssetMutationInput = {
   quantity: 1,
-  average_price: 0,
+  average_price: 40_000,
   pricing_method: "total_balance",
   current_balance: 50_000,
 };
@@ -48,14 +49,14 @@ describe("computeAssetUpdateOnBuy", () => {
     });
   });
 
-  it("incrementa current_balance em ativos total_balance (renda fixa)", () => {
-    // aporte de R$ 5.000 em CDB já com R$ 50.000
+  it("aporte em total_balance soma ao saldo E ao valor aplicado", () => {
+    // aporte de R$ 5.000 em CDB com R$ 50.000 de saldo e R$ 40.000 aplicados
     const out = computeAssetUpdateOnBuy(cdbBase, {
       quantity: 1,
       unit_price: 5_000,
       fees: 0,
     });
-    expect(out).toEqual({ current_balance: 55_000 });
+    expect(out).toEqual({ current_balance: 55_000, average_price: 45_000 });
   });
 
   it("aporte total_balance soma fees ao current_balance", () => {
@@ -64,12 +65,12 @@ describe("computeAssetUpdateOnBuy", () => {
       unit_price: 5_000,
       fees: 25,
     });
-    expect(out).toEqual({ current_balance: 55_025 });
+    expect(out).toEqual({ current_balance: 55_025, average_price: 45_025 });
   });
 
-  it("não retorna campos extras inesperados (lean payload pra supabase.update)", () => {
+  it("payload de total_balance não inclui quantity (lean payload pra supabase.update)", () => {
     const out = computeAssetUpdateOnBuy(cdbBase, { quantity: 1, unit_price: 1, fees: 0 });
-    expect(Object.keys(out)).toEqual(["current_balance"]);
+    expect(Object.keys(out).sort()).toEqual(["average_price", "current_balance"]);
   });
 });
 
@@ -89,7 +90,33 @@ describe("computeAssetUpdateOnSell", () => {
       quantity: 1,
       total_value: 5_000,
     });
-    expect(out).toEqual({ current_balance: 45_000 });
+    expect(out).toMatchObject({ current_balance: 45_000 });
+  });
+
+  it("resgate em total_balance reduz o aplicado na proporção do saldo resgatado", () => {
+    // Resgatar 10% do saldo leva 10% do aplicado: 40.000 → 36.000. Antes, o
+    // aplicado ficava parado e a tela mostrava o resgate como prejuízo.
+    const out = computeAssetUpdateOnSell(cdbBase, { quantity: 1, total_value: 5_000 });
+    expect(out).toEqual({ current_balance: 45_000, average_price: 36_000 });
+  });
+
+  it("reproduz o resgate do Trend Cash na XP (abr/2026)", () => {
+    // Em 31/03 a XP mostrava R$ 22.990,25 de saldo e R$ 19.702,00 aplicados;
+    // depois do resgate, R$ 15.453,22 aplicados — 21,5652% do aplicado saiu.
+    const trendCash: AssetMutationInput = {
+      quantity: 1,
+      average_price: 19_702,
+      pricing_method: "total_balance",
+      current_balance: 22_990.25,
+    };
+    const resgate = 22_990.25 * (1 - 15_453.22 / 19_702);
+    const out = computeAssetUpdateOnSell(trendCash, { quantity: 1, total_value: resgate });
+    expect((out as { average_price: number }).average_price).toBeCloseTo(15_453.22, 1);
+  });
+
+  it("resgate total zera o aplicado", () => {
+    const out = computeAssetUpdateOnSell(cdbBase, { quantity: 1, total_value: 50_000 });
+    expect(out).toEqual({ current_balance: 0, average_price: 0 });
   });
 
   it("não permite quantity negativo (clamp em 0)", () => {
@@ -105,7 +132,7 @@ describe("computeAssetUpdateOnSell", () => {
       quantity: 1,
       total_value: 99_999,
     });
-    expect(out).toEqual({ current_balance: 0 });
+    expect(out).toEqual({ current_balance: 0, average_price: 0 });
   });
 
   it("para total_balance ignora `quantity` da operação (campo irrelevante no domínio)", () => {
@@ -125,7 +152,7 @@ describe("computeAssetUpdateOnSell", () => {
       quantity: 1,
       total_value: 1_000,
     });
-    expect(Object.keys(out)).toEqual(["current_balance"]);
+    expect(Object.keys(out).sort()).toEqual(["average_price", "current_balance"]);
   });
 
   it("trata current_balance null como 0 sem quebrar", () => {
@@ -133,7 +160,7 @@ describe("computeAssetUpdateOnSell", () => {
       { ...cdbBase, current_balance: null as unknown as number },
       { quantity: 1, total_value: 100 },
     );
-    expect(out).toEqual({ current_balance: 0 });
+    expect(out).toEqual({ current_balance: 0, average_price: 0 });
   });
 });
 
@@ -193,10 +220,10 @@ describe("computeAssetUpdateOnBuyReverse", () => {
     expect(out).toEqual({ quantity: 0, average_price: 0 });
   });
 
-  it("reverte buy em total_balance subtraindo aporte do current_balance", () => {
+  it("reverte buy em total_balance subtraindo aporte do saldo e do aplicado", () => {
     const postBuy: AssetMutationInput = {
       quantity: 1,
-      average_price: 0,
+      average_price: 45_000,
       pricing_method: "total_balance",
       current_balance: 55_000,
     };
@@ -205,13 +232,13 @@ describe("computeAssetUpdateOnBuyReverse", () => {
       unit_price: 5_000,
       fees: 0,
     });
-    expect(out).toEqual({ current_balance: 50_000 });
+    expect(out).toEqual({ current_balance: 50_000, average_price: 40_000 });
   });
 
   it("reverte buy em total_balance incluindo fees no aporte", () => {
     const postBuy: AssetMutationInput = {
       quantity: 1,
-      average_price: 0,
+      average_price: 45_025,
       pricing_method: "total_balance",
       current_balance: 55_025,
     };
@@ -220,7 +247,7 @@ describe("computeAssetUpdateOnBuyReverse", () => {
       unit_price: 5_000,
       fees: 25,
     });
-    expect(out).toEqual({ current_balance: 50_000 });
+    expect(out).toEqual({ current_balance: 50_000, average_price: 40_000 });
   });
 
   it("reverte buy em total_balance não permite current_balance negativo", () => {
@@ -235,7 +262,7 @@ describe("computeAssetUpdateOnBuyReverse", () => {
       unit_price: 5_000,
       fees: 0,
     });
-    expect(out).toEqual({ current_balance: 0 });
+    expect(out).toEqual({ current_balance: 0, average_price: 0 });
   });
 });
 
@@ -255,10 +282,11 @@ describe("computeAssetUpdateOnSellReverse", () => {
     expect(out).toEqual({ quantity: 100 });
   });
 
-  it("reverte sell em total_balance somando total_value de volta", () => {
+  it("reverte sell em total_balance devolvendo saldo e aplicado", () => {
+    // Pós-resgate de 10%: 45.000 de saldo, 36.000 aplicados.
     const postSell: AssetMutationInput = {
       quantity: 1,
-      average_price: 0,
+      average_price: 36_000,
       pricing_method: "total_balance",
       current_balance: 45_000,
     };
@@ -266,10 +294,10 @@ describe("computeAssetUpdateOnSellReverse", () => {
       quantity: 1,
       total_value: 5_000,
     });
-    expect(out).toEqual({ current_balance: 50_000 });
+    expect(out).toEqual({ current_balance: 50_000, average_price: 40_000 });
   });
 
-  it("payload de reverse total_balance não inclui quantity", () => {
+  it("reverso de resgate total não inventa aplicado (fica para o cadastro)", () => {
     const postSell: AssetMutationInput = {
       quantity: 1,
       average_price: 0,
@@ -280,7 +308,8 @@ describe("computeAssetUpdateOnSellReverse", () => {
       quantity: 1,
       total_value: 1_000,
     });
-    expect(Object.keys(out)).toEqual(["current_balance"]);
+    expect(out).toEqual({ current_balance: 1_000, average_price: 0 });
+    expect(Object.keys(out)).not.toContain("quantity");
   });
 });
 
@@ -317,22 +346,22 @@ describe("reverse(apply(state)) === state", () => {
     const start = cdbBase;
     const buyOp = { quantity: 1, unit_price: 5_000, fees: 25 };
     const after = computeAssetUpdateOnBuy(start, buyOp);
-    const reverted = computeAssetUpdateOnBuyReverse(
-      { ...start, ...(after as { current_balance: number }) },
-      buyOp,
-    );
-    expect(reverted).toEqual({ current_balance: start.current_balance });
+    const reverted = computeAssetUpdateOnBuyReverse({ ...start, ...after }, buyOp);
+    expect(reverted).toEqual({
+      current_balance: start.current_balance,
+      average_price: expect.closeTo(start.average_price, 2),
+    });
   });
 
   it("sell + reverseSell em total_balance é identidade", () => {
     const start = cdbBase;
     const sellOp = { quantity: 1, total_value: 5_000 };
     const after = computeAssetUpdateOnSell(start, sellOp);
-    const reverted = computeAssetUpdateOnSellReverse(
-      { ...start, ...(after as { current_balance: number }) },
-      sellOp,
-    );
-    expect(reverted).toEqual({ current_balance: start.current_balance });
+    const reverted = computeAssetUpdateOnSellReverse({ ...start, ...after }, sellOp);
+    expect(reverted).toEqual({
+      current_balance: start.current_balance,
+      average_price: expect.closeTo(start.average_price, 2),
+    });
   });
 });
 
