@@ -52,10 +52,13 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { useCreditCardInvoiceSync } from "@/hooks/useCreditCardInvoiceSync";
 import { useExistingInstallments, detectDuplicates } from "@/hooks/useExistingInstallments";
 import { matchManualInvoiceEntries } from "@/lib/deduplication";
+import { invoiceLeftovers } from "@/lib/invoiceLeftovers";
+import { fetchAllRows } from "@/lib/fetchAllRows";
+import type { SystemRow, SystemTransaction } from "@/lib/spreadsheetReconciliation";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ImportedItem, ImportCompleteData } from "./InvoiceImportModal";
-import { format, addMonths, parse } from "date-fns";
+import { format, addMonths, parse, startOfMonth, endOfMonth } from "date-fns";
 import {
   buildInstallmentDescription,
   stripInstallmentMarkers,
@@ -153,6 +156,10 @@ export function InvoiceReviewModal({
   // houver alguma aqui o modal não fecha sozinho — é o que permite ver QUAIS
   // falharam e repetir só elas.
   const [failedRows, setFailedRows] = useState<FailedRow<PreparedTransaction>[]>([]);
+  // Lançamentos do ciclo que somam na fatura e não estão na planilha,
+  // conferidos depois de gravar (ver invoiceLeftovers). Com algum aqui a
+  // importação já terminou: o modal fica aberto só para mostrá-los.
+  const [leftovers, setLeftovers] = useState<SystemRow[]>([]);
   const [categorySearch, setCategorySearch] = useState("");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [openCategoryPopoverIndex, setOpenCategoryPopoverIndex] = useState<number | null>(null);
@@ -234,6 +241,7 @@ export function InvoiceReviewModal({
       setExpandedNotes(new Set());
       setShowPostClosingWarning(postClosingCount > 0);
       setFailedRows([]);
+      setLeftovers([]);
     }
   }, [items, open, findCategoryForDescription, findCorporateForDescription, postClosingCount, importData?.due_date, existingInstallments, isLoadingExisting]);
 
@@ -492,6 +500,38 @@ export function InvoiceReviewModal({
     return resultado;
   };
 
+  /**
+   * Confere o ciclo gravado contra a planilha e guarda o que sobrou. Devolve
+   * `true` quando há sobra — aí o modal fica aberto para mostrá-la.
+   *
+   * Falha na conferência não desfaz nem esconde a importação, que já entrou:
+   * vai para o log e o modal fecha como antes.
+   */
+  const conferirSobras = async (): Promise<boolean> => {
+    if (!creditCardId || !invoiceMonth || !invoiceYear) return false;
+    try {
+      const inicio = format(startOfMonth(new Date(invoiceYear, invoiceMonth - 1)), "yyyy-MM-dd");
+      const fim = format(endOfMonth(new Date(invoiceYear, invoiceMonth - 1)), "yyyy-MM-dd");
+      // Mesmo recorte de ciclo da Conciliação de Faturas e da deduplicação.
+      const ciclo = await fetchAllRows<SystemTransaction>((from, to) =>
+        supabase
+          .from("transactions")
+          .select("id, date, due_date, description, original_description, amount, is_refund, is_corporate_expense, category_id, status, is_provisional, split_group_id, split_parent_id")
+          .eq("credit_card_id", creditCardId)
+          .or(`and(due_date.gte.${inicio},due_date.lte.${fim}),and(due_date.is.null,date.gte.${inicio},date.lte.${fim})`)
+          .eq("is_card_payment", false)
+          .order("id")
+          .range(from, to),
+      );
+      const sobra = invoiceLeftovers(items, ciclo);
+      setLeftovers(sobra);
+      return sobra.length > 0;
+    } catch (error) {
+      logError(error, "InvoiceReviewModal.conferirSobras");
+      return false;
+    }
+  };
+
   const handleImport = async () => {
     setIsImporting(true);
     setFailedRows([]);
@@ -730,7 +770,7 @@ export function InvoiceReviewModal({
       // e a única saída seria reimportar o arquivo e refazer tudo.
       if (failed.length > 0) {
         setFailedRows(failed);
-      } else {
+      } else if (!(await conferirSobras())) {
         onOpenChange(false);
       }
     } catch (error) {
@@ -768,7 +808,7 @@ export function InvoiceReviewModal({
           title: "Fatura importada com sucesso!",
           description: `${succeeded} ${succeeded === 1 ? "transação gravada" : "transações gravadas"} na nova tentativa`,
         });
-        onOpenChange(false);
+        if (!(await conferirSobras())) onOpenChange(false);
       } else {
         toast({
           title: `${failed.length} ${failed.length === 1 ? "linha continua" : "linhas continuam"} sem gravar`,
@@ -897,6 +937,42 @@ export function InvoiceReviewModal({
                     <li key={i} className="text-xs">
                       <span className="font-medium block">{linha.label}</span>
                       <span className="opacity-80">{linha.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {leftovers.length > 0 && !isImporting && (
+          <Alert variant="default" className="flex-shrink-0 border-chart-4 bg-chart-4/10">
+            <AlertTriangle className="h-4 w-4 text-chart-4" />
+            <AlertTitle className="text-chart-4">
+              {leftovers.length === 1
+                ? "1 lançamento desta fatura não está na planilha"
+                : `${leftovers.length} lançamentos desta fatura não estão na planilha`}
+            </AlertTitle>
+            <AlertDescription className="text-sm space-y-2">
+              <p>
+                A importação terminou. Estes lançamentos de {invoicePeriodStr} somam{" "}
+                <strong>
+                  R$ {leftovers.reduce((s, r) => s + (r.is_refund ? -1 : 1) * Number(r.amount), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </strong>{" "}
+                na fatura e o banco não os listou. Pode ser <strong>duplicata</strong> (o banco mudou o
+                nome da loja), lançamento feito à mão depois da data da planilha, ou compra cancelada.
+                Confira em Cartões › Conciliação de Faturas.
+              </p>
+              <ScrollArea className="max-h-40">
+                <ul className="space-y-1 pr-3">
+                  {leftovers.map((r) => (
+                    <li key={r.id} className="text-xs flex justify-between gap-3">
+                      <span className="truncate">
+                        {format(parse(r.date, "yyyy-MM-dd", new Date()), "dd/MM")} · {r.description}
+                      </span>
+                      <span className="font-medium whitespace-nowrap">
+                        {r.is_refund ? "− " : ""}R$ {Number(r.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -1461,41 +1537,50 @@ export function InvoiceReviewModal({
             )}
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isImporting}
-            >
-              {failedRows.length > 0 ? "Fechar assim mesmo" : "Cancelar"}
-            </Button>
-            {failedRows.length > 0 ? (
-              <Button onClick={handleRetryFailed} disabled={isImporting}>
-                {isImporting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Tentando...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Tentar novamente ({failedRows.length})
-                  </>
-                )}
+            {/* Importação já gravada: sem "Confirmar", que gravaria tudo de novo. */}
+            {leftovers.length > 0 ? (
+              <Button onClick={() => onOpenChange(false)} disabled={isImporting}>
+                Fechar
               </Button>
             ) : (
-              <Button onClick={handleImport} disabled={isImporting || includedItems.length === 0}>
-                {isImporting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Importando...
-                  </>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isImporting}
+                >
+                  {failedRows.length > 0 ? "Fechar assim mesmo" : "Cancelar"}
+                </Button>
+                {failedRows.length > 0 ? (
+                  <Button onClick={handleRetryFailed} disabled={isImporting}>
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Tentando...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Tentar novamente ({failedRows.length})
+                      </>
+                    )}
+                  </Button>
                 ) : (
-                  <>
-                    <Check className="h-4 w-4 mr-2" />
-                    Confirmar ({includedItems.length})
-                  </>
+                  <Button onClick={handleImport} disabled={isImporting || includedItems.length === 0}>
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Importando...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Confirmar ({includedItems.length})
+                      </>
+                    )}
+                  </Button>
                 )}
-              </Button>
+              </>
             )}
           </div>
         </DialogFooter>
