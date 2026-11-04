@@ -40,6 +40,7 @@ import { useCreditCards } from "@/hooks/useCreditCards";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
 import { useCategorizationRules } from "@/hooks/useCategorizationRules";
 import { useProjects } from "@/hooks/useProjects";
+import { categoryKindFor } from "@/lib/transactionFilters";
 
 interface TransactionModalProps {
   open: boolean;
@@ -102,10 +103,16 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   // o valor digitado, e não `totalInstallments`, quando a compra entra pela 3ª.
   const installmentsToCreate = Math.max(1, totalInstallments - installmentNumber + 1);
   // Estorno de compra no cartão é gravado como receita, mas abate a categoria
-  // da COMPRA (ver isCardIncomeRefund) — então escolhe entre as de despesa.
-  // Com a lista de receita, não havia como pôr "Vestuário" num estorno.
-  const isCardRefund = type === "income" && isRefund && paymentMethod === "credit_card";
-  const categories = type === "income" && !isCardRefund ? incomeCategories : expenseCategories;
+  // da COMPRA — então escolhe entre as de despesa. Regra única em
+  // `categoryKindFor`, a mesma do seletor da linha em Transações.
+  const categories =
+    categoryKindFor({
+      type,
+      is_refund: isRefund,
+      credit_card_id: paymentMethod === "credit_card" ? creditCardId || "cartao" : null,
+    }) === "income"
+      ? incomeCategories
+      : expenseCategories;
   
   // Find selected category with full info
   const selectedCategory = allCategories.find(c => c.id === categoryId);

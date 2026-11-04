@@ -60,6 +60,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
+  categoryKindFor,
   isForecastExpense,
   isMonthlyExpense,
   isMonthlyExpenseRefund,
@@ -1019,7 +1020,7 @@ export default function Transactions() {
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <CategorySelector
                               value={transaction.category_id}
-                              type={transaction.type as "income" | "expense"}
+                              type={categoryKindFor(transaction)}
                               currentCategory={transaction.categories}
                               onSelect={(categoryId) => handleCategoryChange(transaction.id, categoryId)}
                             />
