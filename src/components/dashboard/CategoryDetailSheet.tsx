@@ -28,6 +28,10 @@ import { Transaction } from "@/hooks/useTransactions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Currency } from "@/components/ui/currency";
 import { formatYmd } from "@/lib/dateUtils";
+import { fetchTransactionById } from "@/lib/fetchTransactionById";
+import { logError } from "@/lib/errorHandler";
+import { mensagemDeErro } from "@/lib/mensagemDeErro";
+import { useToast } from "@/hooks/use-toast";
 
 interface TransactionDisplay {
   id: string;
@@ -68,6 +72,7 @@ export function CategoryDetailSheet({
 }: CategoryDetailSheetProps) {
   const isMobile = useIsMobile();
   const fmt = useFormatCurrency();
+  const { toast } = useToast();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [categoryListOpen, setCategoryListOpen] = useState(false);
@@ -88,48 +93,23 @@ export function CategoryDetailSheet({
     }
   };
 
-  const handleEditTransaction = (transaction: TransactionDisplay) => {
-    // Convert to full Transaction type for the modal
-    setEditingTransaction({
-      id: transaction.id,
-      description: transaction.description,
-      amount: transaction.amount,
-      date: transaction.date,
-      type: transaction.type as "income" | "expense",
-      category_id: transaction.category_id || null,
-      account_id: null,
-      credit_card_id: null,
-      status: "completed",
-      is_corporate_expense: false,
-      is_reimbursable: false,
-      is_refund: false,
-      is_card_payment: false,
-      reimbursement_status: null,
-      user_id: "",
-      created_at: "",
-      updated_at: "",
-      due_date: null,
-      installment_number: null,
-      total_installments: null,
-      installment_group_id: null,
-      refunded_transaction_id: null,
-      imported_at: null,
-      is_provisional: false,
-      recurring_rule_id: null,
-      project_id: null,
-      // Campos que entraram depois (reembolso, divisão, dígitos do cartão).
-      // Este objeto é um `Transaction` sintético montado só para abrir o
-      // modal de edição — os valores neutros abaixo refletem "não se aplica",
-      // e o modal recarrega o lançamento real pelo id.
-      is_reimbursement: false,
-      reimbursement_payment_id: null,
-      reimbursement_income_id: null,
-      split_group_id: null,
-      split_parent_id: null,
-      split_origin: null,
-      card_last_digits: null,
-    });
-    setIsModalOpen(true);
+  // O modal grava o registro INTEIRO a partir do que recebe. Aqui se montava
+  // um Transaction sintético com conta, cartão, status, vencimento e
+  // parcelamento vazios, e salvar a edição gravava isso tudo: o lançamento
+  // virava órfão, fora de qualquer saldo. Assim o PIX de R$ 4.250 da Luisa
+  // (21/10/2026) sumiu do saldo do Itaú ao ganhar categoria pelo Dashboard.
+  const handleEditTransaction = async (transaction: TransactionDisplay) => {
+    try {
+      setEditingTransaction(await fetchTransactionById(transaction.id));
+      setIsModalOpen(true);
+    } catch (error) {
+      logError(error, "CategoryDetailSheet.editar");
+      toast({
+        title: "Não foi possível abrir o lançamento",
+        description: mensagemDeErro(error),
+        variant: "destructive",
+      });
+    }
   };
 
   const handleModalClose = (open: boolean) => {
