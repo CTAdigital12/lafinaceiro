@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  categoryKindFor,
   filterPureExpenses,
   filterPureIncome,
   isCardIncomeRefund,
@@ -264,6 +265,14 @@ describe("estorno de cartão gravado como receita", () => {
     const entradaNaConta = tx("income", { is_refund: true, credit_card_id: null });
     expect(isSettledExpense(entradaNaConta)).toBe(false);
     expect(filterPureExpenses([entradaNaConta])).toEqual([]);
+  });
+
+  it("categoryKindFor: estorno no cartão escolhe entre as categorias de despesa", () => {
+    expect(categoryKindFor(estorno)).toBe("expense");
+    expect(categoryKindFor(compra)).toBe("expense");
+    expect(categoryKindFor(tx("income"))).toBe("income");
+    expect(categoryKindFor(tx("income", { credit_card_id: "black" }))).toBe("income");
+    expect(categoryKindFor(tx("income", { is_refund: true }))).toBe("income");
   });
 
   it("pagamento de fatura no cartão (receita, sem estorno) não entra", () => {

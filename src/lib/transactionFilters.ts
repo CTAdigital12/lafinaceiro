@@ -46,6 +46,19 @@ export function isCardIncomeRefund(t: TransactionFlags): boolean {
 }
 
 /**
+ * De qual lista sai a categoria de um lançamento: despesa ou receita.
+ *
+ * Não é `type`: o estorno de cartão gravado como receita abate a categoria da
+ * COMPRA, então escolhe entre as de despesa. Havia dois seletores decidindo
+ * isso por `type` — o modal de edição e o seletor da linha em Transações — e
+ * corrigir só o modal deixou o da lista oferecendo "Salário" para o estorno do
+ * Mercado Livre (03/11/2026). Os dois chamam esta função.
+ */
+export function categoryKindFor(t: TransactionFlags): 'expense' | 'income' {
+  return t.type === 'expense' || isCardIncomeRefund(t) ? 'expense' : 'income';
+}
+
+/**
  * Base de toda despesa que já aconteceu: efetivada (não provisória, não
  * pendente) e que não é transferência interna (pagamento de fatura).
  *
