@@ -21,6 +21,7 @@ import { ListSearchInput } from "@/components/ui/list-search-input";
 import { ListSortButtons } from "@/components/ui/list-sort-buttons";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { formatDateBR } from "@/lib/dateUtils";
+import { isCardIncomeRefund } from "@/lib/transactionFilters";
 
 interface RefundSummary {
   categoryId: string;
@@ -58,8 +59,12 @@ export function RefundReport() {
 
   // Calculate refund summary by category
   const refundData = useMemo(() => {
-    // Get all expense transactions (both normal and refunds)
-    const expenseTransactions = transactions.filter(t => t.type === "expense");
+    // Get all expense transactions (both normal and refunds). O estorno de
+    // cartão gravado como receita (importação/conciliação de fatura) também é
+    // lado-despesa — sem ele, o estorno mais comum não aparecia aqui.
+    const expenseTransactions = transactions.filter(
+      t => t.type === "expense" || isCardIncomeRefund(t),
+    );
     
     // Group by category
     const categoryMap = new Map<string, RefundSummary>();

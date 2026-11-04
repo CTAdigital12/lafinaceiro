@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   filterPureExpenses,
   filterPureIncome,
+  isCardIncomeRefund,
   isForecastExpense,
   isMonthlyExpense,
   isMonthlyExpenseRefund,
@@ -27,6 +28,7 @@ const tx = (
     is_card_payment: boolean | null;
     is_provisional: boolean | null;
     status: string | null;
+    credit_card_id: string | null;
   }> = {},
 ) => ({
   type,
@@ -176,8 +178,9 @@ describe("isMonthlyExpenseRefund", () => {
     ).toBe(false);
   });
 
-  it("retorna false para income + is_refund=true (refund de receita não conta)", () => {
+  it("retorna false para income + is_refund=true FORA do cartão (receita na conta não é estorno de compra)", () => {
     expect(isMonthlyExpenseRefund(tx("income", { is_refund: true }))).toBe(false);
+    expect(isMonthlyExpenseRefund(tx("income", { is_refund: true, credit_card_id: null }))).toBe(false);
   });
 
   it("retorna false para expense + is_refund=false", () => {
@@ -201,6 +204,71 @@ describe("isSettledExpense (base compartilhada)", () => {
 
   it("recusa receita", () => {
     expect(isSettledExpense(tx("income"))).toBe(false);
+  });
+});
+
+/**
+ * Estorno de compra no cartão gravado como RECEITA — a forma que a importação
+ * da fatura e a Conciliação de Faturas gravam todo crédito.
+ *
+ * Caso real (03/11/2026, Itaú Black, fatura 15/11): compra Mercado Livre de
+ * 164,25 em Vestuário e o estorno de 164,25 vindo da planilha. A fatura dava
+ * zero, mas a despesa do mês ficava +164,25: o estorno, por ser `income`, não
+ * passava em `isSettledExpense` e não abatia nada.
+ */
+describe("estorno de cartão gravado como receita", () => {
+  const compra = { ...tx("expense", { credit_card_id: "black" }), amount: 164.25 };
+  const estorno = {
+    ...tx("income", { is_refund: true, credit_card_id: "black" }),
+    amount: 164.25,
+  };
+
+  it("isCardIncomeRefund reconhece só receita + estorno + cartão", () => {
+    expect(isCardIncomeRefund(estorno)).toBe(true);
+    expect(isCardIncomeRefund(tx("income", { is_refund: true }))).toBe(false);
+    expect(isCardIncomeRefund(tx("income", { credit_card_id: "black" }))).toBe(false);
+    expect(isCardIncomeRefund(tx("expense", { is_refund: true, credit_card_id: "black" }))).toBe(false);
+  });
+
+  it("abate a despesa do mês, e não vira despesa nem receita", () => {
+    expect(isMonthlyExpenseRefund(estorno)).toBe(true);
+    expect(isMonthlyExpense(estorno)).toBe(false);
+    expect(isMonthlyIncome(estorno)).toBe(false);
+    expect(isForecastExpense(estorno)).toBe(false);
+  });
+
+  it("compra + estorno somam zero, como na fatura", () => {
+    const pagas = [compra, estorno];
+    const liquido =
+      pagas.filter(isMonthlyExpense).reduce((s, t) => s + t.amount, 0) -
+      pagas.filter(isMonthlyExpenseRefund).reduce((s, t) => s + t.amount, 0);
+    expect(liquido).toBe(0);
+    expect(filterPureExpenses(pagas)).toEqual([compra, estorno]);
+  });
+
+  it("segue as mesmas exclusões do estorno gravado como despesa", () => {
+    const fora = [
+      { is_corporate_expense: true },
+      { is_reimbursable: true },
+      { is_provisional: true },
+      { status: "pending" },
+      { is_card_payment: true },
+    ];
+    for (const flags of fora) {
+      const t = tx("income", { is_refund: true, credit_card_id: "black", ...flags });
+      expect(isMonthlyExpenseRefund(t)).toBe(false);
+    }
+  });
+
+  it("receita + estorno NA CONTA continua de fora (a conciliação de conta grava assim até salário)", () => {
+    const entradaNaConta = tx("income", { is_refund: true, credit_card_id: null });
+    expect(isSettledExpense(entradaNaConta)).toBe(false);
+    expect(filterPureExpenses([entradaNaConta])).toEqual([]);
+  });
+
+  it("pagamento de fatura no cartão (receita, sem estorno) não entra", () => {
+    const pagamento = tx("income", { is_card_payment: true, credit_card_id: "black" });
+    expect(isSettledExpense(pagamento)).toBe(false);
   });
 });
 
@@ -285,6 +353,12 @@ describe("filterPureExpenses / filterPureIncome (vindas de reportUtils)", () => 
       tx("expense", { is_refund: true, status: "pending" }),
       tx("income"),
       tx("income", { is_refund: true }),
+      tx("income", { is_refund: true, credit_card_id: "card" }),
+      tx("income", { is_refund: true, credit_card_id: "card", is_corporate_expense: true }),
+      tx("income", { is_refund: true, credit_card_id: "card", is_reimbursable: true }),
+      tx("income", { is_refund: true, credit_card_id: "card", is_provisional: true }),
+      tx("income", { is_refund: true, credit_card_id: "card", status: "pending" }),
+      tx("income", { is_card_payment: true, credit_card_id: "card" }),
     ];
 
     expect(filterPureExpenses(universo)).toEqual(

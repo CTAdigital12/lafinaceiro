@@ -101,7 +101,11 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   // O laço cria da parcela atual até a última — é esse o número que multiplica
   // o valor digitado, e não `totalInstallments`, quando a compra entra pela 3ª.
   const installmentsToCreate = Math.max(1, totalInstallments - installmentNumber + 1);
-  const categories = type === "income" ? incomeCategories : expenseCategories;
+  // Estorno de compra no cartão é gravado como receita, mas abate a categoria
+  // da COMPRA (ver isCardIncomeRefund) — então escolhe entre as de despesa.
+  // Com a lista de receita, não havia como pôr "Vestuário" num estorno.
+  const isCardRefund = type === "income" && isRefund && paymentMethod === "credit_card";
+  const categories = type === "income" && !isCardRefund ? incomeCategories : expenseCategories;
   
   // Find selected category with full info
   const selectedCategory = allCategories.find(c => c.id === categoryId);
@@ -890,7 +894,9 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
                   Extorno
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {type === "expense" ? "Devolução/estorno de compra" : "Devolução de receita"}
+                  {type === "expense" || paymentMethod === "credit_card"
+                    ? "Devolução/estorno de compra"
+                    : "Devolução de receita"}
                 </p>
               </div>
             </div>
