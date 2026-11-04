@@ -19,11 +19,39 @@ export type TransactionFlags = {
   is_card_payment?: boolean | null;
   is_provisional?: boolean | null;
   status?: string | null;
+  credit_card_id?: string | null;
 };
+
+/**
+ * Estorno de compra no cartão gravado como RECEITA (`type='income'` +
+ * `is_refund=true`).
+ *
+ * É a forma canônica que a importação da fatura (`InvoiceReviewModal`) e a
+ * Conciliação de Faturas (`SpreadsheetReconciliationModal`) gravam todo
+ * crédito, e a fatura já o subtrai (`invoiceTotal.ts` olha `is_refund` antes
+ * de `type`). Os relatórios de despesa, não: `isSettledExpense` exigia
+ * `type='expense'`, então esse estorno não abatia a categoria nem o mês — e
+ * também não era receita (`isMonthlyIncome` recusa `is_refund`). Ficava
+ * invisível, e a compra estornada continuava pesando como gasto.
+ *
+ * Só no CARTÃO, de propósito. Na conta a mesma forma NÃO quer dizer estorno:
+ * a conciliação de conta (`AccountReconciliationModal`) grava como
+ * receita+estorno TODA entrada do extrato por padrão — salário e PIX recebido
+ * inclusive. Abater isso da despesa seria inventar economia. No cartão, um
+ * crédito só pode ser estorno ou pagamento de fatura, e pagamento tem
+ * `is_card_payment` (excluído em `isSettledExpense`).
+ */
+export function isCardIncomeRefund(t: TransactionFlags): boolean {
+  return t.type === 'income' && t.is_refund === true && !!t.credit_card_id;
+}
 
 /**
  * Base de toda despesa que já aconteceu: efetivada (não provisória, não
  * pendente) e que não é transferência interna (pagamento de fatura).
+ *
+ * Inclui o estorno de cartão gravado como receita (`isCardIncomeRefund`):
+ * ele é lado-despesa, só que com sinal trocado, e as camadas acima já o
+ * separam pelo `is_refund`.
  *
  * NÃO decide sobre estorno nem sobre o recorte (pessoal / corporativa /
  * reembolsável) — isso é de quem chama. Existe para que as camadas acima
@@ -32,7 +60,7 @@ export type TransactionFlags = {
  */
 export function isSettledExpense(t: TransactionFlags): boolean {
   return (
-    t.type === 'expense' &&
+    (t.type === 'expense' || isCardIncomeRefund(t)) &&
     !t.is_card_payment &&
     !t.is_provisional &&
     t.status !== 'pending'
