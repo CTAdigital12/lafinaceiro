@@ -2,33 +2,33 @@
 
 > Atualize em PR. Declare apenas o que foi verificado; não presuma o que está em outra branch.
 
-- **Referência:** `main` em `e0acda2` (merge do PR #139, instalação do Dev Memory).
-- **Última atualização:** 2026-11-09 (branch `docs/congelar-lessons`).
+- **Referência:** `main` em `70ff57b` (merge do PR #140). Kit Dev Memory sincronizado com `gestor-de-ia@29f809b`
+  na branch `chore/sincronizar-close-task`.
+- **Última atualização:** 2026-11-09.
 
 ## Verificado
-- Kit Dev Memory copiado de `gestor-de-ia@5e6688d`; arquivos idênticos byte a byte. Ver [ADR-0001](decisions/ADR-0001-adocao-dev-memory.md).
+- Kit Dev Memory instalado (PR #139). Ver [ADR-0001](decisions/ADR-0001-adocao-dev-memory.md). Os arquivos do kit são
+  idênticos aos de `gestor-de-ia@29f809b`; a última sincronização trouxe a correção do `close-task` (o caminho sem
+  memória também roda `check-staleness` e sugere trailers).
 - Instalação sem impacto nos gates (2026-11-09, local): `npm run memory:test` 37/37; vitest 776/776 (76 arquivos;
   nenhum teste do kit incluído); typecheck 0 erros; lint 0 erros e 0 warnings (17 arquivos do kit analisados).
 - `.gitignore`: `git check-ignore` confirma `.claude/backups`, `.claude/settings.json` e `.claude/settings.local.json`
   ignorados; só `.claude/skills/close-task/SKILL.md` versionável.
 - Hook `Stop` ativo só na máquina de André (`.claude/settings.local.json`, não versionado).
-- **Claude Code 2.1.319 carrega `AGENTS.md` via `CLAUDE.md`** (2026-11-09): uma sessão sem ferramentas de leitura
-  apontou o `AI_CONTEXT.md` como fonte de verdade, os dois lugares de memória e o `/close-task` ao terminar.
-- CI do PR de instalação (#139): `ci.yml` (testes, typecheck, lint), `dev-memory.yml` e Vercel, todos verdes.
-  Depois do merge, o CI do `main` também passou.
-- `.claude-squad/lessons.md` congelado como registro da migração ([ADR-0002](decisions/ADR-0002-lessons-md-e-dev-memory.md),
-  aprovado). Lições novas vão para `.ai/memory/`.
-
-- L1, L2 e L4 do `lessons.md` reproduzidas em 2026-11-09 (PostgreSQL 16.14 local, `/bin/bash` 3.2.57). Confirmadas no
-  essencial, com correções registradas como errata no topo do `lessons.md`.
-
-## Em andamento
-- Promoção de L1, L2 e L4 ao `organization-knowledge` como ORG-0004, ORG-0003 e ORG-0002 (PR #3 de lá, `verified`).
+- **Claude Code 2.1.319 carrega `AGENTS.md` via `CLAUDE.md`** neste repositório (2026-11-09): uma sessão sem ferramentas
+  de leitura apontou o `AI_CONTEXT.md` como fonte de verdade, os dois lugares de memória e o `/close-task` ao terminar.
+- CI dos PRs #139 e #140 e do `main` depois deles: `ci.yml`, `dev-memory.yml` e Vercel verdes.
+- `.claude-squad/lessons.md` congelado como registro da migração, com errata de L1, L2 e L4
+  ([ADR-0002](decisions/ADR-0002-lessons-md-e-dev-memory.md), aprovado).
+- L1, L2 e L4 reproduzidas (PostgreSQL 16.14, `/bin/bash` 3.2.57) e publicadas no `organization-knowledge` como
+  ORG-0004, ORG-0003 e ORG-0002 (aprovadas, 2026-11-09).
 
 ## Pendente
 - Primeira tarefa real com `close-task`: uma correção de aplicação deve gerar um registro concreto (SOL),
-  ou `no-memory-change` justificado.
-- Codex e Gemini CLI: não verificados (não instalados na máquina de desenvolvimento).
+  ou `no-memory-change` justificado com os trailers sugeridos.
+- **Codex CLI:** verificado no kit (`gestor-de-ia`, em cópias descartáveis), **não neste repositório** (opção de não
+  enviar conteúdo deste projeto, com dados financeiros, para outro provedor durante testes).
+- **Gemini CLI:** não testado; este repositório não tem `GEMINI.md`.
 
 ## Decisões abertas
 - Nenhuma.

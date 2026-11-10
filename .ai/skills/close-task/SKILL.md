@@ -55,8 +55,18 @@ já expliquem sozinhos.
 
 ### 2. Se nada se qualifica
 
-Pare aqui e responda com a saída padrão, usando `Memórias propostas: 0` e o motivo em uma linha
-(`no-memory-change: <motivo>`). **Não crie arquivo.**
+**Não crie arquivo.** Antes de responder, rode o detector de obsolescência, porque o CI do PR vai rodá-lo também:
+
+```bash
+node scripts/dev-memory/cli.mjs check-staleness --base <base>   # mesma base do diff da tarefa
+```
+
+Para cada aviso, confira o registro citado. Se ele **continua válido**, proponha o trailer
+`Memory-Reviewed: <ID> <motivo>`. Se **ficou desatualizado**, a tarefa gerou memória afinal: vá para o passo 3 e atualize-o.
+Para o aviso "sem memória", proponha `No-Memory-Change: <motivo>`.
+
+Responda com a saída padrão, usando `Memórias propostas: 0` e o motivo em uma linha
+(`no-memory-change: <motivo>`), e liste os trailers em "Trailers sugeridos" para quem for commitar.
 
 ### 3. Se algo se qualifica
 
@@ -116,5 +126,6 @@ Evidências: [PRs / commits / testes executados e resultados]
 Itens que exigem revisão: [...]
 Possíveis soluções reutilizáveis: [...]   (candidatas a organization-knowledge, ou "nenhuma")
 Soluções reaproveitadas: [...]            (reused_solution_ids: ORG-NNNN, ou "nenhuma")
-Resultado dos validadores: [...]
+Resultado dos validadores: [...]              (inclua o check-staleness: avisos e reconhecidos)
+Trailers sugeridos: [...]                     (linhas prontas para o commit, ou "nenhum")
 ```
