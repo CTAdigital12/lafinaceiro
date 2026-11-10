@@ -1,5 +1,9 @@
 # Lições da Squad — La Financeiro
 
+> **Congelado desde 28/04/2026 como registro da migração Lovable → Supabase.** As lições abaixo continuam
+> válidas e de leitura recomendada, mas **lições novas não entram aqui**: vão para `.ai/memory/` pelo
+> `/close-task` (ver `.ai/memory/decisions/ADR-0002-lessons-md-e-dev-memory.md`).
+
 Memória compartilhada do squad para este repositório. Cada entrada
 descreve uma armadilha encontrada em produção que **não é óbvia** olhando
 só o código atual. Sempre **leia antes** de começar uma task na área
@@ -243,6 +247,9 @@ com 3 env vars marcadas como Sensitive — confirmou-se no commit `3e68e1a`.
 ---
 
 ## Como atualizar este arquivo
+
+> **Desde 09/11/2026 (ADR-0002): não adicione lições aqui.** Use `/close-task`, que registra em `.ai/memory/`.
+> As instruções abaixo ficam como histórico de como o arquivo era mantido.
 
 - **Quando**: ao final de uma task, se identificar uma lição que
   vai economizar horas pra próxima invocação. Não é diário pessoal — só

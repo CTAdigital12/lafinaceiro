@@ -11,7 +11,7 @@ Contexto do projeto: [PROJECT.md](PROJECT.md) · Estado atual: [CURRENT_STATE.md
 | ID | Título | Status | Arquivos | Revisada |
 |---|---|---|---|---|
 | [ADR-0001](decisions/ADR-0001-adocao-dev-memory.md) | Adoção do Dev Memory com .claude/skills versionado e hook de lembrete só local | approved | .gitignore | 2026-11-09 |
-| [ADR-0002](decisions/ADR-0002-lessons-md-e-dev-memory.md) | Conhecimento novo vai para .ai/memory via close-task; lessons.md fica como fonte de leitura | proposed | .claude-squad/lessons.md | — |
+| [ADR-0002](decisions/ADR-0002-lessons-md-e-dev-memory.md) | Conhecimento novo vai para .ai/memory via close-task; lessons.md congelado como registro da migração | approved | .claude-squad/lessons.md | 2026-11-09 |
 
 ## Soluções (SOL)
 
