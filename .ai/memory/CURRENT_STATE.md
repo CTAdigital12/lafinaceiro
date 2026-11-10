@@ -12,6 +12,9 @@
 - `.gitignore`: `git check-ignore` confirma `.claude/backups`, `.claude/settings.json` e `.claude/settings.local.json`
   ignorados; só `.claude/skills/close-task/SKILL.md` versionável.
 - Hook `Stop` ativo só na máquina de André (`.claude/settings.local.json`, não versionado).
+- **Claude Code 2.1.319 carrega `AGENTS.md` via `CLAUDE.md`** (2026-11-09): uma sessão sem ferramentas de leitura
+  apontou o `AI_CONTEXT.md` como fonte de verdade, os dois lugares de memória e o `/close-task` ao terminar.
+- CI do PR de instalação (#139): `ci.yml` (testes, typecheck, lint), `dev-memory.yml` e Vercel, todos verdes.
 
 ## Em andamento
 - Instalação do Dev Memory (PR da branch `chore/instalar-dev-memory`).
