@@ -3,6 +3,17 @@
 > **Congelado desde 28/04/2026 como registro da migração Lovable → Supabase.** As lições abaixo continuam
 > válidas e de leitura recomendada, mas **lições novas não entram aqui**: vão para `.ai/memory/` pelo
 > `/close-task` (ver `.ai/memory/decisions/ADR-0002-lessons-md-e-dev-memory.md`).
+>
+> **Errata (09/11/2026), após reproduzir L1, L2 e L4.** O essencial de cada uma se confirmou, mas:
+> - **L1:** o erro do `declare -A` acontece **durante a execução** (comandos anteriores já rodaram), e
+>   **`bash -n` não detecta** o problema (sai 0). Valide com
+>   `grep -nE '\b(declare|local|typeset)[[:space:]]+-[a-zA-Z]*A' scripts/*.sh`. Versão corrigida: ORG-0004.
+> - **L2:** tirar a coluna gerada só da lista do `\copy`, com o CSV ainda contendo ela, **não** grava dados
+>   trocados: o Postgres recusa com `extra data after last expected column`. Versão corrigida: ORG-0003.
+> - **L4:** quem mapeia por nome é a **lista de colunas do `\copy`**, não o PostgREST. No PG 15+, `HEADER match`
+>   detecta a divergência. Versão corrigida: ORG-0002.
+>
+> As versões ORG-NNNN estão no repositório `organization-knowledge` (`../organization-knowledge/INDEX.md`).
 
 Memória compartilhada do squad para este repositório. Cada entrada
 descreve uma armadilha encontrada em produção que **não é óbvia** olhando

@@ -19,8 +19,11 @@
 - `.claude-squad/lessons.md` congelado como registro da migração ([ADR-0002](decisions/ADR-0002-lessons-md-e-dev-memory.md),
   aprovado). Lições novas vão para `.ai/memory/`.
 
+- L1, L2 e L4 do `lessons.md` reproduzidas em 2026-11-09 (PostgreSQL 16.14 local, `/bin/bash` 3.2.57). Confirmadas no
+  essencial, com correções registradas como errata no topo do `lessons.md`.
+
 ## Em andamento
-- Promoção de lições genéricas do `lessons.md` (L1, L4 e talvez L2) para o `organization-knowledge`, após reprodução.
+- Promoção de L1, L2 e L4 ao `organization-knowledge` como ORG-0004, ORG-0003 e ORG-0002 (PR #3 de lá, `verified`).
 
 ## Pendente
 - Primeira tarefa real com `close-task`: uma correção de aplicação deve gerar um registro concreto (SOL),
