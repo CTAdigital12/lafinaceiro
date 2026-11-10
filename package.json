@@ -16,7 +16,12 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "prepare": "husky",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "memory:validate": "node scripts/dev-memory/cli.mjs validate",
+    "memory:index": "node scripts/dev-memory/cli.mjs build-index",
+    "memory:stale": "node scripts/dev-memory/cli.mjs check-staleness",
+    "memory:check": "node scripts/dev-memory/cli.mjs validate && node scripts/dev-memory/cli.mjs build-index --check && node scripts/dev-memory/cli.mjs check-staleness",
+    "memory:test": "node --test \"scripts/dev-memory/test/*.test.mjs\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

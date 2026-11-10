@@ -1,0 +1,43 @@
+# Dev Memory — checks de memória técnica.
+# validate e build-index --check BLOQUEIAM (memória inválida, possível segredo, índice desatualizado).
+# check-staleness só AVISA (anotações no PR); a política de bloqueio fica para evolução futura (ADR-0004 do kit).
+name: dev-memory
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  memory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # @v5: o runtime das actions @v4 é Node 20, descontinuado (aviso do próprio GitHub).
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # check-staleness precisa do merge-base e das mensagens de commit
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc # mesma versão na máquina (nvm use) e no CI
+
+      # Sem npm ci: o kit não tem dependências. memory:test, não "npm test" (no projeto, pode ser outra suíte).
+      - name: Testes do kit
+        run: npm run memory:test
+
+      - name: Validar memória
+        run: node scripts/dev-memory/cli.mjs validate
+
+      - name: Índice em dia
+        run: node scripts/dev-memory/cli.mjs build-index --check
+
+      - name: Memória possivelmente obsoleta (aviso)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }} # via env, nunca interpolado direto no shell
+        run: node scripts/dev-memory/cli.mjs check-staleness --base "origin/$BASE_REF" --head HEAD

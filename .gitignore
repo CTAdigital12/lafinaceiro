@@ -29,7 +29,11 @@ supabase/.branches/
 # Claude Code: settings locais e, principalmente, .claude/backups/, que guarda
 # dumps de transações reais (valores, estabelecimentos, contas). Nunca esteve
 # versionado; o ignore existe para que um `git add .` não versione por acidente.
-.claude/
+# `.claude/*` (e não `.claude/`) para permitir UMA exceção: `.claude/skills/`, que só
+# contém atalhos de procedimento (Dev Memory: /close-task), nunca dados. Tudo o mais
+# em .claude/ — backups, settings.json, settings.local.json — continua ignorado.
+.claude/*
+!.claude/skills/
 
 # Editor directories and files
 .vscode/*
