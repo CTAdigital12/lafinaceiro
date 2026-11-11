@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 export interface Activity {
   imported_at: string;
@@ -25,23 +26,31 @@ export function useActivities() {
     queryFn: async (): Promise<Activity[]> => {
       if (!user) return [];
 
-      // Fetch transactions with imported_at set (imports only)
-      const { data: transactions, error } = await supabase
-        .from("transactions")
-        .select(`
-          imported_at,
-          amount,
-          date,
-          credit_card_id,
-          account_id,
-          credit_cards(name),
-          accounts(name)
-        `)
-        .not("imported_at", "is", null)
-        .order("imported_at", { ascending: false });
+      // Só lançamentos importados (imported_at preenchido), lidos até o fim
+      // em páginas. Sem paginar, o PostgREST corta em 1000 linhas sem erro: a
+      // importação mais antiga da lista aparecia com contagem e total menores,
+      // e "Desfazer" apagava mais do que a tela mostrava.
+      // `id` desempata dentro da mesma importação: sem ele a ordem entre
+      // páginas não é estável e linhas se repetem ou somem.
+      const transactions = await fetchAllRows((from, to) =>
+        supabase
+          .from("transactions")
+          .select(`
+            imported_at,
+            amount,
+            date,
+            credit_card_id,
+            account_id,
+            credit_cards(name),
+            accounts(name)
+          `)
+          .not("imported_at", "is", null)
+          .order("imported_at", { ascending: false })
+          .order("id")
+          .range(from, to),
+      );
 
-      if (error) throw error;
-      if (!transactions || transactions.length === 0) return [];
+      if (transactions.length === 0) return [];
 
       // Group by imported_at
       const grouped = new Map<string, {
@@ -102,9 +111,11 @@ export function useActivities() {
     mutationFn: async (imported_at: string) => {
       if (!user) throw new Error("User not authenticated");
 
+      // Sem `count: "exact"` o PostgREST não conta, `count` volta null e o
+      // aviso dizia "0 transações removidas" a cada desfazer.
       const { error, count } = await supabase
         .from("transactions")
-        .delete()
+        .delete({ count: "exact" })
         .eq("imported_at", imported_at);
 
       if (error) throw error;
