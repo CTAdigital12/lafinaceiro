@@ -14,10 +14,12 @@ files:
   - src/hooks/useActivities.ts
   - src/hooks/useCreditCardInvoiceSync.ts
   - src/lib/accountBalance.ts
+  - src/lib/budgetEvolutionData.ts
+  - src/pages/Accounts.tsx
 deps:
   - name: "@supabase/supabase-js"
     version: "^2"
-related_prs: [124, 131]
+related_prs: [124, 131, 142]
 related_commits: [b22a6ce, 6db3296]
 supersedes: []
 review_required: false
@@ -31,10 +33,13 @@ e a tela mostra um número plausível, mas errado. Casos no projeto:
   lançamentos no cartão, os pagamentos ficaram fora do corte e o saldo foi **gravado** várias vezes maior que o real.
 - PR #124: a revisão do extrato deixava de ver lançamentos já existentes e oferecia importá-los de novo.
 - Auditoria C2 (`accountBalance.ts`): a soma do saldo saiu truncada e foi gravada como `initial_balance`.
-- Latentes, fechados na branch `fix/paginacao-balancechart-activities`: o gráfico "Balanço Mensal"
+- Latentes, fechados no PR #142: o gráfico "Balanço Mensal"
   (6 meses de tudo, cerca de 600 linhas em set/2026) e a tela de Atividades (todas as linhas importadas). Quando
   passassem do teto, os meses ou importações mais antigos perderiam linhas, e o "Desfazer" de uma importação
   apagaria mais do que a tela mostrava.
+- Latentes, fechados na branch `fix/paginacao-budget-exportacao` (2026-11-11): o gráfico de evolução do Planejamento
+  (um ano inteiro, `budgetEvolutionData.ts`) e a exportação do extrato da conta em CSV (`Accounts.tsx`, histórico
+  inteiro da conta, ordem `date` + `id`). A exportação não tem teste próprio: usa o mesmo `fetchAllRows`, já coberto.
 
 ## Erro exato
 Sem mensagem de erro. O PostgREST responde 200 com a lista cortada no `max-rows` do projeto (padrão do Supabase: 1000).
@@ -63,11 +68,15 @@ const rows = await fetchAllRows((from, to) =>
   (`fetchBalanceChartData`).
 
 ## Validação
-Executado em 2026-11-10 na branch `fix/paginacao-balancechart-activities`:
+Executado em 2026-11-10 no PR #142 (merge `c1f055e`):
 - `src/lib/__tests__/balanceChartData.paginacao.test.ts` e `src/hooks/__tests__/useActivities.test.tsx`:
   passam com a correção e **falham** com ela revertida (só a paginação desfeita, para provar que o teste pega o defeito).
 - `npm test`: 78 arquivos, 779/779; `npm run typecheck`: 0 erros; `npm run lint`: 0 erros.
 - Ainda não visto na tela (o volume atual dessas duas telas ainda está abaixo de 1000).
+
+Executado em 2026-11-11 na branch `fix/paginacao-budget-exportacao`:
+- `src/lib/__tests__/budgetEvolutionData.test.ts`: o teste de paginação falha sem `fetchAllRows` e passa com ele.
+- `npm test`: 79 arquivos, 783/783; `npm run typecheck`: 0 erros; `npm run lint`: 0 erros e 0 warnings.
 
 ## Quando reutilizar
 - Qualquer `select` em `transactions` (ou outra tabela que cresce) sem filtro estreito, cujo resultado é somado,
@@ -85,4 +94,5 @@ Executado em 2026-11-10 na branch `fix/paginacao-balancechart-activities`:
 ## Evidências
 - PR #124 (merge `b22a6ce`): revisão do extrato e "Sincronizar" paginados.
 - PR #131 (merge `6db3296`): `recalculateInvoice` paginado; teste de referência do mock com teto.
-- Branch `fix/paginacao-balancechart-activities` (2026-11-10): `BalanceChart` e `useActivities`.
+- PR #142 (merge `c1f055e`, 2026-11-11): `BalanceChart` e `useActivities`.
+- Branch `fix/paginacao-budget-exportacao` (2026-11-11): gráfico de evolução do Planejamento e exportação de conta.

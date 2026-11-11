@@ -138,6 +138,29 @@ export function isMonthlyIncome(t: TransactionFlags): boolean {
 }
 
 /**
+ * O que consome orçamento no Planejamento: pagas (despesa do mês menos
+ * estornos, o mesmo número das outras telas) e previstas (provisórias ou
+ * pendentes). "Total Gasto" = `paid + forecast`.
+ *
+ * Mora aqui porque são duas telas somando o mesmo: o card "Total Gasto" e a
+ * linha "Gasto" do gráfico de evolução. O gráfico tinha filtro inline próprio
+ * — contava pagamento de fatura, não abatia estorno, agrupava pela data da
+ * compra — e discordava do card logo acima dele.
+ */
+export function sumBudgetSpending(
+  transactions: readonly (TransactionFlags & { amount: number | string })[],
+): { paid: number; forecast: number } {
+  let paid = 0;
+  let forecast = 0;
+  for (const t of transactions) {
+    if (isMonthlyExpense(t)) paid += Number(t.amount);
+    else if (isMonthlyExpenseRefund(t)) paid -= Number(t.amount);
+    else if (isForecastExpense(t)) forecast += Number(t.amount);
+  }
+  return { paid, forecast };
+}
+
+/**
  * Versões em lista, para quem filtra um array inteiro. Genéricas na transação
  * para devolver o MESMO tipo que receberam — `Transaction` entra, `Transaction`
  * sai, com todos os campos que o chamador precisa depois.

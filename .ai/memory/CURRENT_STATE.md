@@ -4,7 +4,7 @@
 
 - **Referência:** `main` em `70ff57b` (merge do PR #140). Kit Dev Memory sincronizado com `gestor-de-ia@29f809b`
   na branch `chore/sincronizar-close-task`.
-- **Última atualização:** 2026-11-10 (branch `fix/paginacao-balancechart-activities`).
+- **Última atualização:** 2026-11-11 (branch `fix/paginacao-budget-exportacao`, sobre `main` em `c1f055e`).
 
 ## Verificado
 - Kit Dev Memory instalado (PR #139). Ver [ADR-0001](decisions/ADR-0001-adocao-dev-memory.md). Os arquivos do kit são
@@ -23,13 +23,15 @@
 - L1, L2 e L4 reproduzidas (PostgreSQL 16.14, `/bin/bash` 3.2.57) e publicadas no `organization-knowledge` como
   ORG-0004, ORG-0003 e ORG-0002 (aprovadas, 2026-11-09).
 
-- Primeira tarefa real com `close-task` (2026-11-10): a paginação do "Balanço Mensal" e das Atividades gerou a
-  [SOL-0001](solutions/SOL-0001-postgrest-trunca-em-1000-sem-erro.md) (`proposed`, aguardando revisão no PR).
+- Primeira tarefa real com `close-task` (PR #142, merge `c1f055e`): a paginação do "Balanço Mensal" e das Atividades
+  gerou a [SOL-0001](solutions/SOL-0001-postgrest-trunca-em-1000-sem-erro.md) (`proposed`).
+- Na branch `fix/paginacao-budget-exportacao` (2026-11-11): gráfico de evolução do Planejamento e exportação de conta
+  paginados; a linha "Gasto" do gráfico passa a usar a mesma soma do card "Total Gasto"
+  ([SOL-0002](solutions/SOL-0002-soma-de-despesa-com-filtro-inline-diverge.md)); `useCreditCardTransactions`
+  (sem chamador) removido. Com isso, nenhuma leitura de `transactions` conhecida que some ou exporte o conjunto
+  inteiro fica sem paginação. O levantamento foi por `grep`, não exaustivo.
 
 ## Pendente
-- Leituras de `transactions` ainda sem paginação que podem passar de 1000 linhas (não verificado em volume):
-  `BudgetEvolutionChart` (um ano de despesas) e a exportação de conta em `src/pages/Accounts.tsx`.
-  `useCreditCardTransactions` lê o histórico inteiro do cartão sem paginar, mas não tem chamador (código morto).
 - **Codex CLI:** verificado no kit (`gestor-de-ia`, em cópias descartáveis), **não neste repositório** (opção de não
   enviar conteúdo deste projeto, com dados financeiros, para outro provedor durante testes).
 - **Gemini CLI:** não testado; este repositório não tem `GEMINI.md`.

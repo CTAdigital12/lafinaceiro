@@ -10,6 +10,7 @@ import {
   isMonthlyIncome,
   isSettledExpense,
   matchesExpenseView,
+  sumBudgetSpending,
   type ExpenseViewFilter,
   type TransactionFlags,
 } from "@/lib/transactionFilters";
@@ -468,5 +469,34 @@ describe("matchesExpenseView", () => {
       expect(metadeDespesas(t) && metadeEstornos(t)).toBe(false);
       expect(metadeDespesas(t) || metadeEstornos(t)).toBe(isSettledExpense(t));
     }
+  });
+});
+
+describe("sumBudgetSpending — o que consome orçamento no Planejamento", () => {
+  const comValor = <T,>(t: T, amount: number) => ({ ...t, amount });
+
+  it("soma pagas menos estornos, e previstas à parte", () => {
+    const { paid, forecast } = sumBudgetSpending([
+      comValor(tx("expense"), 100),
+      comValor(tx("expense", { is_refund: true }), 30),
+      comValor(tx("income", { is_refund: true, credit_card_id: "c1" }), 20),
+      comValor(tx("expense", { status: "pending" }), 50),
+      comValor(tx("expense", { is_provisional: true }), 40),
+    ]);
+
+    expect(paid).toBe(50); // 100 − 30 − 20 (estorno de cartão gravado como receita)
+    expect(forecast).toBe(90);
+  });
+
+  it("ignora pagamento de fatura, despesa da empresa, reembolsável e receita comum", () => {
+    const { paid, forecast } = sumBudgetSpending([
+      comValor(tx("expense", { is_card_payment: true }), 1000),
+      comValor(tx("expense", { is_corporate_expense: true }), 200),
+      comValor(tx("expense", { is_reimbursable: true }), 300),
+      comValor(tx("income"), 5000),
+    ]);
+
+    expect(paid).toBe(0);
+    expect(forecast).toBe(0);
   });
 });
