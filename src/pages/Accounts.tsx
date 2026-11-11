@@ -30,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCategories } from "@/hooks/useCategories";
 import { mensagemDeErro } from "@/lib/mensagemDeErro";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const typeLabels = {
   bank: "Conta Corrente",
@@ -168,15 +169,20 @@ export default function Accounts() {
 
   const handleExport = async (account: Account) => {
     try {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("date, description, amount, type, category_id, status")
-        .eq("account_id", account.id)
-        .order("date", { ascending: true });
+      // O extrato é o histórico inteiro da conta: em páginas, ou o CSV sairia
+      // cortado nas 1000 linhas do PostgREST, sem aviso. `id` desempata o
+      // mesmo dia para a ordem não mudar entre páginas.
+      const data = await fetchAllRows((from, to) =>
+        supabase
+          .from("transactions")
+          .select("date, description, amount, type, category_id, status")
+          .eq("account_id", account.id)
+          .order("date", { ascending: true })
+          .order("id")
+          .range(from, to),
+      );
 
-      if (error) throw error;
-
-      if (!data || data.length === 0) {
+      if (data.length === 0) {
         toast({ title: "Nenhuma transação encontrada para esta conta", variant: "destructive" });
         return;
       }

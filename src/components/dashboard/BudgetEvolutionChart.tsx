@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { usePrivacyMode } from "@/contexts/PrivacyContext";
+import { fetchBudgetSpentByMonth } from "@/lib/budgetEvolutionData";
 
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -33,23 +34,9 @@ export function BudgetEvolutionChart({ currentYear }: BudgetEvolutionChartProps)
     enabled: !!user?.id,
   });
 
-  const { data: transactionsData, isLoading: loadingTransactions } = useQuery({
+  const { data: spentByMonth, isLoading: loadingTransactions } = useQuery({
     queryKey: ["transactions-evolution", currentYear, user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      const startDate = `${currentYear}-01-01`;
-      const endDate = `${currentYear}-12-31`;
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("date, amount, type, is_corporate_expense")
-        .eq("user_id", user.id)
-        .eq("type", "expense")
-        .eq("is_corporate_expense", false)
-        .gte("date", startDate)
-        .lte("date", endDate);
-      if (error) throw error;
-      return data || [];
-    },
+    queryFn: () => fetchBudgetSpentByMonth(currentYear),
     enabled: !!user?.id,
   });
 
@@ -69,16 +56,12 @@ export function BudgetEvolutionChart({ currentYear }: BudgetEvolutionChartProps)
       }
     });
 
-    // Sum transactions by month
-    transactionsData?.forEach((transaction) => {
-      const monthIndex = Number(transaction.date.substring(5, 7)) - 1; // "MM" → 0-11
-      if (monthIndex >= 0 && monthIndex < 12) {
-        monthlyData[monthIndex].gasto += Number(transaction.amount);
-      }
+    spentByMonth?.forEach((spent, monthIndex) => {
+      monthlyData[monthIndex].gasto = spent;
     });
 
     return monthlyData;
-  }, [budgetsData, transactionsData]);
+  }, [budgetsData, spentByMonth]);
 
   const isLoading = loadingBudgets || loadingTransactions;
 

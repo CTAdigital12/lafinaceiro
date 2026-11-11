@@ -48,6 +48,7 @@ import {
   isForecastExpense,
   isMonthlyExpense,
   isMonthlyExpenseRefund,
+  sumBudgetSpending,
 } from "@/lib/transactionFilters";
 import { formatDateBR } from "@/lib/dateUtils";
 
@@ -131,16 +132,10 @@ export default function Planning() {
 
   // Calculate totals from transactions directly (not from spentByCategory which has duplicates).
   // totalPaid bate com o "total de despesas" das telas de Transações/Dashboard.
-  const { totalPaid, totalForecast } = useMemo(() => {
-    let paid = 0;
-    let forecast = 0;
-    transactions.forEach((t) => {
-      if (isMonthlyExpense(t)) paid += Number(t.amount);
-      else if (isMonthlyExpenseRefund(t)) paid -= Number(t.amount);
-      else if (isForecastExpense(t)) forecast += Number(t.amount);
-    });
-    return { totalPaid: paid, totalForecast: forecast };
-  }, [transactions]);
+  const { paid: totalPaid, forecast: totalForecast } = useMemo(
+    () => sumBudgetSpending(transactions),
+    [transactions],
+  );
 
   const totalSpent = totalPaid + totalForecast;
   
