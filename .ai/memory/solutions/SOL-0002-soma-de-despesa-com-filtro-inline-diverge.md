@@ -2,9 +2,9 @@
 id: SOL-0002
 type: solution
 title: Soma de despesa com filtro inline diverge das outras telas — usar os helpers de transactionFilters
-status: proposed
+status: verified
 created_at: 2026-11-11
-reviewed_at: null
+reviewed_at: 2026-11-11
 scope: project
 stack: [typescript, react]
 tags: [planejamento, despesa, estorno, competencia, transactionFilters, consistencia-entre-telas]
@@ -14,8 +14,8 @@ files:
   - src/pages/Planning.tsx
   - src/components/dashboard/BudgetEvolutionChart.tsx
 deps: []
-related_prs: [55]
-related_commits: []
+related_prs: [55, 143]
+related_commits: [7aa1414]
 supersedes: []
 review_required: false
 confidence: high
@@ -56,13 +56,15 @@ do próprio módulo.
   sem filtrar `type` nem `user_id` no banco. O card também não filtra `user_id`: quem recorta é o RLS.
 
 ## Validação
-Executado em 2026-11-11 na branch `fix/paginacao-budget-exportacao`:
+Executado em 2026-11-11 no PR #143 (merge `7aa1414`):
 - `src/lib/__tests__/budgetEvolutionData.test.ts`: o teste de regra falha com a soma antiga (1480 contra 580),
   e o de paginação falha sem `fetchAllRows`. Os dois passam com a correção.
 - `src/lib/__tests__/transactionFilters.test.ts`: `sumBudgetSpending` com estorno de cartão como receita, prevista,
   pagamento de fatura, empresa e reembolsável.
 - `npm test` 783/783; `npm run typecheck` 0 erros; `npm run lint` 0 erros e 0 warnings.
-- Não visto na tela. Depois do deploy, a linha "Gasto" do mês aberto deve bater com o card "Total Gasto".
+- CI do PR #143 verde (testes, typecheck e lint, Dev Memory).
+- `verified` em 2026-11-11 por decisão do responsável, com base nos testes acima (inclusive a prova negativa).
+  Ainda não visto na tela: depois do deploy, a linha "Gasto" do mês aberto deve bater com o card "Total Gasto".
 
 ## Quando reutilizar
 - Toda tela nova que soma ou filtra despesa ou receita do mês: chame os helpers de `transactionFilters.ts`.
@@ -78,4 +80,4 @@ Executado em 2026-11-11 na branch `fix/paginacao-budget-exportacao`:
 ## Evidências
 - PR #55: "Total Gasto" = pagas + previstas, com estorno abatendo.
 - Auditoria M17: consolidação das cópias em `transactionFilters.ts`.
-- Branch `fix/paginacao-budget-exportacao` (2026-11-11): gráfico de evolução alinhado ao card.
+- PR #143 (merge `7aa1414`, 2026-11-11): gráfico de evolução alinhado ao card.
