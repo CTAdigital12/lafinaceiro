@@ -10,22 +10,12 @@ import {
 } from "recharts";
 import type { TooltipProps } from "recharts";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDate } from "@/contexts/DateContext";
 import { Loader2 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { usePrivacyMode } from "@/contexts/PrivacyContext";
-import { isMonthlyIncome, isMonthlyExpense, isMonthlyExpenseRefund } from "@/lib/transactionFilters";
-import { competenceRangeFilter, getCompetenceDate } from "@/lib/reportUtils";
-import { endOfMonthYmd, startOfMonthYmd } from "@/lib/dateUtils";
-import type { Transaction } from "@/hooks/useTransactions";
-
-interface MonthData {
-  month: string;
-  receitas: number;
-  despesas: number;
-}
+import { fetchBalanceChartData } from "@/lib/balanceChartData";
 
 export function BalanceChart() {
   const { user } = useAuth();
@@ -35,64 +25,7 @@ export function BalanceChart() {
 
   const { data: chartData, isLoading } = useQuery({
     queryKey: ["balance-chart", user?.id, year, month],
-    queryFn: async () => {
-      // Generate last 6 months
-      const months: { month: number; year: number; label: string }[] = [];
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date(year, month - 1 - i, 1);
-        months.push({
-          month: date.getMonth() + 1,
-          year: date.getFullYear(),
-          label: date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
-        });
-      }
-
-      // Fetch all transactions for the 6-month period
-      const lastMonth = months[months.length - 1];
-      const startDate = startOfMonthYmd(months[0].year, months[0].month);
-      const endDate = endOfMonthYmd(lastMonth.year, lastMonth.month);
-
-      // Competência, não data da compra: o mesmo recorte que os cards de
-      // resumo logo acima usam. Antes o gráfico buscava e agrupava por `date`
-      // bruto, então uma compra de cartão de 25/08 que vence em 15/09 entrava
-      // na barra de agosto e no card de setembro — o painel discordava de si
-      // mesmo, e não havia como explicar a diferença (auditoria A12).
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("amount, type, date, due_date, credit_card_id, status, is_corporate_expense, is_refund, is_reimbursable, is_reimbursement, is_card_payment, is_provisional")
-        .or(competenceRangeFilter(startDate, endDate));
-
-      if (error) throw error;
-
-      // Aggregate by month
-      const result: MonthData[] = months.map((m) => {
-        const key = `${m.year}-${String(m.month).padStart(2, "0")}`; // "YYYY-MM"
-        const monthTransactions =
-          data?.filter((t) => getCompetenceDate(t as Transaction).substring(0, 7) === key) || [];
-
-        const receitas = monthTransactions
-          .filter(isMonthlyIncome)
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const despesasGross = monthTransactions
-          .filter(isMonthlyExpense)
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const refunds = monthTransactions
-          .filter(isMonthlyExpenseRefund)
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const despesas = despesasGross - refunds;
-
-        return {
-          month: m.label.charAt(0).toUpperCase() + m.label.slice(1),
-          receitas,
-          despesas,
-        };
-      });
-
-      return result;
-    },
+    queryFn: () => fetchBalanceChartData(year, month),
     enabled: !!user,
   });
 
