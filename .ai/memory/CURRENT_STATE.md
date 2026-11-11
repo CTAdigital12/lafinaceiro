@@ -2,9 +2,8 @@
 
 > Atualize em PR. Declare apenas o que foi verificado; não presuma o que está em outra branch.
 
-- **Referência:** `main` em `70ff57b` (merge do PR #140). Kit Dev Memory sincronizado com `gestor-de-ia@29f809b`
-  na branch `chore/sincronizar-close-task`.
-- **Última atualização:** 2026-11-11 (branch `fix/paginacao-budget-exportacao`, sobre `main` em `c1f055e`).
+- **Referência:** `main` em `7aa1414` (merge do PR #143). Kit Dev Memory idêntico a `gestor-de-ia@29f809b`.
+- **Última atualização:** 2026-11-11 (branch `docs/paginacao-regra-e-triagem`, sobre `main` em `7aa1414`).
 
 ## Verificado
 - Kit Dev Memory instalado (PR #139). Ver [ADR-0001](decisions/ADR-0001-adocao-dev-memory.md). Os arquivos do kit são
@@ -24,14 +23,21 @@
   ORG-0004, ORG-0003 e ORG-0002 (aprovadas, 2026-11-09).
 
 - Primeira tarefa real com `close-task` (PR #142, merge `c1f055e`): a paginação do "Balanço Mensal" e das Atividades
-  gerou a [SOL-0001](solutions/SOL-0001-postgrest-trunca-em-1000-sem-erro.md) (`proposed`).
-- Na branch `fix/paginacao-budget-exportacao` (2026-11-11): gráfico de evolução do Planejamento e exportação de conta
-  paginados; a linha "Gasto" do gráfico passa a usar a mesma soma do card "Total Gasto"
+  gerou a [SOL-0001](solutions/SOL-0001-postgrest-trunca-em-1000-sem-erro.md), **aprovada como regra do projeto em
+  2026-11-11** depois de verificação independente (inclusive a prova negativa) e publicada no `organization-knowledge`
+  como ORG-0005.
+- PR #143 (merge `7aa1414`): gráfico de evolução do Planejamento e exportação de conta paginados; a linha "Gasto" do
+  gráfico passa a usar a mesma soma do card "Total Gasto"
   ([SOL-0002](solutions/SOL-0002-soma-de-despesa-com-filtro-inline-diverge.md)); `useCreditCardTransactions`
-  (sem chamador) removido. Com isso, nenhuma leitura de `transactions` conhecida que some ou exporte o conjunto
-  inteiro fica sem paginação. O levantamento foi por `grep`, não exaustivo.
+  (sem chamador) removido.
+- **Correção (2026-11-11):** o PR #143 registrou aqui que "nenhuma leitura de `transactions` conhecida que some ou
+  exporte o conjunto inteiro fica sem paginação". Uma triagem completa das 22 leituras sem `.range()` mostrou que
+  ainda restam **7 de risco** (duas altas, entre elas uma que grava), latentes e não observadas:
+  [ISSUE-0001](known-issues/ISSUE-0001-leituras-sem-paginacao.md).
 
 ## Pendente
+- [ISSUE-0001](known-issues/ISSUE-0001-leituras-sem-paginacao.md): 7 leituras de `transactions` a paginar ou justificar,
+  começando pelas duas de `useCategorizationRules` (alto risco). Antes de priorizar, medir o volume real de cada recorte.
 - **Codex CLI:** verificado no kit (`gestor-de-ia`, em cópias descartáveis), **não neste repositório** (opção de não
   enviar conteúdo deste projeto, com dados financeiros, para outro provedor durante testes).
 - **Gemini CLI:** não testado; este repositório não tem `GEMINI.md`.

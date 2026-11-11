@@ -2,9 +2,9 @@
 id: SOL-0001
 type: solution
 title: Leitura de transactions truncada em 1000 linhas pelo PostgREST, sem erro — paginar com fetchAllRows e ordem estável
-status: proposed
+status: approved
 created_at: 2026-11-10
-reviewed_at: null
+reviewed_at: 2026-11-11
 scope: project
 stack: [typescript, supabase, postgrest, react-query]
 tags: [paginacao, postgrest, max-rows, truncamento-silencioso, transactions]
@@ -92,6 +92,12 @@ Executado em 2026-11-11 na branch `fix/paginacao-budget-exportacao`:
   é melhor do que trazer todas as linhas.
 
 ## Evidências
+- **Aprovada como regra do projeto em 2026-11-11:** código novo que soma, agrupa, compara ou decide o que gravar
+  com base no conjunto inteiro lê por `fetchAllRows`, com ordem estável. Leituras antigas fora da regra estão
+  triadas em [ISSUE-0001](../known-issues/ISSUE-0001-leituras-sem-paginacao.md).
+- Verificação independente (2026-11-11): commits, PRs, arquivos e testes citados existem. Com a paginação de
+  `balanceChartData.ts` desfeita, o teste falha (`expected +0 to be 10000`); com ela restaurada, passa.
+- Versão generalizada no `organization-knowledge`: **ORG-0005**.
 - PR #124 (merge `b22a6ce`): revisão do extrato e "Sincronizar" paginados.
 - PR #131 (merge `6db3296`): `recalculateInvoice` paginado; teste de referência do mock com teto.
 - PR #142 (merge `c1f055e`, 2026-11-11): `BalanceChart` e `useActivities`.
