@@ -5,12 +5,14 @@ import {
   filterPureIncome,
   isCardIncomeRefund,
   isForecastExpense,
+  isInvestmentContribution,
   isMonthlyExpense,
   isMonthlyExpenseRefund,
   isMonthlyIncome,
   isSettledExpense,
   matchesExpenseView,
   sumBudgetSpending,
+  sumInvestmentContributions,
   type ExpenseViewFilter,
   type TransactionFlags,
 } from "@/lib/transactionFilters";
@@ -28,6 +30,7 @@ const tx = (
     is_reimbursable: boolean | null;
     is_reimbursement: boolean | null;
     is_card_payment: boolean | null;
+    is_investment_contribution: boolean | null;
     is_provisional: boolean | null;
     status: string | null;
     credit_card_id: string | null;
@@ -369,6 +372,9 @@ describe("filterPureExpenses / filterPureIncome (vindas de reportUtils)", () => 
       tx("income", { is_refund: true, credit_card_id: "card", is_provisional: true }),
       tx("income", { is_refund: true, credit_card_id: "card", status: "pending" }),
       tx("income", { is_card_payment: true, credit_card_id: "card" }),
+      tx("expense", { is_investment_contribution: true }),
+      tx("expense", { is_investment_contribution: true, is_refund: true }),
+      tx("expense", { is_investment_contribution: true, is_provisional: true }),
     ];
 
     expect(filterPureExpenses(universo)).toEqual(
@@ -498,5 +504,44 @@ describe("sumBudgetSpending — o que consome orçamento no Planejamento", () =>
 
     expect(paid).toBe(0);
     expect(forecast).toBe(0);
+  });
+});
+
+describe("aporte em investimento — sai da despesa, entra em Aportes", () => {
+  const comValor = <T,>(t: T, amount: number) => ({ ...t, amount });
+  const aporte = tx("expense", { is_investment_contribution: true });
+
+  it("não é despesa do mês, nem base, nem estorno", () => {
+    expect(isSettledExpense(aporte)).toBe(false);
+    expect(isMonthlyExpense(aporte)).toBe(false);
+    expect(isMonthlyExpenseRefund(aporte)).toBe(false);
+    expect(filterPureExpenses([aporte])).toEqual([]);
+  });
+
+  it("aporte previsto também não consome orçamento", () => {
+    expect(isForecastExpense(tx("expense", { is_investment_contribution: true, is_provisional: true }))).toBe(false);
+    expect(isForecastExpense(tx("expense", { is_investment_contribution: true, status: "pending" }))).toBe(false);
+  });
+
+  it("não vira receita", () => {
+    expect(isMonthlyIncome(aporte)).toBe(false);
+  });
+
+  it("é aporte só quando efetivado", () => {
+    expect(isInvestmentContribution(aporte)).toBe(true);
+    expect(isInvestmentContribution(tx("expense", { is_investment_contribution: true, is_provisional: true }))).toBe(false);
+    expect(isInvestmentContribution(tx("expense", { is_investment_contribution: true, status: "pending" }))).toBe(false);
+    expect(isInvestmentContribution(tx("expense"))).toBe(false);
+    expect(isInvestmentContribution(tx("income", { is_investment_contribution: true }))).toBe(false);
+  });
+
+  it("no Planejamento, o aporte sai do gasto e a despesa comum da mesma conta continua", () => {
+    const linhas = [
+      comValor(tx("expense"), 120),
+      comValor(aporte, 300),
+      comValor(tx("expense", { is_investment_contribution: true, is_provisional: true }), 300),
+    ];
+    expect(sumBudgetSpending(linhas)).toEqual({ paid: 120, forecast: 0 });
+    expect(sumInvestmentContributions(linhas)).toBe(300);
   });
 });

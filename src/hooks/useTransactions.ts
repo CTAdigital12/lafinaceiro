@@ -65,6 +65,7 @@ export interface Transaction {
   is_reimbursable: boolean;
   is_reimbursement: boolean;
   is_card_payment: boolean | null;
+  is_investment_contribution?: boolean;
   refunded_transaction_id: string | null;
   reimbursement_status: string | null;
   reimbursement_payment_id: string | null;

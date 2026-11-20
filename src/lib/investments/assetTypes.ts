@@ -22,6 +22,7 @@ export const ASSET_TYPES = [
   "acoes",
   "etfs",
   "bdrs",
+  "capitalizacao",
 ] as const;
 
 export type AssetType = (typeof ASSET_TYPES)[number];
@@ -39,6 +40,7 @@ export const ASSET_TYPE_LABELS: Record<string, string> = {
   acoes: "Ações",
   etfs: "ETFs",
   bdrs: "BDRs",
+  capitalizacao: "Título de Capitalização",
 };
 
 /**
@@ -53,6 +55,7 @@ export const SELECTABLE_ASSET_TYPES: readonly AssetType[] = [
   "fundos",
   "crypto",
   "saldo_corretora",
+  "capitalizacao",
 ];
 
 /**
@@ -65,7 +68,9 @@ export const SELECTABLE_ASSET_TYPES: readonly AssetType[] = [
  * se cadastrados como "Renda Fixa", e o gráfico de alocação mostrava 100% em
  * renda fixa numa carteira com ~5% em ações globais.
  */
-const TOTAL_BALANCE_TYPES: readonly string[] = ["renda_fixa", "fundos", "saldo_corretora"];
+// `capitalizacao` entrou em 20/11/2026: o título (PIC do Itaú) é pago em
+// parcelas mensais e o banco informa só o saldo — não há cota nem cotação.
+const TOTAL_BALANCE_TYPES: readonly string[] = ["renda_fixa", "fundos", "saldo_corretora", "capitalizacao"];
 
 export const usesTotalBalancePricing = (assetType: string): boolean =>
   TOTAL_BALANCE_TYPES.includes(assetType);

@@ -4,6 +4,7 @@ import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback } from "react";
+import { ruleMatches } from "@/lib/ruleMatch";
 
 export interface CategorizationRule {
   id: string;
@@ -11,6 +12,8 @@ export interface CategorizationRule {
   keyword: string;
   category_id: string;
   is_corporate: boolean;
+  /** Ao casar, marca a despesa como aporte em investimento (fora da despesa do mês). */
+  is_investment_contribution?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -35,7 +38,12 @@ export function useCategorizationRules() {
   });
 
   const createRule = useMutation({
-    mutationFn: async (rule: { keyword: string; category_id: string | null; is_corporate?: boolean }) => {
+    mutationFn: async (rule: {
+      keyword: string;
+      category_id: string | null;
+      is_corporate?: boolean;
+      is_investment_contribution?: boolean;
+    }) => {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
@@ -47,7 +55,8 @@ export function useCategorizationRules() {
           user_id: user.id,
           keyword: rule.keyword.toUpperCase(),
           category_id: rule.category_id || null,
-          is_corporate: rule.is_corporate ?? false
+          is_corporate: rule.is_corporate ?? false,
+          is_investment_contribution: rule.is_investment_contribution ?? false,
         }], {
           onConflict: 'user_id,keyword'
         })
@@ -66,7 +75,19 @@ export function useCategorizationRules() {
   });
 
   const updateRule = useMutation({
-    mutationFn: async ({ id, keyword, category_id, is_corporate }: { id: string; keyword?: string; category_id?: string | null; is_corporate?: boolean }) => {
+    mutationFn: async ({
+      id,
+      keyword,
+      category_id,
+      is_corporate,
+      is_investment_contribution,
+    }: {
+      id: string;
+      keyword?: string;
+      category_id?: string | null;
+      is_corporate?: boolean;
+      is_investment_contribution?: boolean;
+    }) => {
       // Tipado pelo schema em vez de `Record<string, unknown>`: o cliente do
       // Supabase não consegue validar um record aberto contra as colunas da
       // tabela, então qualquer chave errada só apareceria como erro do
@@ -75,6 +96,9 @@ export function useCategorizationRules() {
       if (keyword !== undefined) updateData.keyword = keyword.toUpperCase();
       if (category_id !== undefined) updateData.category_id = category_id;
       if (is_corporate !== undefined) updateData.is_corporate = is_corporate;
+      if (is_investment_contribution !== undefined) {
+        updateData.is_investment_contribution = is_investment_contribution;
+      }
 
       const { data, error } = await supabase
         .from("categorization_rules")
@@ -115,10 +139,8 @@ export function useCategorizationRules() {
 
   // Function to find matching category and corporate status for a description
   const findCategoryForDescription = useCallback((description: string): string | null => {
-    const upperDesc = description.toUpperCase();
-    
     for (const rule of rules) {
-      if (upperDesc.includes(rule.keyword.toUpperCase())) {
+      if (ruleMatches(description, rule.keyword)) {
         return rule.category_id;
       }
     }
@@ -128,14 +150,25 @@ export function useCategorizationRules() {
 
   // Function to find if a description matches a corporate rule
   const findCorporateForDescription = useCallback((description: string): boolean => {
-    const upperDesc = description.toUpperCase();
-    
     for (const rule of rules) {
-      if (upperDesc.includes(rule.keyword.toUpperCase())) {
+      if (ruleMatches(description, rule.keyword)) {
         return rule.is_corporate || false;
       }
     }
     
+    return false;
+  }, [rules]);
+
+  // A regra que casa marca aporte? Mesma ordem das outras (a primeira que casa
+  // decide), para categoria, corporativa e aporte nunca virem de regras
+  // diferentes.
+  const findInvestmentContributionForDescription = useCallback((description: string): boolean => {
+    for (const rule of rules) {
+      if (ruleMatches(description, rule.keyword)) {
+        return rule.is_investment_contribution || false;
+      }
+    }
+
     return false;
   }, [rules]);
 
@@ -166,7 +199,7 @@ export function useCategorizationRules() {
       // For each rule, count matching transactions
       for (const rule of rules) {
         const matchingTransactions = uncategorizedTransactions.filter(
-          (t) => !matchedTransactionIds.has(t.id) && t.description.toUpperCase().includes(rule.keyword.toUpperCase())
+          (t) => !matchedTransactionIds.has(t.id) && ruleMatches(t.description, rule.keyword)
         );
 
         if (matchingTransactions.length > 0) {
@@ -194,12 +227,12 @@ export function useCategorizationRules() {
     
     try {
       // If specific transaction IDs are provided, use them. Otherwise fetch all uncategorized
-      let transactionsToProcess: { id: string; description: string }[];
+      let transactionsToProcess: { id: string; description: string; type: string }[];
       
       if (transactionIds && transactionIds.length > 0) {
         const { data, error } = await supabase
           .from("transactions")
-          .select("id, description")
+          .select("id, description, type")
           .in("id", transactionIds);
         
         if (error) throw error;
@@ -207,7 +240,7 @@ export function useCategorizationRules() {
       } else {
         const { data, error } = await supabase
           .from("transactions")
-          .select("id, description")
+          .select("id, description, type")
           .is("category_id", null);
         
         if (error) throw error;
@@ -223,16 +256,20 @@ export function useCategorizationRules() {
 
       // For each transaction, check if any rule matches
       for (const transaction of transactionsToProcess) {
-        const upperDesc = transaction.description.toUpperCase();
-        
         for (const rule of rules) {
-          if (upperDesc.includes(rule.keyword.toUpperCase())) {
+          if (ruleMatches(transaction.description, rule.keyword)) {
             // Found a matching rule, update the transaction
             const { error: updateError } = await supabase
               .from("transactions")
               .update({
                 category_id: rule.category_id,
                 is_corporate_expense: rule.is_corporate,
+                // Só LIGA, e só em despesa: um aporte marcado à mão não é
+                // desmarcado por uma regra que não fala de aporte, e o resgate
+                // (receita) com a mesma palavra no extrato continua receita.
+                ...(rule.is_investment_contribution && transaction.type === "expense"
+                  ? { is_investment_contribution: true }
+                  : {}),
               })
               .eq("id", transaction.id);
 
@@ -279,6 +316,7 @@ export function useCategorizationRules() {
     deleteRule,
     findCategoryForDescription,
     findCorporateForDescription,
+    findInvestmentContributionForDescription,
     previewRulesApplication,
     isLoadingPreview,
     applyRulesToUncategorized,

@@ -17,6 +17,7 @@ const createTransactionMock = vi.hoisted(() => vi.fn().mockResolvedValue({ id: "
 const regras = vi.hoisted(() => ({
   findCategoryForDescription: () => null,
   findCorporateForDescription: () => false,
+  findInvestmentContributionForDescription: () => false,
   createRule: { mutateAsync: vi.fn() },
 }));
 const SEM_CARTOES = vi.hoisted(() => [] as unknown[]);

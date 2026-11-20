@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, LineChart, Info, ChevronsUpDown, MoreVertical, List } from "lucide-react";
+import { Plus, Target, TrendingDown, AlertTriangle, CheckCircle, Copy, ChevronLeft, ChevronRight, Loader2, Trash2, Pencil, CornerDownRight, ChevronDown, LineChart, Info, ChevronsUpDown, MoreVertical, List, PiggyBank } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +49,7 @@ import {
   isMonthlyExpense,
   isMonthlyExpenseRefund,
   sumBudgetSpending,
+  sumInvestmentContributions,
 } from "@/lib/transactionFilters";
 import { formatDateBR } from "@/lib/dateUtils";
 
@@ -138,6 +139,13 @@ export default function Planning() {
   );
 
   const totalSpent = totalPaid + totalForecast;
+
+  // Aporte em investimento não consome orçamento (fica fora de
+  // sumBudgetSpending); aparece no próprio card para não sumir da tela.
+  const totalContributions = useMemo(
+    () => sumInvestmentContributions(transactions),
+    [transactions],
+  );
   
   const totalRemaining = totalPlanned - totalSpent;
   const totalPercentage = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
@@ -533,7 +541,7 @@ export default function Planning() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 lg:gap-4">
         <div className="bg-card rounded-xl border border-border p-4 shadow-card">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg gradient-balance flex items-center justify-center"><Target className="h-5 w-5 text-balance-foreground" /></div>
@@ -564,6 +572,16 @@ export default function Planning() {
           <div className="flex items-center gap-3">
             <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center", categoriesOverBudget > 0 ? "bg-expense/10" : "bg-income/10")}>{categoriesOverBudget > 0 ? <AlertTriangle className="h-5 w-5 text-expense" /> : <CheckCircle className="h-5 w-5 text-income" />}</div>
             <div><p className="text-xs text-muted-foreground">Categorias Excedidas</p><p className={cn("text-lg font-bold", categoriesOverBudget > 0 ? "text-expense" : "text-income")}>{categoriesOverBudget} de {budgetedRows}</p></div>
+          </div>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4 shadow-card">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center"><PiggyBank className="h-5 w-5 text-emerald-600 dark:text-emerald-400" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">Aportes no mês</p>
+              <Currency value={totalContributions} className="text-lg font-bold text-foreground block" />
+              <p className="text-[11px] text-muted-foreground">Fora do orçamento</p>
+            </div>
           </div>
         </div>
       </div>

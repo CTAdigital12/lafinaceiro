@@ -52,6 +52,7 @@ export function LinkTransactionsModal({ open, onOpenChange, onLink, isPending }:
       .eq("type", "expense")
       .eq("is_refund", false)
       .eq("is_card_payment", false)
+      .eq("is_investment_contribution", false)
       .eq("is_provisional", false)
       .gte("date", since)
       .order("date", { ascending: false })

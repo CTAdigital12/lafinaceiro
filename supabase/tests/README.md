@@ -44,6 +44,10 @@ psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/recompute_card_invoic
 # como o B5, então vem por último.
 psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/um_pix_varias_despesas.sql
 
+# Aporte em investimento: a divisão herda a flag. Também aplica a própria
+# migration no meio (`\i`), depois das de divisão.
+psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/aporte_na_divisao.sql
+
 pg_ctl -D /tmp/lfpg stop
 ```
 

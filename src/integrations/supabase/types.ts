@@ -141,6 +141,7 @@ export type Database = {
           created_at: string
           id: string
           is_corporate: boolean
+          is_investment_contribution: boolean
           keyword: string
           updated_at: string
           user_id: string
@@ -150,6 +151,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_corporate?: boolean
+          is_investment_contribution?: boolean
           keyword: string
           updated_at?: string
           user_id: string
@@ -159,6 +161,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_corporate?: boolean
+          is_investment_contribution?: boolean
           keyword?: string
           updated_at?: string
           user_id?: string
@@ -692,6 +695,7 @@ export type Database = {
           installment_group_id: string | null
           installment_number: number | null
           is_card_payment: boolean | null
+          is_investment_contribution: boolean
           is_corporate_expense: boolean
           is_provisional: boolean
           is_refund: boolean
@@ -728,6 +732,7 @@ export type Database = {
           installment_group_id?: string | null
           installment_number?: number | null
           is_card_payment?: boolean | null
+          is_investment_contribution?: boolean
           is_corporate_expense?: boolean
           is_provisional?: boolean
           is_refund?: boolean
@@ -764,6 +769,7 @@ export type Database = {
           installment_group_id?: string | null
           installment_number?: number | null
           is_card_payment?: boolean | null
+          is_investment_contribution?: boolean
           is_corporate_expense?: boolean
           is_provisional?: boolean
           is_refund?: boolean

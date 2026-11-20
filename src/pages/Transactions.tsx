@@ -32,6 +32,7 @@ import {
   Clock,
   SplitSquareHorizontal,
   ListChecks,
+  PiggyBank,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +66,7 @@ import {
   isMonthlyExpense,
   isMonthlyExpenseRefund,
   isMonthlyIncome,
+  sumInvestmentContributions,
 } from "@/lib/transactionFilters";
 import { affectedCardIds, findClosedInvoiceBlock } from "@/lib/invoiceGuard";
 import { useTransactions, Transaction } from "@/hooks/useTransactions";
@@ -317,6 +319,7 @@ export default function Transactions() {
         "Valor": value,
         "Status": t.status === "completed" ? "Concluída" : "Pendente",
         "Pag. Fatura": t.is_card_payment ? "Sim" : "Não",
+        "Aporte": t.is_investment_contribution ? "Sim" : "Não",
       };
     });
 
@@ -478,6 +481,9 @@ export default function Transactions() {
 
   // Provisórias + pendentes: não entram no total pago, mas continuam visíveis.
   const tabForecastExpense = sum(filteredTransactions.filter(isForecastExpense));
+
+  // Aporte em investimento sai da conta mas não é despesa: aparece à parte.
+  const tabInvestmentContributions = sumInvestmentContributions(filteredTransactions);
 
   // Os totais cobrem apenas o que está carregado. Enquanto houver mais páginas,
   // o rótulo precisa dizer isso — senão o número parece ser o do mês inteiro.
@@ -997,6 +1003,12 @@ export default function Transactions() {
                                   Fatura
                                 </Badge>
                               )}
+                              {transaction.is_investment_contribution && (
+                                <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-300 bg-emerald-50">
+                                  <PiggyBank className="h-3 w-3 mr-1" />
+                                  Aporte
+                                </Badge>
+                              )}
                               {transaction.is_reimbursable && (
                                 <Badge variant="outline" className="text-xs text-blue-600 border-blue-300 bg-blue-50">
                                   <Receipt className="h-3 w-3 mr-1" />
@@ -1193,6 +1205,9 @@ export default function Transactions() {
                           {transaction.is_corporate_expense && (
                             <span className="text-[10px] text-muted-foreground">Empresa</span>
                           )}
+                          {transaction.is_investment_contribution && (
+                            <span className="text-[10px] text-muted-foreground">Aporte</span>
+                          )}
                         </div>
                         {!transaction.is_card_payment && (
                           <Button
@@ -1298,6 +1313,11 @@ export default function Transactions() {
                 {tabForecastExpense > 0 && (
                   <p className="text-[11px] text-muted-foreground">
                     + <Currency value={tabForecastExpense} /> previstas
+                  </p>
+                )}
+                {tabInvestmentContributions > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    <Currency value={tabInvestmentContributions} /> em aportes (fora da despesa)
                   </p>
                 )}
               </div>

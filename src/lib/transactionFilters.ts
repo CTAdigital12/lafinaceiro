@@ -17,10 +17,41 @@ export type TransactionFlags = {
   is_reimbursable?: boolean | null;
   is_reimbursement?: boolean | null;
   is_card_payment?: boolean | null;
+  is_investment_contribution?: boolean | null;
   is_provisional?: boolean | null;
   status?: string | null;
   credit_card_id?: string | null;
 };
+
+/**
+ * Aporte em investimento: dinheiro que sai da conta para uma aplicação (o
+ * débito mensal do título de capitalização, a compra na corretora).
+ *
+ * Continua `type='expense'` de propósito, como o pagamento de fatura: o saldo
+ * da conta (`accountBalance.ts`) não olha flags e segue debitando. Mas NÃO é
+ * despesa — é dinheiro guardado — então `isSettledExpense` e
+ * `isForecastExpense` o recusam, e ele é somado à parte como "Aportes".
+ *
+ * Só o efetivado conta, pela mesma régua da despesa do mês.
+ */
+export function isInvestmentContribution(t: TransactionFlags): boolean {
+  return (
+    t.type === 'expense' &&
+    t.is_investment_contribution === true &&
+    !t.is_provisional &&
+    t.status !== 'pending'
+  );
+}
+
+export function sumInvestmentContributions(
+  transactions: readonly (TransactionFlags & { amount: number | string })[],
+): number {
+  let total = 0;
+  for (const t of transactions) {
+    if (isInvestmentContribution(t)) total += Number(t.amount);
+  }
+  return total;
+}
 
 /**
  * Estorno de compra no cartão gravado como RECEITA (`type='income'` +
@@ -60,7 +91,8 @@ export function categoryKindFor(t: TransactionFlags): 'expense' | 'income' {
 
 /**
  * Base de toda despesa que já aconteceu: efetivada (não provisória, não
- * pendente) e que não é transferência interna (pagamento de fatura).
+ * pendente) e que não é transferência interna (pagamento de fatura) nem aporte
+ * em investimento (`isInvestmentContribution`).
  *
  * Inclui o estorno de cartão gravado como receita (`isCardIncomeRefund`):
  * ele é lado-despesa, só que com sinal trocado, e as camadas acima já o
@@ -75,6 +107,7 @@ export function isSettledExpense(t: TransactionFlags): boolean {
   return (
     (t.type === 'expense' || isCardIncomeRefund(t)) &&
     !t.is_card_payment &&
+    !t.is_investment_contribution &&
     !t.is_provisional &&
     t.status !== 'pending'
   );
@@ -107,6 +140,7 @@ export function isForecastExpense(t: TransactionFlags): boolean {
     !t.is_refund &&
     !t.is_reimbursable &&
     !t.is_card_payment &&
+    !t.is_investment_contribution &&
     (Boolean(t.is_provisional) || t.status === 'pending')
   );
 }

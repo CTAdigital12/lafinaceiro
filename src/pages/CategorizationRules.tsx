@@ -7,6 +7,7 @@ import {
   BookMarked,
   Building2,
   Wand2,
+  PiggyBank,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ export default function CategorizationRules() {
   const [editKeyword, setEditKeyword] = useState("");
   const [editCategoryId, setEditCategoryId] = useState<string | null>(null);
   const [editIsCorporate, setEditIsCorporate] = useState(false);
+  const [editIsContribution, setEditIsContribution] = useState(false);
 
   const filteredRules = rules.filter((rule) => {
     const category = categories.find((c) => c.id === rule.category_id);
@@ -92,6 +94,7 @@ export default function CategorizationRules() {
     setEditKeyword(rule.keyword);
     setEditCategoryId(rule.category_id);
     setEditIsCorporate(rule.is_corporate);
+    setEditIsContribution(rule.is_investment_contribution ?? false);
   };
 
   const handleEditSave = async () => {
@@ -102,6 +105,7 @@ export default function CategorizationRules() {
       keyword: editKeyword,
       category_id: editCategoryId,
       is_corporate: editIsCorporate,
+      is_investment_contribution: editIsContribution,
     });
     
     setEditingRule(null);
@@ -225,13 +229,14 @@ export default function CategorizationRules() {
               <SortableHead field="keyword" label="Palavra-chave" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
               <SortableHead field="category" label="Categoria" activeField={sort.field} direction={sort.direction} onSort={toggleSort} />
               <TableHead className="text-center">Corporativa</TableHead>
+              <TableHead className="text-center">Aporte</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedRules.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   {searchQuery
                     ? "Nenhuma regra encontrada com esse filtro"
                     : "Nenhuma regra de categorização criada ainda"}
@@ -259,6 +264,16 @@ export default function CategorizationRules() {
                       {rule.is_corporate ? (
                         <Badge variant="default" className="gap-1">
                           <Building2 className="h-3 w-3" />
+                          Sim
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">Não</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {rule.is_investment_contribution ? (
+                        <Badge variant="outline" className="gap-1 text-emerald-600 border-emerald-500/30 bg-emerald-500/10">
+                          <PiggyBank className="h-3 w-3" />
                           Sim
                         </Badge>
                       ) : (
@@ -342,6 +357,12 @@ export default function CategorizationRules() {
                     Corporativa
                   </Badge>
                 )}
+                {rule.is_investment_contribution && (
+                  <Badge variant="outline" className="gap-1 text-xs text-emerald-600 border-emerald-500/30 bg-emerald-500/10">
+                    <PiggyBank className="h-3 w-3" />
+                    Aporte
+                  </Badge>
+                )}
               </div>
             );
           })
@@ -399,7 +420,29 @@ export default function CategorizationRules() {
               <Switch
                 id="corporate"
                 checked={editIsCorporate}
-                onCheckedChange={setEditIsCorporate}
+                onCheckedChange={(checked) => {
+                  setEditIsCorporate(checked);
+                  if (checked) setEditIsContribution(false);
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="contribution" className="cursor-pointer">
+                  Aporte em Investimento
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  A saída não conta como despesa (ex.: capitalização)
+                </p>
+              </div>
+              <Switch
+                id="contribution"
+                checked={editIsContribution}
+                onCheckedChange={(checked) => {
+                  setEditIsContribution(checked);
+                  if (checked) setEditIsCorporate(false);
+                }}
               />
             </div>
           </div>
