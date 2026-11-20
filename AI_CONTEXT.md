@@ -107,6 +107,7 @@ Tabela central que armazena todas as movimentações financeiras.
 | `is_corporate_expense` | BOOLEAN | Não | `false` | Gasto da empresa no cartão pessoal |
 | `is_reimbursable` | BOOLEAN | Não | `false` | Despesa a ser reembolsada |
 | `is_card_payment` | BOOLEAN | Sim | `false` | **Pagamento de fatura (NÃO É DESPESA!)** |
+| `is_investment_contribution` | BOOLEAN | Não | `false` | **Aporte em investimento (NÃO É DESPESA! debita o saldo; §3.1.1)** |
 | `is_refund` | BOOLEAN | Não | `false` | Estorno/reembolso |
 | `refunded_transaction_id` | UUID | Sim | - | Transação original do estorno |
 | `installment_group_id` | UUID | Sim | - | **Agrupa parcelas da mesma compra** |
@@ -397,6 +398,28 @@ Regras para geração automática de transações provisórias mensais.
 
 ---
 
+### ⚠️ 3.1.1 Aporte em Investimento NÃO É Despesa
+
+```typescript
+// Débito da conta para uma aplicação (título de capitalização, compra na XP)
+{
+  type: 'expense',                  // ← continua expense: o SALDO da conta cai
+  is_investment_contribution: true, // ← FLAG: fora da despesa e do orçamento
+  account_id: 'conta-corrente',
+}
+```
+
+- `isSettledExpense` e `isForecastExpense` (`src/lib/transactionFilters.ts`) recusam a flag; a soma à
+  parte é `sumInvestmentContributions` — card "Aportes" no Dashboard e no Planejamento.
+- Marcada por: switch no `TransactionModal`, caixa "Aporte" na revisão do extrato
+  (`AccountReviewModal`), regra de categorização (`categorization_rules.is_investment_contribution`)
+  e todo BUY criado em Investimentos (`createOrLinkTransactionForOp`).
+- Não há gerador de `recurring_rules`: o débito mensal só é marcado sozinho pela REGRA, na importação.
+- A regra só LIGA a flag, e só em despesa: o resgate (receita) com a mesma palavra continua receita.
+- Exclusiva com corporativa/reembolsável/pagamento de fatura.
+
+---
+
 ### ⚠️ 3.2 `date` vs `due_date`
 
 | Campo | Significado | Quando Usar |
@@ -619,7 +642,8 @@ transações por `collapseSplitGroups()` primeiro.**
 
 ```typescript
 const normalExpenses = transactions
-  .filter(t => t.type === "expense" && !t.is_refund && !t.is_card_payment 
+  .filter(t => t.type === "expense" && !t.is_refund && !t.is_card_payment
+    && !t.is_investment_contribution  // ← aporte não é despesa (§3.1.1)
     && !t.is_corporate_expense && !t.is_reimbursable
     && !t.is_provisional && t.status !== "pending")  // ← Exclui projeções e pendentes
   .reduce((sum, t) => sum + Number(t.amount), 0);

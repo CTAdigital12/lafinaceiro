@@ -3,7 +3,7 @@
 > Atualize em PR. Declare apenas o que foi verificado; não presuma o que está em outra branch.
 
 - **Referência:** `main` em `7aa1414` (merge do PR #143). Kit Dev Memory idêntico a `gestor-de-ia@29f809b`.
-- **Última atualização:** 2026-11-11 (branch `docs/paginacao-regra-e-triagem`, sobre `main` em `7aa1414`).
+- **Última atualização:** 2026-11-20 (branch `feat/aporte-nao-e-despesa`, sobre `main` em `16a31d3`).
 
 ## Verificado
 - Kit Dev Memory instalado (PR #139). Ver [ADR-0001](decisions/ADR-0001-adocao-dev-memory.md). Os arquivos do kit são
@@ -36,6 +36,10 @@
   [ISSUE-0001](known-issues/ISSUE-0001-leituras-sem-paginacao.md).
 
 ## Pendente
+- **Aporte em investimento fora da despesa** ([ADR-0003](decisions/ADR-0003-aporte-em-investimento-nao-e-despesa.md),
+  branch `feat/aporte-nao-e-despesa`): código e testes locais verdes em 2026-11-20. Faltam: aplicar a migração
+  `20261120120000` no Supabase, validar na tela, criar a regra da capitalização e marcar os débitos históricos.
+  PR seguinte: BUY vinculando débito existente + tipo de ativo `capitalizacao`.
 - [ISSUE-0001](known-issues/ISSUE-0001-leituras-sem-paginacao.md): 7 leituras de `transactions` a paginar ou justificar,
   começando pelas duas de `useCategorizationRules` (alto risco). Antes de priorizar, medir o volume real de cada recorte.
 - **Codex CLI:** verificado no kit (`gestor-de-ia`, em cópias descartáveis), **não neste repositório** (opção de não

@@ -306,7 +306,7 @@ export function useInvestments() {
    * Cria/linka a `transactions` na conta corrente e amarra no
    * `investment_transactions.linked_transaction_id`.
    *
-   * - BUY → cria expense (sempre auto-criada).
+   * - BUY → cria expense marcada como aporte (sempre auto-criada).
    * - SELL `linkMode="existing"` → valida candidato + checa se já não está
    *   vinculada a OUTRA operação, e linka.
    * - SELL `linkMode="new"` → cria income "Resgate: TICKER".
@@ -343,6 +343,9 @@ export function useInvestments() {
             date: tx.date,
             status: "completed",
             is_corporate_expense: false,
+            // Aplicação é dinheiro guardado: debita a conta, mas não é
+            // despesa do mês (ver isInvestmentContribution).
+            is_investment_contribution: true,
           },
         ])
         .select()

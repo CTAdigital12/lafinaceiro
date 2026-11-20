@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { Wallet, TrendingUp, TrendingDown, CreditCard, Loader2 } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, CreditCard, Loader2, PiggyBank } from "lucide-react";
 import { SummaryCard } from "@/components/dashboard/SummaryCard";
 import { CategoryChart } from "@/components/dashboard/CategoryChart";
 import { BalanceChart } from "@/components/dashboard/BalanceChart";
@@ -13,6 +13,7 @@ import { useCategories } from "@/hooks/useCategories";
 import {
   isSettledExpense,
   matchesExpenseView,
+  sumInvestmentContributions,
   type ExpenseViewFilter,
 } from "@/lib/transactionFilters";
 import { groupIncomeByCategory } from "@/lib/incomeByCategory";
@@ -130,6 +131,13 @@ export default function Dashboard() {
     
     return expenses - refunds;
   }, [transactions, filterTransactionsByView, filterRefundsByView]);
+
+  // Aporte em investimento: saiu da conta, mas é dinheiro guardado — fica fora
+  // de "Despesas" (isSettledExpense o recusa) e aparece no próprio card.
+  const totalInvestmentContributions = useMemo(
+    () => sumInvestmentContributions(transactions),
+    [transactions],
+  );
 
   // Calculate expenses grouped by parent category (with refunds subtracted)
   const expensesByParentCategory = useMemo(() => {
@@ -370,7 +378,7 @@ export default function Dashboard() {
       {/* Summary Cards */}
       {(() => {
         return (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
             <SummaryCard
               title="Saldo Atual"
               value={fmt(totalBalance)}
@@ -391,6 +399,13 @@ export default function Dashboard() {
               subtitle="Este mês"
               icon={TrendingDown}
               variant="expense"
+            />
+            <SummaryCard
+              title="Aportes"
+              value={fmt(totalInvestmentContributions)}
+              subtitle="Investido este mês"
+              icon={PiggyBank}
+              variant="investment"
             />
             {/* `totalInvoice` é o saldo devedor acumulado de TODOS os cartões,
                 somando todo o histórico não pago — NÃO a fatura do mês

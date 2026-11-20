@@ -7,6 +7,23 @@ create table public.recurring_rules (
   type text not null
 );
 
+-- Só para a migration de aporte (20261120120000) ter onde pôr a coluna.
+create table public.categorization_rules (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  keyword text not null,
+  category_id uuid,
+  is_corporate boolean not null default false
+);
+
+-- Idem, para a CHECK de asset_type recriada na mesma migration.
+create table public.investment_assets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  name text not null,
+  asset_type text not null
+);
+
 create table public.transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,

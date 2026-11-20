@@ -63,7 +63,7 @@ export function RefundReport() {
     // cartão gravado como receita (importação/conciliação de fatura) também é
     // lado-despesa — sem ele, o estorno mais comum não aparecia aqui.
     const expenseTransactions = transactions.filter(
-      t => t.type === "expense" || isCardIncomeRefund(t),
+      t => (t.type === "expense" || isCardIncomeRefund(t)) && !t.is_investment_contribution,
     );
     
     // Group by category

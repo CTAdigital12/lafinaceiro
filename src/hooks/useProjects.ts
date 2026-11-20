@@ -39,7 +39,7 @@ export function useProjects() {
       const projectIds = rawProjects.map((p) => p.id);
       const { data: txData, error: txError } = await supabase
         .from("transactions")
-        .select("project_id, type, amount, is_refund, is_card_payment, is_provisional")
+        .select("project_id, type, amount, is_refund, is_card_payment, is_investment_contribution, is_provisional")
         .in("project_id", projectIds);
 
       if (txError) throw txError;
@@ -51,13 +51,14 @@ export function useProjects() {
       // reforma tirou os 10x do orçamento do projeto, e contar só o pago
       // mostraria uma folga que não existe. Previsão de recorrência
       // (is_provisional) fica fora — é palpite, não compra —, e pagamento de
-      // fatura também, porque só move dinheiro. Decidido em 21/10/2026; todas
+      // fatura e aporte em investimento também, porque só movem dinheiro. Decidido em 21/10/2026; todas
       // as telas de projeto leem este número (spent_amount).
       const spentByProject: Record<string, number> = {};
       for (const tx of txData || []) {
         if (!tx.project_id) continue;
-        // Skip card payments and provisional
+        // Skip card payments, investment contributions and provisional
         if (tx.is_card_payment) continue;
+        if (tx.is_investment_contribution) continue;
         if (tx.is_provisional) continue;
 
         if (tx.type === "expense" && !tx.is_refund) {

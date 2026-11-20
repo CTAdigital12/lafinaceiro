@@ -45,7 +45,7 @@ export async function fetchBalanceChartData(
   const data = await fetchAllRows((from, to) =>
     supabase
       .from("transactions")
-      .select("amount, type, date, due_date, credit_card_id, status, is_corporate_expense, is_refund, is_reimbursable, is_reimbursement, is_card_payment, is_provisional")
+      .select("amount, type, date, due_date, credit_card_id, status, is_corporate_expense, is_refund, is_reimbursable, is_reimbursement, is_card_payment, is_investment_contribution, is_provisional")
       .or(competenceRangeFilter(startDate, endDate))
       .order("id")
       .range(from, to),

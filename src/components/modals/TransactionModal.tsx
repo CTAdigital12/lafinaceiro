@@ -4,7 +4,7 @@ import { format, parseISO, addMonths } from "date-fns";
 import { todayYmd } from "@/lib/dateUtils";
 import { installmentStatus, isFutureYmd } from "@/lib/transactionStatus";
 import { calculateCardDueDate } from "@/lib/creditCardCycle";
-import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText, CreditCard } from "lucide-react";
+import { CalendarIcon, Loader2, Briefcase, BookMarked, Check, ChevronsUpDown, RotateCcw, Layers, ReceiptText, CreditCard, PiggyBank } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -70,6 +70,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
   const [isReimbursable, setIsReimbursable] = useState(false);
   const [isRefund, setIsRefund] = useState(false);
   const [isCardPayment, setIsCardPayment] = useState(false);
+  const [isInvestmentContribution, setIsInvestmentContribution] = useState(false);
   const [refundedTransactionId, setRefundedTransactionId] = useState<string | null>(null);
   const [saveRule, setSaveRule] = useState(false);
   const [ruleKeyword, setRuleKeyword] = useState("");
@@ -162,6 +163,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsReimbursable(false);
       setIsRefund(true);
       setIsCardPayment(false);
+      setIsInvestmentContribution(false);
       setRefundedTransactionId(refundFrom.id);
       setProjectId(null);
       setSaveRule(false);
@@ -198,6 +200,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsReimbursable(sourceData.is_reimbursable || false);
       setIsRefund(sourceData.is_refund || false);
       setIsCardPayment(sourceData.is_card_payment || false);
+      setIsInvestmentContribution(sourceData.is_investment_contribution || false);
       setRefundedTransactionId(sourceData.refunded_transaction_id || null);
       setProjectId(sourceData.project_id || null);
       setSaveRule(false);
@@ -216,6 +219,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
       setIsReimbursable(false);
       setIsRefund(false);
       setIsCardPayment(false);
+      setIsInvestmentContribution(false);
       setRefundedTransactionId(null);
       setProjectId(null);
       setSaveRule(false);
@@ -258,6 +262,12 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
     }
   }, [date, dueDate, paymentMethod]);
 
+  // Aporte só existe como despesa saindo de conta, e não é pagamento de fatura.
+  // Mudar o tipo ou o meio depois de ligar o switch não pode deixar a flag
+  // gravada escondida.
+  const investmentContributionToSave =
+    isInvestmentContribution && type === "expense" && paymentMethod === "account" && !isCardPayment;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -267,6 +277,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         keyword: ruleKeyword.trim(),
         category_id: categoryId || null,
         is_corporate: isCorporateExpense,
+        is_investment_contribution: investmentContributionToSave,
       });
     }
 
@@ -327,6 +338,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
           is_reimbursable: isReimbursable,
           is_refund: false,
           is_card_payment: false,
+          is_investment_contribution: investmentContributionToSave,
           refunded_transaction_id: null,
           installment_group_id: groupId,
           installment_number: i,
@@ -384,6 +396,7 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
         // deixa de abater a fatura. Compra no cartão nunca é pagamento.
         is_card_payment:
           paymentMethod === "account" ? isCardPayment : type === "income" && isCardPayment,
+        is_investment_contribution: investmentContributionToSave,
         refunded_transaction_id: refundedTransactionId,
         installment_group_id: isEditing && transaction ? transaction.installment_group_id : null,
         installment_number: isEditing && transaction ? transaction.installment_number : null,
@@ -931,7 +944,10 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
             <Switch
               id="corporate-expense"
               checked={isCorporateExpense}
-              onCheckedChange={setIsCorporateExpense}
+              onCheckedChange={(checked) => {
+                setIsCorporateExpense(checked);
+                if (checked) setIsInvestmentContribution(false);
+              }}
             />
           </div>
 
@@ -983,6 +999,36 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
             </div>
           )}
 
+          {/* Aporte em investimento - despesa em conta que não é pagamento de fatura */}
+          {type === "expense" && paymentMethod === "account" && !isCardPayment && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <PiggyBank className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <Label htmlFor="investment-contribution" className="text-sm font-medium cursor-pointer">
+                    Aporte em Investimento
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Sai da conta, mas não conta como despesa (ex.: capitalização)
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="investment-contribution"
+                checked={isInvestmentContribution}
+                onCheckedChange={(checked) => {
+                  setIsInvestmentContribution(checked);
+                  if (checked) {
+                    setIsCorporateExpense(false);
+                    setIsReimbursable(false);
+                  }
+                }}
+              />
+            </div>
+          )}
+
           {/* Reimbursable Expense - Only show for expenses */}
           {type === "expense" && (
             <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
@@ -1000,7 +1046,10 @@ export function TransactionModal({ open, onOpenChange, transaction, duplicateFro
               <Switch
                 id="reimbursable-expense"
                 checked={isReimbursable}
-                onCheckedChange={setIsReimbursable}
+                onCheckedChange={(checked) => {
+                setIsReimbursable(checked);
+                if (checked) setIsInvestmentContribution(false);
+              }}
               />
             </div>
           )}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard, RefreshCw, ArrowRightLeft } from "lucide-react";
+import { Check, AlertCircle, Sparkles, Loader2, Plus, Ban, Briefcase, ChevronsUpDown, CreditCard, RefreshCw, ArrowRightLeft, PiggyBank } from "lucide-react";
 import { accountLookupRange, findAccountDuplicates, matchManualEntries } from "@/lib/deduplication";
 import { collapseSplitGroups } from "@/lib/splitTransaction";
 import { fetchAllRows } from "@/lib/fetchAllRows";
@@ -99,6 +99,10 @@ interface ReviewItem extends AccountImportedItem {
   remember_corporate: boolean;
   corporate_keyword: string;
   is_card_payment: boolean;
+  /** Aporte em investimento: debita a conta, mas não é despesa do mês. */
+  is_investment_contribution: boolean;
+  remember_contribution: boolean;
+  contribution_keyword: string;
   /** Cartão que o pagamento de fatura pagou — sugerido pelo nome, confirmado na revisão. */
   paid_card_id: string | null;
   original_description: string;
@@ -129,7 +133,23 @@ export function AccountReviewModal({
 }: AccountReviewModalProps) {
   const { user } = useAuth();
   const { categories, createCategory } = useCategories();
-  const { findCategoryForDescription, findCorporateForDescription, createRule } = useCategorizationRules();
+  const {
+    findCategoryForDescription,
+    findCorporateForDescription,
+    findInvestmentContributionForDescription,
+    createRule,
+  } = useCategorizationRules();
+
+  // A regra de aporte só vale para SAÍDA comum: o resgate com a mesma palavra no
+  // extrato é receita, e pagamento de fatura/corporativa têm a própria marca.
+  const suggestContribution = useCallback(
+    (item: AccountImportedItem, isCorporate: boolean) =>
+      item.type === "expense" &&
+      !isCorporate &&
+      !isCardPaymentDescription(item.description) &&
+      findInvestmentContributionForDescription(item.description),
+    [findInvestmentContributionForDescription],
+  );
   const { createTransaction } = useTransactions();
   const { updateAccount } = useAccounts();
   const { creditCards } = useCreditCards();
@@ -260,6 +280,9 @@ export function AccountReviewModal({
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
+            is_investment_contribution: suggestContribution(item, isCorporate),
+            remember_contribution: false,
+            contribution_keyword: item.description.toUpperCase(),
             paid_card_id: isCardPaymentDescription(item.description)
               ? suggestCardForPayment(item.description, creditCards)
               : null,
@@ -310,6 +333,9 @@ export function AccountReviewModal({
             remember_corporate: false,
             corporate_keyword: item.description.toUpperCase(),
             is_card_payment: isCardPaymentDescription(item.description),
+            is_investment_contribution: suggestContribution(item, isCorporate),
+            remember_contribution: false,
+            contribution_keyword: item.description.toUpperCase(),
             paid_card_id: isCardPaymentDescription(item.description)
               ? suggestCardForPayment(item.description, creditCards)
               : null,
@@ -327,7 +353,7 @@ export function AccountReviewModal({
     };
 
     initializeItems();
-  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription, findCorporateForDescription, creditCards, toast]);
+  }, [items, open, accountId, user, getItemsKey, findCategoryForDescription, findCorporateForDescription, suggestContribution, creditCards, toast]);
 
   // Reset initialization flag when modal closes
   useEffect(() => {
@@ -389,8 +415,46 @@ export function AccountReviewModal({
     setReviewItems((prev) =>
       prev.map((item, i) =>
         i === index
-          ? { ...item, is_corporate: isCorporate, remember_corporate: false }
+          ? {
+              ...item,
+              is_corporate: isCorporate,
+              remember_corporate: false,
+              // Corporativa e aporte se excluem: a mesma saída não pode ser
+              // reembolsável e dinheiro guardado ao mesmo tempo.
+              ...(isCorporate ? { is_investment_contribution: false, remember_contribution: false } : {}),
+            }
           : item
+      )
+    );
+  };
+
+  const handleContributionChange = (index: number, isContribution: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              is_investment_contribution: isContribution,
+              remember_contribution: false,
+              ...(isContribution ? { is_corporate: false, remember_corporate: false } : {}),
+            }
+          : item
+      )
+    );
+  };
+
+  const handleRememberContributionChange = (index: number, remember: boolean) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, remember_contribution: remember } : item
+      )
+    );
+  };
+
+  const handleContributionKeywordChange = (index: number, keyword: string) => {
+    setReviewItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, contribution_keyword: keyword } : item
       )
     );
   };
@@ -464,6 +528,7 @@ export function AccountReviewModal({
           keyword: item.rule_keyword.trim(),
           category_id: item.category_id!,
           is_corporate: item.is_corporate,
+          is_investment_contribution: item.is_investment_contribution,
         }));
 
       const corporateRulesToCreate = itemsToImport
@@ -474,7 +539,16 @@ export function AccountReviewModal({
           is_corporate: true,
         }));
 
-      for (const rule of [...rulesToCreate, ...corporateRulesToCreate]) {
+      const contributionRulesToCreate = itemsToImport
+        .filter((item) => item.remember_contribution && item.is_investment_contribution && item.contribution_keyword.trim())
+        .map((item) => ({
+          keyword: item.contribution_keyword.trim(),
+          category_id: item.category_id || null,
+          is_corporate: false,
+          is_investment_contribution: true,
+        }));
+
+      for (const rule of [...rulesToCreate, ...corporateRulesToCreate, ...contributionRulesToCreate]) {
         await createRule.mutateAsync(rule);
       }
 
@@ -495,6 +569,11 @@ export function AccountReviewModal({
               category_id: item.category_id || undefined,
               is_corporate_expense: item.is_corporate,
               is_card_payment: item.is_card_payment,
+              // Só LIGA: o previsto pode ter sido marcado como aporte à mão, e
+              // uma linha sem regra de aporte não deve desmarcá-lo.
+              ...(item.is_investment_contribution && !item.is_card_payment
+                ? { is_investment_contribution: true }
+                : {}),
               ...(item.is_card_payment && item.paid_card_id
                 ? { credit_card_id: item.paid_card_id }
                 : {}),
@@ -570,6 +649,7 @@ export function AccountReviewModal({
             is_reimbursable: false,
             is_refund: false,
             is_card_payment: item.is_card_payment,
+            is_investment_contribution: item.is_investment_contribution && !item.is_card_payment,
             refunded_transaction_id: null,
             reimbursement_status: item.is_corporate ? "pending" : null,
             installment_group_id: null,
@@ -855,6 +935,12 @@ export function AccountReviewModal({
                             Reembolso
                           </Badge>
                         )}
+                        {item.is_investment_contribution && !item.isDuplicate && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0 bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                            <PiggyBank className="h-3 w-3 mr-1" />
+                            Aporte
+                          </Badge>
+                        )}
                         {item.is_card_payment && !item.isDuplicate && (
                           <Badge variant="outline" className="text-xs flex-shrink-0 bg-purple-500/10 text-purple-600 border-purple-500/30">
                             <CreditCard className="h-3 w-3 mr-1" />
@@ -1082,6 +1168,26 @@ export function AccountReviewModal({
                             </label>
                           </div>
                         )}
+
+                        {/* Checkbox Aporte em investimento */}
+                        {item.type === "expense" && !item.is_card_payment && (
+                          <div className="flex items-center gap-1.5">
+                            <Checkbox
+                              id={`contribution-${index}`}
+                              checked={item.is_investment_contribution}
+                              onCheckedChange={(checked) =>
+                                handleContributionChange(index, checked === true)
+                              }
+                            />
+                            <label
+                              htmlFor={`contribution-${index}`}
+                              className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1 whitespace-nowrap"
+                            >
+                              <PiggyBank className="h-3 w-3" />
+                              Aporte
+                            </label>
+                          </div>
+                        )}
                       </div>
 
                       {/* Linha 3: Input de Keyword da Regra (Condicional) */}
@@ -1134,6 +1240,44 @@ export function AccountReviewModal({
                               />
                               <p className="text-[10px] text-muted-foreground">
                                 → Será marcado como despesa corporativa (reembolso)
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Linha 5: Lembrar como aporte (Condicional) */}
+                      {item.is_investment_contribution && item.type === "expense" && !item.is_card_payment && (
+                        <div className="space-y-2 pt-1 border-t border-dashed">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`remember-contribution-${index}`}
+                              checked={item.remember_contribution}
+                              onCheckedChange={(checked) =>
+                                handleRememberContributionChange(index, checked === true)
+                              }
+                            />
+                            <label
+                              htmlFor={`remember-contribution-${index}`}
+                              className="text-xs text-muted-foreground cursor-pointer"
+                            >
+                              Lembrar como aporte em investimento
+                            </label>
+                          </div>
+
+                          {item.remember_contribution && (
+                            <div className="space-y-1.5 ml-5">
+                              <label className="text-xs text-muted-foreground">
+                                Se a descrição contiver o texto:
+                              </label>
+                              <Input
+                                value={item.contribution_keyword}
+                                onChange={(e) => handleContributionKeywordChange(index, e.target.value)}
+                                placeholder="Digite o texto chave para identificação"
+                                className="h-8 text-xs font-mono"
+                              />
+                              <p className="text-[10px] text-muted-foreground">
+                                → Todo mês, sairá da despesa e entrará em Aportes
                               </p>
                             </div>
                           )}

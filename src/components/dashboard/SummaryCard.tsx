@@ -6,7 +6,7 @@ interface SummaryCardProps {
   value: string;
   subtitle?: string;
   icon: LucideIcon;
-  variant: "balance" | "income" | "expense" | "card";
+  variant: "balance" | "income" | "expense" | "card" | "investment";
   trend?: {
     value: number;
     isPositive: boolean;
@@ -37,6 +37,12 @@ const variantStyles = {
     iconBg: "bg-primary/10",
     iconColor: "text-primary",
     valueColor: "text-primary",
+  },
+  investment: {
+    borderColor: "border-l-emerald-500",
+    iconBg: "bg-emerald-500/10",
+    iconColor: "text-emerald-600 dark:text-emerald-400",
+    valueColor: "text-emerald-600 dark:text-emerald-400",
   },
 };
 
