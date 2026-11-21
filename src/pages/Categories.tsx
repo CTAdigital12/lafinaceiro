@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Collapsible,
   CollapsibleContent,
@@ -275,7 +276,11 @@ function DroppableParentCategory({
 }
 
 export default function Categories() {
-  const { expenseCategories, isLoading, createCategory, updateCategory } = useCategories();
+  const { expenseCategories: allExpenseCategories, incomeCategories, isLoading, createCategory, updateCategory } = useCategories();
+  const [activeType, setActiveType] = useState<"expense" | "income">("expense");
+  // Tudo abaixo (lista, subcategorias, arrastar) opera só sobre o tipo da aba ativa.
+  const expenseCategories = activeType === "income" ? incomeCategories : allExpenseCategories;
+  const isExpenseTab = activeType === "expense";
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
@@ -359,9 +364,9 @@ export default function Categories() {
       name: newName.trim(),
       icon: newIcon,
       color: newColor,
-      type: "expense",
+      type: activeType,
       parent_id: parentId,
-      is_reimbursable: isReimbursable,
+      is_reimbursable: isExpenseTab && isReimbursable,
     });
     
     resetForm();
@@ -376,9 +381,9 @@ export default function Categories() {
       name: newName.trim(),
       icon: newIcon,
       color: newColor,
-      is_reimbursable: isReimbursable,
+      is_reimbursable: editingCategory.type === "expense" && isReimbursable,
     });
-    
+
     resetForm();
     setEditingCategory(null);
   };
@@ -421,7 +426,7 @@ export default function Categories() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Categorias de Despesas</h1>
+          <h1 className="text-2xl font-bold text-foreground">Categorias</h1>
           <p className="text-muted-foreground">Gerencie suas categorias e subcategorias. Arraste subcategorias para movê-las.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
@@ -435,6 +440,7 @@ export default function Categories() {
             <DialogHeader>
               <DialogTitle>
                 {parentId ? "Nova Subcategoria" : "Nova Categoria"}
+                {isExpenseTab ? " de Despesa" : " de Receita"}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -483,6 +489,7 @@ export default function Categories() {
                   ))}
                 </div>
               </div>
+              {isExpenseTab && (
               <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -501,6 +508,7 @@ export default function Categories() {
                   onCheckedChange={setIsReimbursable}
                 />
               </div>
+              )}
               <Button
                 onClick={handleAddCategory}
                 className="w-full"
@@ -565,6 +573,7 @@ export default function Categories() {
                 ))}
               </div>
             </div>
+            {editingCategory?.type === "expense" && (
             <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -583,6 +592,7 @@ export default function Categories() {
                 onCheckedChange={setIsReimbursable}
               />
             </div>
+            )}
             <Button
               onClick={handleUpdateCategory}
               className="w-full"
@@ -593,6 +603,25 @@ export default function Categories() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Tabs
+        value={activeType}
+        onValueChange={(v) => {
+          setActiveType(v as "expense" | "income");
+          setExpandedCategories(new Set());
+        }}
+      >
+        <TabsList>
+          <TabsTrigger value="expense">Despesas ({allExpenseCategories.length})</TabsTrigger>
+          <TabsTrigger value="income">Receitas ({incomeCategories.length})</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {parentCategories.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Nenhuma categoria de {isExpenseTab ? "despesa" : "receita"} ainda. Use “Nova Categoria” para criar a primeira.
+        </p>
+      )}
 
       {/* Categories List with DnD */}
       <DndContext
