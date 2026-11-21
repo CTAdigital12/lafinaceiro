@@ -205,6 +205,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Conta única (21/11/2026). Só para conta criada AGORA por este convite:
+    //  - o sentido de volta (membro -> dono), senão o que o membro lança fica
+    //    invisível para o dono. Conta que já existia NÃO ganha a volta: seria
+    //    o dono passando a ler os dados de outra pessoa sem o consentimento dela.
+    //  - apagar as categorias que o gatilho `on_auth_user_created` acabou de
+    //    criar. O membro usa as do dono; as dele apareciam em dobro na lista.
+    //    Conta recém-criada não tem lançamento, meta nem regra apontando para elas.
+    if (contaCriadaAgora) {
+      const { error: voltaError } = await adminClient
+        .from("shared_access")
+        .insert({ owner_id: targetUserId, shared_with_user_id: caller.id });
+      if (voltaError) {
+        console.warn(`[add-member] sem o compartilhamento de volta para ${targetUserId}: ${voltaError.message}`);
+      }
+
+      const { error: categoriasError } = await adminClient
+        .from("categories")
+        .delete()
+        .eq("user_id", targetUserId);
+      if (categoriasError) {
+        console.warn(`[add-member] categorias padrão de ${targetUserId} não apagadas: ${categoriasError.message}`);
+      }
+    }
+
     return new Response(JSON.stringify({ success: true, id: access.id, created: contaCriadaAgora }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

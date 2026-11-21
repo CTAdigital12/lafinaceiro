@@ -56,6 +56,16 @@ describe("planBudgetCopy", () => {
     expect(toInsert.map((x) => x.category_id)).toEqual(["food"]);
   });
 
+  it("conta única: duas metas na mesma categoria (uma de cada login) viram uma", () => {
+    const { toInsert, skipped } = planBudgetCopy([b("food", 100), b("food", 80), b("pet", 200)], []);
+
+    expect(toInsert.map((x) => [x.category_id, x.planned_amount])).toEqual([
+      ["food", 100],
+      ["pet", 200],
+    ]);
+    expect(skipped).toBe(1);
+  });
+
   it("não altera o array de entrada", () => {
     const entrada = [b("food"), b("pet")];
     planBudgetCopy(entrada, ["pet"]);

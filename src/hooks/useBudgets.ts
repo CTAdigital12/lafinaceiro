@@ -46,7 +46,39 @@ export function useBudgets(month: number, year: number) {
       if (!user?.id) {
         throw new Error("Usuário não autenticado");
       }
-      
+
+      // Conta única: se a categoria já tem meta no mês, de QUALQUER um dos dois
+      // logins, ela é atualizada. A unique é (user_id, category_id, month, year),
+      // então inserir no nome de quem digita criava uma meta paralela que o
+      // outro login não via (12 metas do membro, achadas em 21/11/2026).
+      if (budget.category_id) {
+        const { data: existing, error: findError } = await supabase
+          .from("budgets")
+          .select("id")
+          .eq("category_id", budget.category_id)
+          .eq("month", budget.month)
+          .eq("year", budget.year)
+          .order("created_at", { ascending: true })
+          .limit(1);
+
+        if (findError) throw findError;
+
+        if (existing && existing.length > 0) {
+          const { data, error } = await supabase
+            .from("budgets")
+            .update({ planned_amount: budget.planned_amount })
+            .eq("id", existing[0].id)
+            .select(`
+              *,
+              categories (id, name, icon, color, parent_id)
+            `)
+            .single();
+
+          if (error) throw error;
+          return data;
+        }
+      }
+
       const { data, error } = await supabase
         .from("budgets")
         .insert([{ ...budget, user_id: user.id }])
@@ -128,13 +160,15 @@ export function useBudgets(month: number, year: number) {
         prevYear = year - 1;
       }
 
-      // Fetch previous month budgets
+      // Conta única: as metas do mês anterior e as do mês de destino são as dos
+      // DOIS logins (a RLS decide o que é visível). Filtrar por `user_id`
+      // copiava só as de quem clicou e, pior, não via as do outro no destino,
+      // criando metas paralelas na mesma categoria.
       const { data: prevBudgets, error: fetchError } = await supabase
         .from("budgets")
         .select("*")
         .eq("month", prevMonth)
-        .eq("year", prevYear)
-        .eq("user_id", userId);
+        .eq("year", prevYear);
 
       if (fetchError) throw fetchError;
 
@@ -149,8 +183,7 @@ export function useBudgets(month: number, year: number) {
         .from("budgets")
         .select("category_id")
         .eq("month", month)
-        .eq("year", year)
-        .eq("user_id", userId);
+        .eq("year", year);
 
       if (currentError) throw currentError;
 
@@ -165,8 +198,11 @@ export function useBudgets(month: number, year: number) {
         );
       }
 
+      // A cópia sai no nome de quem clicou: a policy de INSERT só aceita o
+      // próprio `user_id`, e a meta de origem pode ser do outro login.
       const newBudgets = toInsert.map(({ id, created_at, ...budget }) => ({
         ...budget,
+        user_id: userId,
         month,
         year,
       }));

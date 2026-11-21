@@ -86,3 +86,14 @@ defeito — é o que prova que o teste mede alguma coisa.
   migration do A1.
 - Para provar que algo é RECUSADO, envolver em `do $$ ... exception when others`.
   Sem isso o psql aborta a transação e o resto do script não roda.
+
+## Conta única (20261121180000)
+
+Ver, alterar e apagar entre os dois logins. Autocontido: cria as próprias 12
+tabelas com as policies de produção de 21/11/2026 e aplica a migration no meio
+(`\i`). O primeiro bloco roda ANTES dela e reproduz o defeito.
+
+```sh
+psql -h /tmp/lfs -p 54329 -U postgres -q -v ON_ERROR_STOP=1 -f supabase/tests/conta_unica.sql
+```
+
