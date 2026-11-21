@@ -856,23 +856,33 @@ supabase/
 
 ### 6.1 Row Level Security (RLS)
 
-Todas as tabelas têm RLS habilitado:
+Todas as tabelas têm RLS habilitado. O modelo é **CONTA ÚNICA**: os dois logins veem as mesmas
+finanças, e `user_id` só registra quem digitou a linha, não é fronteira de privacidade.
 
 ```sql
--- Visualizar próprios dados OU dados compartilhados
-CREATE POLICY "Users can view own or shared data" ON table_name
-FOR SELECT USING (
-  auth.uid() = user_id 
+-- SELECT / UPDATE / DELETE (migration 20261121180000, policies conta_unica_*):
+-- próprios OU de quem compartilha comigo. UPDATE repete o teste no WITH CHECK.
+CREATE POLICY conta_unica_select ON table_name FOR SELECT TO authenticated USING (
+  user_id = (select auth.uid())
   OR EXISTS (
-    SELECT 1 FROM shared_access 
-    WHERE shared_with_user_id = auth.uid() 
-    AND owner_id = table_name.user_id
+    SELECT 1 FROM shared_access s
+    WHERE s.owner_id = table_name.user_id
+    AND s.shared_with_user_id = (select auth.uid())
   )
 );
 
--- INSERT/DELETE: apenas próprios dados (auth.uid() = user_id)
--- UPDATE: próprios ou compartilhados (mesma lógica de SELECT)
+-- INSERT: apenas no próprio nome (auth.uid() = user_id).
+-- Por cima de tudo, a RESTRICTIVE require_aal2 (A1): nada sem MFA.
 ```
+
+- Vale para 12 tabelas: accounts, budgets, categories, categorization_rules, credit_card_invoices,
+  credit_cards, investment_assets, investment_institutions, investment_transactions, projects,
+  recurring_rules, transactions. `pluggy_items` fica "só próprio" (consentimento Open Finance de UMA pessoa).
+- **`shared_access` precisa existir nos DOIS sentidos.** Com um só, o que o membro lança some para o dono.
+- **Não filtre por `user_id` no cliente** ao LER dados financeiros: esconde do membro o que o dono lançou.
+  Quem pode ver o quê é decisão da RLS.
+- `budgets` tem unique `(user_id, category_id, month, year)`: duas metas na mesma categoria e mês, uma de
+  cada login, são possíveis no banco. `useBudgets.createBudget` atualiza a existente em vez de inserir.
 
 ### 6.2 Auth Guards em Mutations
 
@@ -1228,7 +1238,7 @@ Migra parcelamentos legados para formato com `installment_group_id`.
 
 ### 10.3 `add-member`
 
-Cria usuário (se não existe) + adiciona `shared_access`. Usa `SUPABASE_SERVICE_ROLE_KEY` para criar conta com senha definida pelo admin.
+Cria usuário (se não existe) + adiciona `shared_access`. Usa `SUPABASE_SERVICE_ROLE_KEY` para criar conta com senha definida pelo admin. Para conta criada no convite, grava também o sentido de volta (membro → dono) e apaga as categorias padrão que o gatilho `on_auth_user_created` cria (conta única, 21/11/2026).
 
 ### 10.4 `admin-reset-password`
 
@@ -1282,7 +1292,9 @@ ReopenInvoiceModal → Remove closed_at → status='open' → Libera edições
 ```
 Settings > MembersSection → Insere email → Edge Function add-member
   → Cria usuário se não existe (com senha definida pelo admin)
-  → Adiciona shared_access → Acesso imediato aos dados
+  → Adiciona shared_access dono → membro → Acesso imediato aos dados
+  → Conta criada AGORA: também membro → dono, e apaga as categorias padrão do gatilho
+    (conta que já existia não ganha a volta: seria ler dados alheios sem consentimento)
 ```
 
 ---

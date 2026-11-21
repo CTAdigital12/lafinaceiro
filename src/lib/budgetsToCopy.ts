@@ -29,9 +29,16 @@ export function planBudgetCopy<T extends CopyableBudget>(
 ): CopyPlan<T> {
   const existing = new Set(existingCategoryIds.filter(Boolean) as string[]);
 
-  const toInsert = previousBudgets.filter(
-    (b) => b.category_id && !existing.has(b.category_id),
-  );
+  // Conta única: o mês anterior pode ter DUAS metas na mesma categoria, uma de
+  // cada login. As duas sairiam no nome de quem clicou, e a unique
+  // (user_id, category_id, month, year) rejeitaria o lote inteiro. Copia a
+  // primeira e conta a outra como pulada.
+  const toInsert: T[] = [];
+  for (const b of previousBudgets) {
+    if (!b.category_id || existing.has(b.category_id)) continue;
+    existing.add(b.category_id);
+    toInsert.push(b);
+  }
 
   return { toInsert, skipped: previousBudgets.length - toInsert.length };
 }

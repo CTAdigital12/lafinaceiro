@@ -29,8 +29,8 @@ function shiftIsoDate(iso: string, days: number): string {
  * da data de referência, que ainda NÃO estão marcadas como reembolso. Usadas
  * para vincular um PIX/transferência já lançado a uma despesa reembolsável.
  *
- * Filtra por user_id próprio (defesa em profundidade vs. shared_access) além da
- * RLS. Apenas completed/não-provisório, e is_reimbursement=false para não
+ * Conta única: não filtra por `user_id` (o membro precisa achar o PIX que o
+ * dono lançou); a RLS decide o acesso. Apenas completed/não-provisório, e is_reimbursement=false para não
  * reaproveitar uma receita já usada em outra baixa.
  */
 export function useReimbursementIncomeCandidates(
@@ -52,7 +52,6 @@ export function useReimbursementIncomeCandidates(
       const { data, error } = await supabase
         .from("transactions")
         .select("id, account_id, amount, date, description, accounts (name)")
-        .eq("user_id", user.id)
         .eq("type", "income")
         .eq("status", "completed")
         .eq("is_provisional", false)
