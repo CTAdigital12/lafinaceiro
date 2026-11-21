@@ -76,7 +76,7 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => authMock,
 }));
 
-import { useUnlinkedIncomes } from "@/hooks/useUnlinkedIncomes";
+import { useUnlinkedIncomes, useUnlinkedTransactions } from "@/hooks/useUnlinkedIncomes";
 
 const wrapper = ({ children }: { children: ReactNode }) => {
   const qc = new QueryClient({
@@ -197,5 +197,38 @@ describe("useUnlinkedIncomes", () => {
 
     await waitFor(() => expect(result.current.error).toBeTruthy());
     expect(result.current.error?.message).toBe("perm-denied");
+  });
+});
+
+describe("useUnlinkedTransactions — débitos para a aplicação", () => {
+  beforeEach(() => {
+    supabaseMock.__reset();
+    supabaseMock.from.mockClear();
+  });
+
+  it("busca despesas da conta e deixa de fora pagamento de fatura e o que já está vinculado", async () => {
+    const debitos = [
+      { id: "pic", account_id: "acc-1", amount: 92.29, date: "2026-12-19", description: "CAP PIC 44 60", category_id: null, user_id: "user-me", is_card_payment: false },
+      { id: "fatura", account_id: "acc-1", amount: 900, date: "2026-12-10", description: "FATURA PAGA", category_id: null, user_id: "user-me", is_card_payment: true },
+      { id: "antigo", account_id: "acc-1", amount: 50, date: "2026-12-05", description: "SEM FLAG", category_id: null, user_id: "user-me", is_card_payment: null },
+      { id: "ja", account_id: "acc-1", amount: 92.29, date: "2026-11-19", description: "CAP PIC 43 60", category_id: null, user_id: "user-me", is_card_payment: false },
+    ];
+    supabaseMock.__setResponse("transactions", { data: debitos, error: null });
+    supabaseMock.__setResponse("investment_transactions", { data: [{ linked_transaction_id: "ja" }], error: null });
+
+    const { result } = renderHook(
+      () => useUnlinkedTransactions("expense", "acc-1", "2026-12-19"),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const txQuery = supabaseMock.__log.find((q) => q.table === "transactions");
+    const flat = txQuery!.filters.map((f) => `${f.method}:${JSON.stringify(f.args)}`);
+    expect(flat).toContain(`eq:["type","expense"]`);
+    expect(flat).toContain(`eq:["user_id","user-me"]`);
+
+    expect(result.current.transactions.map((t) => t.id)).toEqual(["pic", "antigo"]);
+    expect(result.current.transactions[0]).not.toHaveProperty("is_card_payment");
   });
 });

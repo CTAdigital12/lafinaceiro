@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
-import { useUnlinkedIncomes } from "@/hooks/useUnlinkedIncomes";
+import { useUnlinkedTransactions } from "@/hooks/useUnlinkedIncomes";
 
 /**
  * Shape mínimo do form esperado pelo componente. Forms reais (ex: OperationModal)
@@ -28,6 +28,7 @@ export interface LinkSectionFormShape {
   createExpense: boolean;
   accountId?: string;
   categoryId?: string;
+  /** Usado em compra e venda: vincular lançamento existente ou criar um novo. */
   linkMode?: "existing" | "new";
   existingTransactionId?: string;
 }
@@ -38,12 +39,12 @@ interface Props {
   form: UseFormReturn<any>;
   refDate: string | undefined;
   /**
-   * Receita extra a injetar na lista do dropdown "Receita a vincular".
-   * Usado em edit mode: a receita atualmente vinculada não aparece em
-   * `useUnlinkedIncomes` (porque está linkada), mas precisa estar
+   * Lançamento extra a injetar na lista do dropdown "… a vincular".
+   * Usado em edit mode: o lançamento atualmente vinculado não aparece em
+   * `useUnlinkedTransactions` (porque está linkado), mas precisa estar
    * selecionável para o usuário re-salvar sem mexer na vinculação.
    */
-  additionalIncome?: {
+  additionalTransaction?: {
     id: string;
     date: string;
     amount: number;
@@ -53,13 +54,34 @@ interface Props {
 
 const COPY = {
   buy: {
-    checkboxLabel: "Lançar como despesa na conta corrente",
-    checkboxHint: "Cria uma transação de saída para manter o saldo atualizado",
+    checkboxLabel: "Lançar/vincular saída na conta corrente",
+    checkboxHint:
+      "Vincula esta aplicação a um débito já lançado na conta (ex.: o do extrato) ou cria uma nova saída equivalente",
+    existingTitle: "Vincular a um débito já existente",
+    existingHint: "Use quando o débito já está na conta — veio do extrato ou foi lançado à mão",
+    newTitle: "Criar nova saída",
+    newHint: "Lança uma saída nova na conta com o valor da aplicação",
+    pickLabel: "Débito a vincular",
+    pickPlaceholder: "Selecione o débito",
+    emptyPlaceholder: "Nenhum débito elegível nos últimos ±30 dias",
+    pickHint:
+      "Lista débitos da conta ±30 dias da data da aplicação que ainda não estão vinculados a outra operação. Vinculado, ele passa a contar como aporte, fora da despesa do mês.",
+    newCategoryLabel: "Categoria",
   },
   sell: {
     checkboxLabel: "Lançar/vincular receita na conta corrente",
     checkboxHint:
       "Vincula este resgate a uma receita já lançada na conta ou cria uma nova entrada equivalente",
+    existingTitle: "Vincular a uma receita já existente",
+    existingHint: "Use quando você já lançou esta entrada na conta corrente manualmente",
+    newTitle: "Criar nova receita",
+    newHint: "Lança uma entrada nova na conta com o valor do resgate",
+    pickLabel: "Receita a vincular",
+    pickPlaceholder: "Selecione a receita",
+    emptyPlaceholder: "Nenhuma receita elegível nos últimos ±30 dias",
+    pickHint:
+      "Lista filtra receitas da conta ±30 dias da data do resgate que ainda não estão vinculadas a outra operação.",
+    newCategoryLabel: "Categoria da receita",
   },
 } as const;
 
@@ -76,7 +98,7 @@ function formatBRL(amount: number): string {
   }).format(amount);
 }
 
-export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: Props) {
+export function LinkToAccountSection({ mode, form, refDate, additionalTransaction }: Props) {
   const { accounts } = useAccounts();
   const { categories } = useCategories();
 
@@ -89,23 +111,25 @@ export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: 
       ? categories.filter((c) => c.type === "expense")
       : categories.filter((c) => c.type === "income");
 
-  const { incomes, isFetching } = useUnlinkedIncomes(
+  const { transactions: candidates, isFetching } = useUnlinkedTransactions(
+    mode === "buy" ? "expense" : "income",
     accountId,
     refDate,
-    mode === "sell" && !!createExpense && linkMode === "existing",
+    !!createExpense && linkMode === "existing",
   );
 
-  const incomeOptions =
-    additionalIncome && !incomes.some((i) => i.id === additionalIncome.id)
-      ? [additionalIncome, ...incomes]
-      : incomes;
+  const options =
+    additionalTransaction && !candidates.some((i) => i.id === additionalTransaction.id)
+      ? [additionalTransaction, ...candidates]
+      : candidates;
 
-  // Default `linkMode` para "existing" quando o checkbox é ativado em sell.
+  // Default `linkMode` para "existing" quando o checkbox é ativado: nos dois
+  // lados, o caso comum é o lançamento já estar na conta (extrato).
   useEffect(() => {
-    if (mode === "sell" && createExpense && !linkMode) {
+    if (createExpense && !linkMode) {
       form.setValue("linkMode", "existing", { shouldValidate: false });
     }
-  }, [mode, createExpense, linkMode, form]);
+  }, [createExpense, linkMode, form]);
 
   // Limpa campos dependentes quando o usuário muda de modo/desmarca.
   useEffect(() => {
@@ -114,13 +138,13 @@ export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: 
       form.setValue("categoryId", undefined, { shouldValidate: false });
       return;
     }
-    if (mode === "sell" && linkMode === "existing") {
+    if (linkMode === "existing") {
       form.setValue("categoryId", undefined, { shouldValidate: false });
     }
-    if (mode === "sell" && linkMode === "new") {
+    if (linkMode === "new") {
       form.setValue("existingTransactionId", undefined, { shouldValidate: false });
     }
-  }, [mode, createExpense, linkMode, form]);
+  }, [createExpense, linkMode, form]);
 
   const copy = COPY[mode];
 
@@ -172,34 +196,7 @@ export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: 
             )}
           />
 
-          {mode === "buy" && (
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Categoria</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {filteredCategories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.icon} {cat.fullName || cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {mode === "sell" && accountId && (
+          {accountId && (
             <>
               <FormField
                 control={form.control}
@@ -216,19 +213,15 @@ export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: 
                         <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/30">
                           <RadioGroupItem value="existing" className="mt-1" />
                           <div className="space-y-0.5 leading-tight">
-                            <div className="text-sm">Vincular a uma receita já existente</div>
-                            <div className="text-xs text-muted-foreground">
-                              Use quando você já lançou esta entrada na conta corrente manualmente
-                            </div>
+                            <div className="text-sm">{copy.existingTitle}</div>
+                            <div className="text-xs text-muted-foreground">{copy.existingHint}</div>
                           </div>
                         </label>
                         <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/30">
                           <RadioGroupItem value="new" className="mt-1" />
                           <div className="space-y-0.5 leading-tight">
-                            <div className="text-sm">Criar nova receita</div>
-                            <div className="text-xs text-muted-foreground">
-                              Lança uma entrada nova na conta com o valor do resgate
-                            </div>
+                            <div className="text-sm">{copy.newTitle}</div>
+                            <div className="text-xs text-muted-foreground">{copy.newHint}</div>
                           </div>
                         </label>
                       </RadioGroup>
@@ -244,7 +237,7 @@ export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: 
                   name="existingTransactionId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Receita a vincular</FormLabel>
+                      <FormLabel>{copy.pickLabel}</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value ?? ""}>
                         <FormControl>
                           <SelectTrigger>
@@ -252,15 +245,15 @@ export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: 
                               placeholder={
                                 isFetching
                                   ? "Carregando..."
-                                  : incomeOptions.length === 0
-                                    ? "Nenhuma receita elegível nos últimos ±30 dias"
-                                    : "Selecione a receita"
+                                  : options.length === 0
+                                    ? copy.emptyPlaceholder
+                                    : copy.pickPlaceholder
                               }
                             />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {incomeOptions.map((tx) => (
+                          {options.map((tx) => (
                             <SelectItem key={tx.id} value={tx.id}>
                               {formatIsoToBr(tx.date)} • {formatBRL(tx.amount)} •{" "}
                               {tx.description || "sem descrição"}
@@ -268,10 +261,7 @@ export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: 
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Lista filtra receitas da conta ±30 dias da data do resgate que ainda
-                        não estão vinculadas a outra operação.
-                      </p>
+                      <p className="text-xs text-muted-foreground">{copy.pickHint}</p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -284,7 +274,7 @@ export function LinkToAccountSection({ mode, form, refDate, additionalIncome }: 
                   name="categoryId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Categoria da receita</FormLabel>
+                      <FormLabel>{copy.newCategoryLabel}</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value ?? ""}>
                         <FormControl>
                           <SelectTrigger>

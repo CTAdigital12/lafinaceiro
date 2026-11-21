@@ -414,6 +414,9 @@ Regras para geração automática de transações provisórias mensais.
 - Marcada por: switch no `TransactionModal`, caixa "Aporte" na revisão do extrato
   (`AccountReviewModal`), regra de categorização (`categorization_rules.is_investment_contribution`)
   e todo BUY criado em Investimentos (`createOrLinkTransactionForOp`).
+- A aplicação pode VINCULAR o débito que já veio do extrato (`linkMode="existing"`, marca-o como aporte)
+  em vez de criar outra saída. Editar/excluir a operação só apaga o lançamento que o app criou
+  (`isAutoCreatedLinkedTransaction`: "Investimento:"/"Resgate:"); o do usuário fica.
 - Não há gerador de `recurring_rules`: o débito mensal só é marcado sozinho pela REGRA, na importação.
 - A regra só LIGA a flag, e só em despesa: o resgate (receita) com a mesma palavra continua receita.
 - Exclusiva com corporativa/reembolsável/pagamento de fatura.
