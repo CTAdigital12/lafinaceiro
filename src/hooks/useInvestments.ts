@@ -10,6 +10,8 @@ import {
   type AssetUpdatePayload,
 } from "@/lib/investments/assetMutation";
 import { validateLinkCandidate } from "@/lib/investments/linkCandidate";
+import { AUTO_CREATED_PREFIX, isAutoCreatedLinkedTransaction } from "@/lib/investments/linkedTransaction";
+import { UNLINKED_TRANSACTIONS_KEY } from "@/hooks/useUnlinkedIncomes";
 import { assetTypeLabel, type AssetType } from "@/lib/investments/assetTypes";
 
 export type PricingMethod = "unit_price" | "total_balance";
@@ -306,9 +308,12 @@ export function useInvestments() {
    * Cria/linka a `transactions` na conta corrente e amarra no
    * `investment_transactions.linked_transaction_id`.
    *
-   * - BUY → cria expense marcada como aporte (sempre auto-criada).
-   * - SELL `linkMode="existing"` → valida candidato + checa se já não está
-   *   vinculada a OUTRA operação, e linka.
+   * - `linkMode="existing"` → valida o candidato (DESPESA para aplicação,
+   *   RECEITA para resgate), checa se já não está vinculado a OUTRA operação,
+   *   e linka. Na aplicação, liga também `is_investment_contribution`: o débito
+   *   do extrato vinculado é aporte, não despesa do mês.
+   * - BUY `linkMode="new"` (padrão da aplicação) → cria expense
+   *   "Investimento: TICKER" marcada como aporte.
    * - SELL `linkMode="new"` → cria income "Resgate: TICKER".
    *
    * Chamada pelo create (com row recém-inserida) e pelo update (após o
@@ -326,10 +331,53 @@ export function useInvestments() {
     },
   ) {
     if (!user?.id) throw new Error("Usuário não autenticado");
+    if (tx.type !== "buy" && tx.type !== "sell") return;
 
-    let linkedTxId: string | null = null;
+    const kind = tx.type === "buy" ? "expense" : "income";
+    const noun = kind === "expense" ? "despesa" : "receita";
+    // Padrão de antes para cada lado: a aplicação criava, o resgate vinculava.
+    const effectiveLinkMode = opts.linkMode ?? (tx.type === "buy" ? "new" : "existing");
 
-    if (tx.type === "buy") {
+    let linkedTxId: string;
+
+    if (effectiveLinkMode === "existing") {
+      if (!opts.existingTransactionId) {
+        throw new Error(`Selecione a ${noun} a vincular`);
+      }
+      // Defesa em profundidade contra RLS cross-tenant via shared_access.
+      const { data: candidate, error: candErr } = await supabase
+        .from("transactions")
+        .select("id, type, account_id, user_id, is_card_payment")
+        .eq("id", opts.existingTransactionId)
+        .maybeSingle();
+      if (candErr) throw candErr;
+      const validation = validateLinkCandidate(candidate, user.id, opts.accountId, kind);
+      if (!validation.ok) {
+        throw new Error(validation.message);
+      }
+
+      // Exclui a própria investment_transaction da checagem — relevante
+      // no update flow caso o usuário re-selecione o mesmo lançamento.
+      const { count: linkedCount, error: countErr } = await supabase
+        .from("investment_transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("linked_transaction_id", opts.existingTransactionId)
+        .neq("id", investmentTxId);
+      if (countErr) throw countErr;
+      if ((linkedCount ?? 0) > 0) {
+        throw new Error(`Esta ${noun} já está vinculada a outra operação`);
+      }
+
+      if (kind === "expense") {
+        const { error: flagErr } = await supabase
+          .from("transactions")
+          .update({ is_investment_contribution: true })
+          .eq("id", opts.existingTransactionId);
+        if (flagErr) throw flagErr;
+      }
+
+      linkedTxId = opts.existingTransactionId;
+    } else if (tx.type === "buy") {
       const { data: linkedTx, error: linkedError } = await supabase
         .from("transactions")
         .insert([
@@ -337,7 +385,7 @@ export function useInvestments() {
             user_id: user.id,
             account_id: opts.accountId,
             category_id: opts.categoryId || null,
-            description: `Investimento: ${opts.assetTicker || "Ativo"}`,
+            description: `${AUTO_CREATED_PREFIX.buy} ${opts.assetTicker || "Ativo"}`,
             amount: tx.total_value,
             type: "expense",
             date: tx.date,
@@ -352,111 +400,78 @@ export function useInvestments() {
         .single();
       if (linkedError) throw linkedError;
       linkedTxId = linkedTx.id;
-    } else if (tx.type === "sell") {
-      const effectiveLinkMode = opts.linkMode ?? "existing";
-
-      if (effectiveLinkMode === "existing") {
-        if (!opts.existingTransactionId) {
-          throw new Error("Selecione a receita a vincular");
-        }
-        // Defesa em profundidade contra RLS cross-tenant via shared_access.
-        const { data: candidate, error: candErr } = await supabase
-          .from("transactions")
-          .select("id, type, account_id, user_id")
-          .eq("id", opts.existingTransactionId)
-          .maybeSingle();
-        if (candErr) throw candErr;
-        const validation = validateLinkCandidate(candidate, user.id, opts.accountId);
-        if (!validation.ok) {
-          throw new Error(validation.message);
-        }
-
-        // Exclui a própria investment_transaction da checagem — relevante
-        // no update flow caso o usuário re-selecione a mesma receita.
-        const { count: linkedCount, error: countErr } = await supabase
-          .from("investment_transactions")
-          .select("id", { count: "exact", head: true })
-          .eq("linked_transaction_id", opts.existingTransactionId)
-          .neq("id", investmentTxId);
-        if (countErr) throw countErr;
-        if ((linkedCount ?? 0) > 0) {
-          throw new Error("Esta receita já está vinculada a outra operação");
-        }
-
-        linkedTxId = opts.existingTransactionId;
-      } else if (effectiveLinkMode === "new") {
-        if (!opts.categoryId) {
-          throw new Error("Selecione a categoria da receita");
-        }
-        const { data: newTx, error: newErr } = await supabase
-          .from("transactions")
-          .insert([
-            {
-              user_id: user.id,
-              account_id: opts.accountId,
-              category_id: opts.categoryId,
-              description: `Resgate: ${opts.assetTicker || "Ativo"}`,
-              amount: tx.total_value,
-              type: "income",
-              date: tx.date,
-              status: "completed",
-              is_corporate_expense: false,
-            },
-          ])
-          .select()
-          .single();
-        if (newErr) throw newErr;
-        linkedTxId = newTx.id;
+    } else {
+      if (!opts.categoryId) {
+        throw new Error("Selecione a categoria da receita");
       }
+      const { data: newTx, error: newErr } = await supabase
+        .from("transactions")
+        .insert([
+          {
+            user_id: user.id,
+            account_id: opts.accountId,
+            category_id: opts.categoryId,
+            description: `${AUTO_CREATED_PREFIX.sell} ${opts.assetTicker || "Ativo"}`,
+            amount: tx.total_value,
+            type: "income",
+            date: tx.date,
+            status: "completed",
+            is_corporate_expense: false,
+          },
+        ])
+        .select()
+        .single();
+      if (newErr) throw newErr;
+      linkedTxId = newTx.id;
     }
 
-    if (linkedTxId) {
-      const { error: linkErr } = await supabase
-        .from("investment_transactions")
-        .update({ linked_transaction_id: linkedTxId })
-        .eq("id", investmentTxId);
-      if (linkErr) {
-        if ((linkErr as { code?: string }).code === "23505") {
-          throw new Error(
-            "Esta receita já está vinculada a outra operação (conflito)."
-          );
-        }
-        throw linkErr;
+    const { error: linkErr } = await supabase
+      .from("investment_transactions")
+      .update({ linked_transaction_id: linkedTxId })
+      .eq("id", investmentTxId);
+    if (linkErr) {
+      if ((linkErr as { code?: string }).code === "23505") {
+        throw new Error(
+          `Esta ${noun} já está vinculada a outra operação (conflito).`
+        );
       }
+      throw linkErr;
     }
   }
 
   /**
-   * Apaga a transação vinculada APENAS se foi auto-criada por nós.
-   * Heurística: buy sempre auto-cria expense (deletar). Sell só auto-cria
-   * quando `linkMode="new"`, identificável por description começando com
-   * "Resgate: ". Receitas pré-existentes do usuário permanecem.
+   * Apaga a transação vinculada APENAS se foi auto-criada por nós
+   * (`isAutoCreatedLinkedTransaction`). O lançamento que o usuário já tinha —
+   * a receita do resgate, o débito do extrato da aplicação — permanece: só
+   * perde o vínculo, que o chamador limpa ou apaga junto com a operação.
+   *
+   * Antes, toda aplicação apagava o vínculo sem olhar: correto enquanto a
+   * aplicação só sabia CRIAR a despesa, destrutivo agora que ela vincula o
+   * débito do extrato.
+   *
+   * Na dúvida, não apaga: se a leitura falhar, o erro sobe e nada é removido.
+   * A flag de aporte do débito vinculado também fica: ele continua sendo
+   * dinheiro que foi para um investimento.
    */
   async function deleteOwnedLinkedTransaction(
     linkedTransactionId: string,
     txType: "buy" | "sell" | "dividend",
   ) {
-    if (txType === "buy") {
+    if (txType === "dividend") return;
+
+    const { data: linkedRow, error: readErr } = await supabase
+      .from("transactions")
+      .select("description")
+      .eq("id", linkedTransactionId)
+      .maybeSingle();
+    if (readErr) throw readErr;
+
+    if (isAutoCreatedLinkedTransaction(txType, linkedRow?.description)) {
       const { error } = await supabase
         .from("transactions")
         .delete()
         .eq("id", linkedTransactionId);
       if (error) throw error;
-      return;
-    }
-    if (txType === "sell") {
-      const { data: linkedRow } = await supabase
-        .from("transactions")
-        .select("description")
-        .eq("id", linkedTransactionId)
-        .maybeSingle();
-      if (linkedRow?.description?.startsWith("Resgate:")) {
-        const { error } = await supabase
-          .from("transactions")
-          .delete()
-          .eq("id", linkedTransactionId);
-        if (error) throw error;
-      }
     }
   }
 
@@ -523,7 +538,7 @@ export function useInvestments() {
       queryClient.invalidateQueries({ queryKey: ["investment_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["unlinked_incomes"] });
+      queryClient.invalidateQueries({ queryKey: [UNLINKED_TRANSACTIONS_KEY] });
       toast({ title: "Operação registrada com sucesso!" });
     },
     onError: (error: Error) => {
@@ -630,7 +645,7 @@ export function useInvestments() {
       queryClient.invalidateQueries({ queryKey: ["investment_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["unlinked_incomes"] });
+      queryClient.invalidateQueries({ queryKey: [UNLINKED_TRANSACTIONS_KEY] });
       toast({ title: "Operação atualizada!" });
     },
     onError: (error: Error) => {
@@ -682,7 +697,7 @@ export function useInvestments() {
       queryClient.invalidateQueries({ queryKey: ["investment_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["unlinked_incomes"] });
+      queryClient.invalidateQueries({ queryKey: [UNLINKED_TRANSACTIONS_KEY] });
       toast({ title: "Operação excluída!" });
     },
     onError: (error: Error) => {

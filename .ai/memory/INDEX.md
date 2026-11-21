@@ -12,7 +12,7 @@ Contexto do projeto: [PROJECT.md](PROJECT.md) · Estado atual: [CURRENT_STATE.md
 |---|---|---|---|---|
 | [ADR-0001](decisions/ADR-0001-adocao-dev-memory.md) | Adoção do Dev Memory com .claude/skills versionado e hook de lembrete só local | approved | .gitignore | 2026-11-09 |
 | [ADR-0002](decisions/ADR-0002-lessons-md-e-dev-memory.md) | Conhecimento novo vai para .ai/memory via close-task; lessons.md congelado como registro da migração | approved | .claude-squad/lessons.md | 2026-11-09 |
-| [ADR-0003](decisions/ADR-0003-aporte-em-investimento-nao-e-despesa.md) | Aporte em investimento é despesa com a flag is_investment_contribution, fora da despesa e do orçamento | proposed | src/lib/transactionFilters.ts, supabase/migrations/20261120120000_aporte_em_investimento.sql, src/components/modals/AccountReviewModal.tsx, src/hooks/useCategorizationRules.ts, src/hooks/useInvestments.ts, src/lib/ruleMatch.ts, src/lib/investments/assetTypes.ts | — |
+| [ADR-0003](decisions/ADR-0003-aporte-em-investimento-nao-e-despesa.md) | Aporte em investimento é despesa com a flag is_investment_contribution, fora da despesa e do orçamento | proposed | src/lib/transactionFilters.ts, supabase/migrations/20261120120000_aporte_em_investimento.sql, src/components/modals/AccountReviewModal.tsx, src/hooks/useCategorizationRules.ts, src/hooks/useInvestments.ts, src/lib/ruleMatch.ts, src/lib/investments/assetTypes.ts, src/lib/investments/linkedTransaction.ts, src/components/investments/LinkToAccountSection.tsx | 2026-11-21 |
 
 ## Soluções (SOL)
 

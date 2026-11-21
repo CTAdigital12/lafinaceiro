@@ -3,7 +3,7 @@
 > Atualize em PR. Declare apenas o que foi verificado; não presuma o que está em outra branch.
 
 - **Referência:** `main` em `7aa1414` (merge do PR #143). Kit Dev Memory idêntico a `gestor-de-ia@29f809b`.
-- **Última atualização:** 2026-11-20 (branch `feat/aporte-nao-e-despesa`, sobre `main` em `16a31d3`).
+- **Última atualização:** 2026-11-21 (branch `feat/aplicacao-vincula-debito-existente`, sobre `main` em `5231a2b`).
 
 ## Verificado
 - Kit Dev Memory instalado (PR #139). Ver [ADR-0001](decisions/ADR-0001-adocao-dev-memory.md). Os arquivos do kit são
@@ -35,11 +35,13 @@
   ainda restam **7 de risco** (duas altas, entre elas uma que grava), latentes e não observadas:
   [ISSUE-0001](known-issues/ISSUE-0001-leituras-sem-paginacao.md).
 
+- **Aporte em investimento fora da despesa** (PR #146, merge `fac231a`; PR #147, merge `5231a2b`): migração
+  `20261120120000` aplicada e conferida por sonda em 2026-11-20 (7/7); os 11 débitos do título de capitalização
+  marcados como aporte; regra "CAP PIC" marcando Aporte; ativo cadastrado como "Título de Capitalização".
+
 ## Pendente
-- **Aporte em investimento fora da despesa** ([ADR-0003](decisions/ADR-0003-aporte-em-investimento-nao-e-despesa.md),
-  branch `feat/aporte-nao-e-despesa`): código e testes locais verdes em 2026-11-20. Faltam: aplicar a migração
-  `20261120120000` no Supabase, validar na tela, criar a regra da capitalização e marcar os débitos históricos.
-  PR seguinte: BUY vinculando débito existente + tipo de ativo `capitalizacao`.
+- **Aporte em investimento** ([ADR-0003](decisions/ADR-0003-aporte-em-investimento-nao-e-despesa.md)): validar na
+  tela o vínculo da aplicação ao débito do extrato (branch `feat/aplicacao-vincula-debito-existente`).
 - [ISSUE-0001](known-issues/ISSUE-0001-leituras-sem-paginacao.md): 7 leituras de `transactions` a paginar ou justificar,
   começando pelas duas de `useCategorizationRules` (alto risco). Antes de priorizar, medir o volume real de cada recorte.
 - **Codex CLI:** verificado no kit (`gestor-de-ia`, em cópias descartáveis), **não neste repositório** (opção de não

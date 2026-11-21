@@ -44,6 +44,7 @@ import {
   assetTypeLabel,
 } from "@/hooks/useInvestments";
 import { LinkToAccountSection } from "./LinkToAccountSection";
+import { isAutoCreatedLinkedTransaction } from "@/lib/investments/linkedTransaction";
 import type { NovaOperacao, NovoAtivo } from "@/hooks/useInvestments";
 import type { AssetType } from "@/hooks/useInvestments";
 
@@ -62,7 +63,7 @@ const formSchema = z
     createExpense: z.boolean().default(false),
     accountId: z.string().optional(),
     categoryId: z.string().optional(),
-    // Usado apenas em operationType = "sell".
+    // Compra (aplicação) e venda (resgate): vincular lançamento existente ou criar.
     linkMode: z.enum(["existing", "new"]).optional(),
     existingTransactionId: z.string().optional(),
   })
@@ -77,21 +78,16 @@ const formSchema = z
       });
     }
 
-    if (data.operationType === "buy" && !data.categoryId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["categoryId"],
-        message: "Selecione a categoria",
-      });
-    }
-
-    if (data.operationType === "sell") {
+    if (data.operationType === "buy" || data.operationType === "sell") {
       const linkMode = data.linkMode ?? "existing";
       if (linkMode === "existing" && !data.existingTransactionId) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["existingTransactionId"],
-          message: "Selecione a receita a vincular",
+          message:
+            data.operationType === "buy"
+              ? "Selecione o débito a vincular"
+              : "Selecione a receita a vincular",
         });
       }
       if (linkMode === "new" && !data.categoryId) {
@@ -150,8 +146,8 @@ export function OperationModal({
   const totalValue = quantity * unitPrice + (operationType === "buy" ? fees : 0);
 
   // Em edit mode, busca a transação vinculada (se houver) para pré-popular
-  // a seção de vinculação. Ela não vem em useUnlinkedIncomes porque está
-  // linkada — passamos como `additionalIncome` ao LinkToAccountSection.
+  // a seção de vinculação. Ela não vem em useUnlinkedTransactions porque está
+  // linkada — passamos como `additionalTransaction` ao LinkToAccountSection.
   const { data: linkedTx } = useQuery({
     queryKey: ["investment_linked_tx", operation?.linked_transaction_id],
     enabled: !!(open && isEditing && operation?.linked_transaction_id),
@@ -191,15 +187,11 @@ export function OperationModal({
   useEffect(() => {
     if (!open || !isEditing || !operation || !linkedTx) return;
 
-    if (operation.type === "buy") {
-      form.setValue("accountId", linkedTx.account_id ?? undefined);
-      form.setValue("categoryId", linkedTx.category_id ?? undefined);
-      form.setValue("createExpense", true);
-    } else if (operation.type === "sell") {
-      // Heurística: se a description começa com "Resgate:" foi auto-criada
-      // por nós em linkMode="new". Caso contrário é receita do usuário
-      // referenciada em linkMode="existing".
-      const isAutoCreated = linkedTx.description?.startsWith("Resgate:") ?? false;
+    if (operation.type === "buy" || operation.type === "sell") {
+      // Criado por nós ("Investimento:" / "Resgate:") → linkMode="new". Senão
+      // é lançamento do usuário (o débito do extrato, a receita lançada à
+      // mão) referenciado em linkMode="existing".
+      const isAutoCreated = isAutoCreatedLinkedTransaction(operation.type, linkedTx.description);
       form.setValue("accountId", linkedTx.account_id ?? undefined);
       if (isAutoCreated) {
         form.setValue("linkMode", "new");
@@ -264,9 +256,13 @@ export function OperationModal({
         createExpenseTransaction: values.createExpense,
         accountId: values.accountId,
         categoryId: values.categoryId,
-        linkMode: values.operationType === "sell" ? (values.linkMode ?? "existing") : undefined,
+        linkMode:
+          values.operationType === "buy" || values.operationType === "sell"
+            ? (values.linkMode ?? "existing")
+            : undefined,
         existingTransactionId:
-          values.operationType === "sell" && values.linkMode === "existing"
+          (values.operationType === "buy" || values.operationType === "sell") &&
+          (values.linkMode ?? "existing") === "existing"
             ? values.existingTransactionId
             : undefined,
       });
@@ -512,11 +508,11 @@ export function OperationModal({
                 mode={operationType}
                 form={form}
                 refDate={date}
-                additionalIncome={
+                additionalTransaction={
                   isEditing &&
-                  operation?.type === "sell" &&
+                  (operation?.type === "buy" || operation?.type === "sell") &&
                   linkedTx &&
-                  !linkedTx.description?.startsWith("Resgate:")
+                  !isAutoCreatedLinkedTransaction(operation.type, linkedTx.description)
                     ? {
                         id: linkedTx.id,
                         date: linkedTx.date,

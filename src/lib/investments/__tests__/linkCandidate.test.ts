@@ -91,3 +91,32 @@ describe("validateLinkCandidate", () => {
     if (!out.ok) expect(out.reason).toBe("wrong_owner");
   });
 });
+
+describe("validateLinkCandidate — aplicação vinculando débito existente", () => {
+  const ME = "user-me";
+  const ACCOUNT = "acc-itau";
+  const debito = { id: "d1", user_id: ME, type: "expense", account_id: ACCOUNT, is_card_payment: false };
+
+  it("aceita a despesa da própria conta", () => {
+    expect(validateLinkCandidate(debito, ME, ACCOUNT, "expense")).toEqual({ ok: true });
+  });
+
+  it("recusa receita quando a operação é aplicação, com a mensagem de despesa", () => {
+    const out = validateLinkCandidate({ ...debito, type: "income" }, ME, ACCOUNT, "expense");
+    expect(out).toMatchObject({ ok: false, reason: "wrong_type", message: "A transação selecionada não é uma despesa" });
+  });
+
+  it("recusa pagamento de fatura", () => {
+    const out = validateLinkCandidate({ ...debito, is_card_payment: true }, ME, ACCOUNT, "expense");
+    expect(out).toMatchObject({ ok: false, reason: "wrong_type" });
+  });
+
+  it("recusa despesa de outro usuário e de outra conta", () => {
+    expect(validateLinkCandidate({ ...debito, user_id: "outro" }, ME, ACCOUNT, "expense")).toMatchObject({ reason: "wrong_owner" });
+    expect(validateLinkCandidate({ ...debito, account_id: "outra" }, ME, ACCOUNT, "expense")).toMatchObject({ reason: "wrong_account" });
+  });
+
+  it("o padrão continua sendo receita (resgate)", () => {
+    expect(validateLinkCandidate(debito, ME, ACCOUNT)).toMatchObject({ reason: "wrong_type", message: "A transação selecionada não é uma receita" });
+  });
+});

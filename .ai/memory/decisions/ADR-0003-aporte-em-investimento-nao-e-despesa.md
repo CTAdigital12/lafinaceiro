@@ -4,7 +4,7 @@ type: decision
 title: Aporte em investimento é despesa com a flag is_investment_contribution, fora da despesa e do orçamento
 status: proposed
 created_at: 2026-11-20
-reviewed_at: null
+reviewed_at: 2026-11-21
 owner: André Domingues
 scope: project
 files:
@@ -15,8 +15,10 @@ files:
   - src/hooks/useInvestments.ts
   - src/lib/ruleMatch.ts
   - src/lib/investments/assetTypes.ts
+  - src/lib/investments/linkedTransaction.ts
+  - src/components/investments/LinkToAccountSection.tsx
 deps: []
-related_prs: []
+related_prs: [146, 147]
 supersedes: []
 review_required: false
 ---
@@ -70,10 +72,10 @@ Restrições:
 - Cada leitura com lista explícita de colunas que passa linhas para `transactionFilters` precisa
   incluir `is_investment_contribution`, ou a regra não enxerga a flag. Feito em `balanceChartData`,
   `budgetEvolutionData` e `useProjects`.
-- Pendente (PR seguinte): vincular um débito existente a um BUY (hoje o BUY sempre cria a despesa) e
-  impedir que `deleteOwnedLinkedTransaction` apague esse débito real. Até lá, registrar a parcela
-  mensal como "aplicação" em Investimentos DUPLICA a saída da conta: o saldo do título é atualizado
-  em "Atualizar cotações".
+- A aplicação (BUY) pode VINCULAR um débito existente (`linkMode="existing"`), que é marcado como
+  aporte, em vez de criar outra saída. Editar ou excluir a operação só apaga o lançamento que o app
+  criou (`isAutoCreatedLinkedTransaction`, prefixos "Investimento:"/"Resgate:"); o débito vinculado do
+  usuário fica, e continua aporte. Antes, todo BUY apagava o vínculo sem olhar.
 
 ## Evidências
 - `src/lib/__tests__/transactionFilters.test.ts`, bloco "aporte em investimento": 60/60. Com a
@@ -84,7 +86,11 @@ Restrições:
   casos "ok" (inclusive a CHECK aceitando `capitalizacao` e recusando tipo desconhecido).
 - `src/lib/__tests__/ruleMatch.test.ts`: os dois formatos do extrato casam com "CAP PIC"; "PICPAY" não.
 - Local, 2026-11-20: `npm test` 795/795 (81 arquivos), `npm run typecheck` e `npm run lint` sem erros.
-- Migração ainda **não aplicada** em produção e tela **não validada**.
+- PR #146 mesclado (`fac231a`). Migração **aplicada** e conferida em 2026-11-20 por sonda de leitura no
+  SQL Editor: colunas, CHECK, `split_transaction` e os 11 débitos do título marcados (7/7 itens).
+- Vínculo da aplicação (2026-11-21): `src/hooks/__tests__/useInvestments.vinculoAplicacao.test.tsx` 5/5
+  sobre banco falso em memória. Com a exclusão antiga (todo BUY apaga o vínculo), 2 falham: excluir e
+  editar a aplicação apagavam o débito do extrato. `npm test` 815/815.
 
 ## Revisão / obsolescência
 - Revisar se surgir um gerador de recorrência (a flag precisaria ir para `recurring_rules`).
