@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DeleteCategoryModal } from "@/components/modals/DeleteCategoryModal";
+import { CategoryIconPicker } from "@/components/CategoryIconPicker";
 import { Plus, ChevronRight, Pencil, Trash2, CornerDownRight, GripVertical, MoreVertical, ReceiptText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -45,12 +46,6 @@ const colorOptions = [
   "#EF4444", "#F97316", "#F59E0B", "#EAB308", "#84CC16",
   "#22C55E", "#14B8A6", "#06B6D4", "#3B82F6", "#6366F1",
   "#8B5CF6", "#A855F7", "#EC4899", "#F43F5E", "#6B7280"
-];
-
-const emojiOptions = [
-  "🍔", "🍽️", "🛒", "🏠", "💡", "🚗", "⛽", "🚌", "✈️", "🏨",
-  "🎬", "🎮", "🎯", "🎪", "📚", "💊", "🏥", "💪", "👕", "💇",
-  "🐕", "🐈", "🌱", "💰", "💳", "📱", "💻", "📦", "🎁", "☕"
 ];
 
 interface DraggableSubcategoryProps {
@@ -454,23 +449,7 @@ export default function Categories() {
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">Ícone</label>
-                <div className="flex flex-wrap gap-2">
-                  {emojiOptions.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setNewIcon(emoji)}
-                      className={cn(
-                        "w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all",
-                        newIcon === emoji
-                          ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2"
-                          : "bg-muted hover:bg-muted/80"
-                      )}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
+                <CategoryIconPicker value={newIcon} onChange={setNewIcon} />
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">Cor</label>
@@ -538,23 +517,7 @@ export default function Categories() {
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Ícone</label>
-              <div className="flex flex-wrap gap-2">
-                {emojiOptions.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => setNewIcon(emoji)}
-                    className={cn(
-                      "w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all",
-                      newIcon === emoji
-                        ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2"
-                        : "bg-muted hover:bg-muted/80"
-                    )}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
+              <CategoryIconPicker value={newIcon} onChange={setNewIcon} />
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Cor</label>
