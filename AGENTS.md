@@ -32,7 +32,14 @@
 Transcrições de chat, segredos, tokens, `.env`, dados de transações reais (valores, estabelecimentos,
 contas, extratos), dados pessoais e qualquer conteúdo de `.claude/backups/`. A memória vai para o Git e para o PR.
 
-## 4. Convenções do repositório (observadas no histórico)
+## 4. SQL em produção: backup antes, e só o arquivo certo
+
+- **Todo script que altera dados em produção** (`update`, `delete`, `insert`, `truncate`, `drop`, `alter`)
+  começa com a instrução: rode `npm run backup` antes. Guia em [scripts/backup/README.md](scripts/backup/README.md).
+- Ao entregar SQL para o SQL Editor, diga **qual arquivo** vai para lá. Nada de `supabase/tests/` vai:
+  aqueles scripts apagam tabelas e usam comandos do `psql`.
+
+## 5. Convenções do repositório (observadas no histórico)
 
 - Branches `fix/…`, `feat/…`, `chore/…`; commits `tipo(escopo): descrição` em português; tudo entra por PR em `main`.
 - O pre-commit roda o gitleaks. **Nunca** use `--no-verify`.
