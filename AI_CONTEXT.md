@@ -476,6 +476,11 @@ São **dois caminhos**, e escolher o errado desencontra a fatura do que o banco 
 | Crédito na **própria fatura** (a empresa paga o cartão direto) | `mark_reimbursed` | Cria o espelho `is_card_payment` no mesmo ciclo → **abate a fatura** |
 | **PIX / transferência** numa conta (um amigo te paga) | `settle_reimbursement` | Cria receita `is_reimbursement` na conta (`credit_card_id = null`) → **não toca na fatura**, que você já pagou cheia |
 
+A receita do reembolso (criada ou vinculada do extrato), se estiver **sem categoria**, recebe a
+categoria de **receita** do usuário chamada "Reembolsos Diversos" (`20261121120000`). Busca pelo
+nome, sem flag: renomeada ou inexistente, a receita fica sem categoria, sem erro. Categoria já
+escolhida nunca é sobrescrita. Não afeta totais — `is_reimbursement` já a tira de `isMonthlyIncome`.
+
 Em `Reimbursements.tsx`, uma despesa **de cartão** abre um diálogo perguntando a
 origem antes de quitar (antes assumia sempre o espelho). Fora do cartão, vai
 direto para o `SettleReimbursementModal`.

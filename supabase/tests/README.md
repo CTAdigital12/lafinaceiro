@@ -1,5 +1,10 @@
 # Testes de RPC em Postgres descartável
 
+> **Nenhum arquivo desta pasta vai para o SQL Editor do Supabase.** Quase todos
+> começam com `truncate`/`drop table` (apagam `transactions` e outras tabelas) e
+> usam comandos do `psql` (`\set`, `\i`). Em produção, só os arquivos de
+> `supabase/migrations/`.
+
 As RPCs deste projeto não são cobertas pelo `vitest` — ele testa TypeScript, e
 a regra mora no banco. Estes scripts exercitam as funções de verdade num
 cluster local que se joga fora no fim, sem tocar em produção e sem precisar de
@@ -47,6 +52,12 @@ psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/um_pix_varias_despesa
 # Aporte em investimento: a divisão herda a flag. Também aplica a própria
 # migration no meio (`\i`), depois das de divisão.
 psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/aporte_na_divisao.sql
+
+# A receita do reembolso ganha "Reembolsos Diversos". Cria a própria tabela
+# `categories` e aplica a própria migration no meio (`\i`). Precisa só do
+# schema.sql e da 20260531010000; rode num banco onde as anteriores ainda não
+# trocaram a categoria de nenhum PIX (ele trunca transactions no começo).
+psql -h /tmp/lfs -p 54329 -U postgres -q -f supabase/tests/reembolso_recebe_categoria.sql
 
 pg_ctl -D /tmp/lfpg stop
 ```
