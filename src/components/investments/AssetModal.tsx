@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import {
   Dialog,
@@ -31,25 +30,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { InvestmentAsset, assetTypeLabel, selectableTypesFor, usesTotalBalancePricing } from "@/hooks/useInvestments";
 import { InvestmentInstitution } from "@/hooks/useInstitutions";
+import { resolveTicker } from "@/lib/investments/assetTicker";
+import { assetFormSchema as formSchema, type AssetFormValues } from "@/lib/investments/assetFormSchema";
 
-const formSchema = z.object({
-  name: z.string().min(1, "Nome é obrigatório"),
-  ticker: z.string().min(1, "Ticker é obrigatório"),
-  asset_type: z.string().min(1, "Tipo é obrigatório"),
-  institution_id: z.string().optional(),
-  current_price: z.coerce.number().min(0).default(0),
-  maturity_date: z.string().optional(),
-  yield_info: z.string().optional(),
-  liquidity: z.string().optional(),
-  // Variable income fields
-  initial_quantity: z.coerce.number().min(0).optional(),
-  initial_value: z.coerce.number().min(0).optional(),
-  // Fixed income fields
-  applied_value: z.coerce.number().min(0).optional(),
-  current_balance: z.coerce.number().min(0).optional(),
-});
-
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = AssetFormValues;
 
 export interface AssetModalFormData extends FormValues {
   calculated_quantity?: number;
@@ -205,11 +189,8 @@ export function AssetModal({
       }
     }
 
-    // Auto-generate ticker for fixed income if empty
-    let finalTicker = values.ticker.toUpperCase();
-    if (isFixed && !finalTicker) {
-      finalTicker = values.name.substring(0, 10).toUpperCase().replace(/\s+/g, "_");
-    }
+    // Ativo por saldo sem código: gerado a partir do nome.
+    const finalTicker = resolveTicker(values.ticker, values.name, values.asset_type);
 
     onSubmit({
       ...values,
