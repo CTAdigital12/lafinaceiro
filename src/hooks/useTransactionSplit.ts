@@ -70,7 +70,6 @@ export function useRecurringProvisionals(refDate: string | null | undefined, ena
       const { data, error } = await supabase
         .from("transactions")
         .select("id, recurring_rule_id, description, amount, date")
-        .eq("user_id", user.id)
         .eq("is_provisional", true)
         .not("recurring_rule_id", "is", null)
         .gte("date", start)

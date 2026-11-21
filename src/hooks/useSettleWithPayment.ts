@@ -77,7 +77,6 @@ export function useSettleCandidates(
         .select(
           "id, description, amount, date, due_date, status, is_provisional, installment_number, total_installments, account_id, categories (name), accounts (name)",
         )
-        .eq("user_id", user.id)
         .eq("type", payment.type)
         .is("credit_card_id", null)
         .is("split_group_id", null)

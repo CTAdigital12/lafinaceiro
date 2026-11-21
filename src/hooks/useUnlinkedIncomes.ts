@@ -43,13 +43,11 @@ function shiftIsoDate(iso: string, days: number): string {
  * criar outro (que dobraria a saída da conta). Pagamento de fatura nunca é
  * candidato.
  *
- * IMPORTANTE — Defesa em profundidade vs. shared_access:
- * A RLS de SELECT em `transactions` permite leitura de receitas de OUTROS
- * usuários quando há shared_access ativo. Para evitar que esta feature linke
- * uma receita do dono compartilhado a um investimento individual (vetor de
- * cross-tenant lock pelo UNIQUE índice em linked_transaction_id), filtramos
- * explicitamente por `user_id = auth user.id`. RLS continua sendo a fonte
- * autoritativa para acesso; este filtro restringe o escopo ao próprio usuário.
+ * Conta única: NÃO filtra por `user_id`. Os dois logins compartilham as
+ * mesmas finanças (`user_id` só diz quem digitou), e a conta já restringe o
+ * escopo. O filtro antigo por usuário escondia do membro todas as receitas
+ * que o dono lançou na conta. Quem pode ver o quê é decidido pela RLS
+ * (migration 20261121180000).
  *
  * Filtros adicionais: `status='completed'` e `is_provisional=false` — receitas
  * pendentes/provisórias não compõem saldo (regra já consolidada em
@@ -82,7 +80,6 @@ export function useUnlinkedTransactions(
         supabase
           .from("transactions")
           .select("id, account_id, amount, date, description, category_id, user_id, is_card_payment")
-          .eq("user_id", user.id)
           .eq("account_id", accountId)
           .eq("type", kind)
           .eq("status", "completed")

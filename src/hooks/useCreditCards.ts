@@ -164,7 +164,6 @@ export function useCreditCards() {
         const { data: corpTxs, error: corpFetchError } = await supabase
           .from("transactions")
           .select("id")
-          .eq("user_id", user.id)
           .eq("credit_card_id", creditCardId)
           .eq("type", "expense")
           .eq("status", "completed")

@@ -26,7 +26,6 @@ export function BudgetEvolutionChart({ currentYear }: BudgetEvolutionChartProps)
       const { data, error } = await supabase
         .from("budgets")
         .select("month, planned_amount")
-        .eq("user_id", user.id)
         .eq("year", currentYear);
       if (error) throw error;
       return data || [];

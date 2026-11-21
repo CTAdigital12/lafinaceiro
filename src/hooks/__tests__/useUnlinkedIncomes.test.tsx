@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
  * permite override por chamada via `mockTableResponse`.
  *
  * Mantemos a tabela e os filtros aplicados na lista `lastQueryLog` para que
- * os testes possam afirmar que os filtros corretos (user_id, status,
+ * os testes possam afirmar que os filtros corretos (conta, status,
  * is_provisional, janela de data) foram enviados.
  */
 type QueryLogEntry = {
@@ -92,7 +92,7 @@ beforeEach(() => {
 });
 
 describe("useUnlinkedIncomes", () => {
-  it("filtra por user_id, status=completed, is_provisional=false (regras de saldo + defesa em profundidade)", async () => {
+  it("filtra por conta, status=completed, is_provisional=false e NÃO por user_id (conta única)", async () => {
     supabaseMock.__setResponse("transactions", { data: [], error: null });
     supabaseMock.__setResponse("investment_transactions", { data: [], error: null });
 
@@ -107,7 +107,8 @@ describe("useUnlinkedIncomes", () => {
     expect(txQuery).toBeDefined();
     const flat = txQuery!.filters.map((f) => `${f.method}:${JSON.stringify(f.args)}`);
 
-    expect(flat).toContain(`eq:["user_id","user-me"]`);
+    // Conta única: a receita lançada pelo outro login também é candidata.
+    expect(flat.some((f) => f.includes('"user_id"'))).toBe(false);
     expect(flat).toContain(`eq:["account_id","acc-1"]`);
     expect(flat).toContain(`eq:["type","income"]`);
     expect(flat).toContain(`eq:["status","completed"]`);
@@ -226,7 +227,7 @@ describe("useUnlinkedTransactions — débitos para a aplicação", () => {
     const txQuery = supabaseMock.__log.find((q) => q.table === "transactions");
     const flat = txQuery!.filters.map((f) => `${f.method}:${JSON.stringify(f.args)}`);
     expect(flat).toContain(`eq:["type","expense"]`);
-    expect(flat).toContain(`eq:["user_id","user-me"]`);
+    expect(flat.some((f) => f.includes('"user_id"'))).toBe(false);
 
     expect(result.current.transactions.map((t) => t.id)).toEqual(["pic", "antigo"]);
     expect(result.current.transactions[0]).not.toHaveProperty("is_card_payment");
