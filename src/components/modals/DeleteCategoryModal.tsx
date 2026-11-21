@@ -36,7 +36,10 @@ export function DeleteCategoryModal({
   onClose,
   onConfirm,
 }: DeleteCategoryModalProps) {
-  const { expenseCategories, moveTransactionsToCategory, deleteCategory } = useCategories();
+  const { expenseCategories, incomeCategories, moveTransactionsToCategory, deleteCategory } = useCategories();
+  // As transações só podem ir para uma categoria do mesmo tipo: mover receitas
+  // para uma categoria de despesa as tiraria das somas de receita.
+  const sameTypeCategories = category?.type === "income" ? incomeCategories : expenseCategories;
   const [transactionCount, setTransactionCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [targetCategoryId, setTargetCategoryId] = useState<string>("");
@@ -86,7 +89,7 @@ export function DeleteCategoryModal({
   }, [isOpen, categoryId]);
 
   // Filter out the category being deleted and its subcategories from available targets
-  const availableCategories = expenseCategories.filter((c) => {
+  const availableCategories = sameTypeCategories.filter((c) => {
     if (!category) return true;
     // Exclude the category being deleted
     if (c.id === category.id) return false;
