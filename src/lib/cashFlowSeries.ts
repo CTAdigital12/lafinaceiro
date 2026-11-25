@@ -1,6 +1,6 @@
 import type { Transaction } from "@/hooks/useTransactions";
 import { getCompetenceDate } from "@/lib/reportUtils";
-import { filterPureExpenses, filterPureIncome } from "@/lib/transactionFilters";
+import { filterPureExpenses, filterPureIncome, isInvestmentContribution } from "@/lib/transactionFilters";
 
 /**
  * Série mensal de receitas, despesas e saldo do Fluxo de Caixa.
@@ -101,5 +101,75 @@ export function buildCashFlowSeries(
       monthsWithIncome > 0 ? Math.round(savingRateSum / monthsWithIncome) : 0,
     periodBalance: cumulativeBalance,
     lastMonthBalance: rows[rows.length - 1]?.balance ?? 0,
+  };
+}
+
+/**
+ * Ponte entre o "Acumulado" pessoal e o dinheiro que de fato sobrou na conta.
+ *
+ * O acumulado do Fluxo de Caixa é o ORÇAMENTO PESSOAL: tira o lado empresarial
+ * inteiro (gasto corporativo/reembolsável e reembolso recebido) e não conta
+ * aporte como despesa. Responde "fechei no azul?", não "quanto juntei?". Em
+ * nov/2026 eram R$ 4.257 de acumulado contra R$ 2.077 que sobraram na conta,
+ * e nada na tela dizia por quê.
+ *
+ *   sobrou na conta = pessoal − aportes + empresa e defasagens
+ *
+ * "Empresa e defasagens" é o RESÍDUO da ponte, de propósito: assim os três
+ * itens sempre fecham no saldo da conta. Ali cai o que se adiantou para a
+ * empresa e ainda não voltou (ou voltou de outro período), e diferenças de
+ * competência entre a compra no cartão e o pagamento da fatura.
+ *
+ * "Na conta" segue a regra de realizado do saldo (`accountBalance.ts`):
+ * `completed`, não provisório, data até hoje — pela DATA do lançamento, que é
+ * quando o dinheiro mexeu.
+ */
+export interface CashFlowBridge {
+  /** O mesmo `periodBalance` do acumulado pessoal. */
+  personalBalance: number;
+  /** Aportes em investimento que saíram das contas no período. */
+  investmentContributions: number;
+  /** Resíduo: empresa (adiantado − reembolsado) e defasagens de competência. */
+  companyAndTiming: number;
+  /** Entradas − saídas realizadas nas contas no período. */
+  accountNet: number;
+}
+
+/**
+ * @param months competências `yyyy-MM`, em ordem cronológica (as do gráfico).
+ * @param today `yyyy-MM-dd` do usuário (`todayYmd()`); corta lançamentos futuros.
+ */
+export function buildCashFlowBridge(
+  transactions: Transaction[],
+  months: string[],
+  personalBalance: number,
+  today: string,
+): CashFlowBridge {
+  if (months.length === 0) {
+    return { personalBalance, investmentContributions: 0, companyAndTiming: 0, accountNet: 0 };
+  }
+
+  const start = `${months[0]}-01`;
+  const lastMonthEnd = `${months[months.length - 1]}-31`; // comparação de texto: 31 cobre todo mês
+  const end = today < lastMonthEnd ? today : lastMonthEnd;
+
+  let accountNet = 0;
+  let investmentContributions = 0;
+
+  for (const t of transactions) {
+    if (!t.account_id) continue;
+    if (t.status !== "completed" || t.is_provisional) continue;
+    if (t.date < start || t.date > end) continue;
+
+    const amount = Number(t.amount);
+    accountNet += t.type === "income" ? amount : -amount;
+    if (isInvestmentContribution(t)) investmentContributions += amount;
+  }
+
+  return {
+    personalBalance,
+    investmentContributions,
+    companyAndTiming: accountNet - personalBalance + investmentContributions,
+    accountNet,
   };
 }

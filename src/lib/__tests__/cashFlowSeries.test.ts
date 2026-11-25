@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCashFlowSeries } from "@/lib/cashFlowSeries";
+import { buildCashFlowBridge, buildCashFlowSeries } from "@/lib/cashFlowSeries";
 import type { Transaction } from "@/hooks/useTransactions";
 
 /**
@@ -169,5 +169,56 @@ describe("buildCashFlowSeries — comportamento normal preservado", () => {
     );
 
     expect(serie.months[1].netExpense).toBe(7);
+  });
+});
+
+/**
+ * O "Acumulado" é o orçamento pessoal; o card "Sobrou na conta" mostra o
+ * dinheiro que de fato ficou e a ponte entre os dois. Cenário com tudo que
+ * separa um do outro: aporte, gasto corporativo no cartão e reembolso por PIX.
+ */
+describe("buildCashFlowBridge — do acumulado pessoal ao que sobrou na conta", () => {
+  const CONTA = "conta-1";
+  const CARTAO = "cartao-1";
+  const lancamentos = [
+    tx({ account_id: CONTA, type: "income", amount: 10_000, date: "2026-08-05" }), // salário
+    tx({ account_id: CONTA, amount: 3_000, date: "2026-08-06" }), // despesa pessoal na conta
+    tx({ credit_card_id: CARTAO, due_date: "2026-08-15", date: "2026-07-20", amount: 2_000 }), // pessoal no cartão
+    tx({ credit_card_id: CARTAO, due_date: "2026-08-15", date: "2026-07-21", amount: 1_500, is_corporate_expense: true }), // da empresa
+    tx({ account_id: CONTA, credit_card_id: CARTAO, amount: 3_500, date: "2026-08-15", is_card_payment: true }), // fatura
+    tx({ account_id: CONTA, type: "income", amount: 1_000, date: "2026-08-20", is_reimbursement: true }), // empresa devolveu parte
+    tx({ account_id: CONTA, amount: 800, date: "2026-08-21", is_investment_contribution: true }), // aporte
+  ] as Transaction[];
+
+  it("fecha: pessoal − aportes + empresa = sobrou na conta", () => {
+    const { periodBalance } = buildCashFlowSeries(lancamentos, MESES);
+    const ponte = buildCashFlowBridge(lancamentos, MESES, periodBalance, "2026-08-31");
+
+    // Pessoal: 10.000 − 3.000 − 2.000. Aporte e empresa ficam de fora.
+    expect(ponte.personalBalance).toBe(5_000);
+    expect(ponte.investmentContributions).toBe(800);
+    // Adiantou 1.500 para a empresa, voltaram 1.000.
+    expect(ponte.companyAndTiming).toBe(-500);
+    // Conta: 10.000 − 3.000 − 3.500 + 1.000 − 800.
+    expect(ponte.accountNet).toBe(3_700);
+    expect(ponte.personalBalance - ponte.investmentContributions + ponte.companyAndTiming).toBe(ponte.accountNet);
+  });
+
+  it("na conta, ignora o futuro, o previsto e o que é só de cartão", () => {
+    const ponte = buildCashFlowBridge(
+      [
+        tx({ account_id: CONTA, type: "income", amount: 1_000, date: "2026-08-05" }),
+        tx({ account_id: CONTA, amount: 50, date: "2026-08-30" }), // depois de hoje
+        tx({ account_id: CONTA, amount: 70, date: "2026-08-10", status: "pending" }),
+        tx({ account_id: CONTA, amount: 90, date: "2026-08-10", is_provisional: true }),
+        tx({ account_id: CONTA, amount: 40, date: "2026-06-30" }), // antes do período
+        tx({ credit_card_id: CARTAO, due_date: "2026-08-15", amount: 300 }), // só pesa quando a fatura é paga
+      ],
+      MESES,
+      0,
+      "2026-08-20",
+    );
+
+    expect(ponte.accountNet).toBe(1_000);
   });
 });
