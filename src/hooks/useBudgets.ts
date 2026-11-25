@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { leafPlannedTotal } from "@/lib/buildHierarchicalBudgets";
 import { planBudgetCopy } from "@/lib/budgetsToCopy";
 
 export interface Budget {
@@ -230,19 +231,8 @@ export function useBudgets(month: number, year: number) {
     },
   });
 
-  // Calculate total only from "leaf" budgets (subcategories or categories without children)
-  const totalPlanned = useMemo(() => {
-    const parentCategoryIds = new Set(
-      budgets
-        .filter(b => b.categories?.parent_id)
-        .map(b => b.categories?.parent_id)
-    );
-    
-    // Sum only budgets that are NOT parent categories (i.e., don't have children in the budget list)
-    return budgets
-      .filter(b => !parentCategoryIds.has(b.categories?.id))
-      .reduce((sum, b) => sum + Number(b.planned_amount), 0);
-  }, [budgets]);
+  // Só metas-folha: a meta do pai cujos filhos têm meta não entra (leafPlannedTotal).
+  const totalPlanned = useMemo(() => leafPlannedTotal(budgets), [budgets]);
 
   return {
     budgets,

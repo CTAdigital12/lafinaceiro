@@ -4,6 +4,7 @@ import { Currency } from "@/components/ui/currency";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface Props {
+  title: string;
   accumulated: {
     totalPlanned: number;
     totalActual: number;
@@ -12,7 +13,7 @@ interface Props {
   };
 }
 
-export function BudgetAccumulatedCard({ accumulated }: Props) {
+export function BudgetAccumulatedCard({ title, accumulated }: Props) {
   const { totalPlanned, totalActual, pct, diff } = accumulated;
   const overBudget = pct > 100;
   const Icon = diff > 0 ? TrendingUp : TrendingDown;
@@ -21,7 +22,7 @@ export function BudgetAccumulatedCard({ accumulated }: Props) {
     <Card>
       <CardContent className="pt-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-foreground">Acumulado — 6 meses</h3>
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
             overBudget
               ? "bg-destructive/10 text-destructive"

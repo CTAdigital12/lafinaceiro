@@ -6,20 +6,17 @@ import {
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import type { TooltipProps } from "recharts";
-
-interface ChartDataItem {
-  label: string;
-  planned: number;
-  actual: number;
-  variance: number;
-}
+import type { BudgetPeriodMonth } from "@/lib/budgetPeriodReport";
 
 function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
   const fmt = useFormatCurrency();
   if (!active || !payload?.length) return null;
   const planned = payload.find((p) => p.dataKey === "planned")?.value || 0;
   const actual = payload.find((p) => p.dataKey === "actual")?.value || 0;
-  const variance = payload.find((p) => p.dataKey === "variance")?.value || 0;
+  // Realizado contra o ORÇADO do mesmo mês. Antes a linha media a variação do
+  // realizado sobre o mês anterior, e ficava ao lado de "Orçado" como se fosse
+  // a distância até a meta.
+  const variance = (payload[0]?.payload as BudgetPeriodMonth | undefined)?.variancePct ?? null;
 
   return (
     <div className="bg-popover border border-border rounded-lg p-3 shadow-lg text-sm space-y-1">
@@ -33,22 +30,26 @@ function CustomTooltip({ active, payload, label }: TooltipProps<number, string>)
         <span className="font-medium text-amber-500">{fmt(actual)}</span>
       </div>
       <div className="border-t border-border pt-1 flex justify-between gap-4">
-        <span className="text-muted-foreground">Variação:</span>
-        <span className={`font-semibold ${variance > 0 ? "text-destructive" : variance < 0 ? "text-emerald-500" : "text-muted-foreground"}`}>
-          {variance > 0 ? "+" : ""}{variance}%
-        </span>
+        <span className="text-muted-foreground">Vs orçado:</span>
+        {variance === null ? (
+          <span className="text-muted-foreground">sem meta</span>
+        ) : (
+          <span className={`font-semibold ${variance > 0 ? "text-destructive" : variance < 0 ? "text-emerald-500" : "text-muted-foreground"}`}>
+            {variance > 0 ? "+" : ""}{variance}%
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-export function BudgetChart({ data }: { data: ChartDataItem[] }) {
+export function BudgetChart({ title, data }: { title: string; data: BudgetPeriodMonth[] }) {
   const { isHidden } = usePrivacyMode();
   return (
     <Card>
       <CardContent className="pt-4">
         <h3 className="text-sm font-semibold text-foreground mb-4">
-          Evolução Orçado vs Realizado (6 meses)
+          {title}
         </h3>
         <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -75,7 +76,7 @@ export function BudgetChart({ data }: { data: ChartDataItem[] }) {
                   const labels: Record<string, string> = {
                     planned: "Orçado",
                     actual: "Realizado",
-                    variance: "Variação %",
+                    variancePct: "Vs orçado %",
                   };
                   return labels[value] || value;
                 }}
@@ -85,7 +86,7 @@ export function BudgetChart({ data }: { data: ChartDataItem[] }) {
               <Line
                 yAxisId="pct"
                 type="monotone"
-                dataKey="variance"
+                dataKey="variancePct"
                 stroke="hsl(var(--chart-5, 280 65% 60%))"
                 strokeWidth={2}
                 dot={{ r: 3 }}

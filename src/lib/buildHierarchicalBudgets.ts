@@ -264,3 +264,22 @@ export function buildHierarchicalBudgets(
     (a.categories?.name || "").localeCompare(b.categories?.name || ""),
   );
 }
+
+/**
+ * Orçamento total de um mês: soma só as metas-FOLHA. A meta de um pai cujos
+ * filhos têm meta no mesmo mês fica de fora — quem manda é a soma dos filhos
+ * (a mesma regra de `totalPlanned` na árvore acima), senão o pai contaria duas
+ * vezes. Estava inline no `useBudgets`; o relatório de Planejamento usa igual.
+ *
+ * @param budgets metas de UM mês, com a categoria carregada.
+ */
+export function leafPlannedTotal(
+  budgets: readonly Pick<Budget, "planned_amount" | "categories">[],
+): number {
+  const parentCategoryIds = new Set(
+    budgets.map((b) => b.categories?.parent_id).filter(Boolean) as string[],
+  );
+  return budgets
+    .filter((b) => !parentCategoryIds.has(b.categories?.id ?? ""))
+    .reduce((sum, b) => sum + Number(b.planned_amount), 0);
+}

@@ -47,11 +47,11 @@ import {
 import {
   isForecastExpense,
   isMonthlyExpense,
-  isMonthlyExpenseRefund,
   sumBudgetSpending,
   sumInvestmentContributions,
 } from "@/lib/transactionFilters";
 import { formatDateBR } from "@/lib/dateUtils";
+import { buildCategorySpending } from "@/lib/categorySpending";
 
 // Despesa que consome orçamento: paga (efetivada) ou prevista (provisória/pendente).
 const isBudgetExpense = (t: Transaction) => isMonthlyExpense(t) || isForecastExpense(t);
@@ -86,42 +86,11 @@ export default function Planning() {
   // Per-category totals, aggregating subcategory spending into parent categories.
   // "paid" segue o mesmo filtro das telas de Transações/Dashboard (isMonthlyExpense,
   // com estornos abatidos); "forecast" são as provisórias/pendentes; "spent" é a soma.
-  const { paidByCategory, forecastByCategory, spentByCategory } = useMemo(() => {
-    const paid: Record<string, number> = {};
-    const forecast: Record<string, number> = {};
-
-    transactions.forEach((t) => {
-      let target: Record<string, number>;
-      let amount = Number(t.amount);
-
-      if (isMonthlyExpense(t)) {
-        target = paid;
-      } else if (isMonthlyExpenseRefund(t)) {
-        target = paid;
-        amount = -amount;
-      } else if (isForecastExpense(t)) {
-        target = forecast;
-      } else {
-        return;
-      }
-
-      const catId = t.category_id || "uncategorized";
-      target[catId] = (target[catId] || 0) + amount;
-
-      // If the category is a subcategory, also add to the parent's total
-      const category = categories.find(c => c.id === catId);
-      if (category?.parent_id) {
-        target[category.parent_id] = (target[category.parent_id] || 0) + amount;
-      }
-    });
-
-    const spent: Record<string, number> = {};
-    new Set([...Object.keys(paid), ...Object.keys(forecast)]).forEach((catId) => {
-      spent[catId] = (paid[catId] || 0) + (forecast[catId] || 0);
-    });
-
-    return { paidByCategory: paid, forecastByCategory: forecast, spentByCategory: spent };
-  }, [transactions, categories]);
+  // A regra mora em categorySpending.ts, compartilhada com o relatório de Planejamento.
+  const { paid: paidByCategory, forecast: forecastByCategory, spent: spentByCategory } = useMemo(
+    () => buildCategorySpending(transactions, categories),
+    [transactions, categories],
+  );
 
   // Build hierarchical structure (extracted to a pure helper for unit testing
   // and to fix Bug 4: orphan child budgets now get a synthesized virtual parent
