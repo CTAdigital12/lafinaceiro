@@ -4,7 +4,7 @@ type: solution
 title: Soma de despesa com filtro inline diverge das outras telas — usar os helpers de transactionFilters
 status: verified
 created_at: 2026-11-11
-reviewed_at: 2026-11-11
+reviewed_at: 2026-11-25
 scope: project
 stack: [typescript, react]
 tags: [planejamento, despesa, estorno, competencia, transactionFilters, consistencia-entre-telas]
@@ -13,6 +13,8 @@ files:
   - src/lib/budgetEvolutionData.ts
   - src/pages/Planning.tsx
   - src/components/dashboard/BudgetEvolutionChart.tsx
+  - src/lib/categorySpending.ts
+  - src/lib/budgetPeriodReport.ts
 deps: []
 related_prs: [55, 143]
 related_commits: [7aa1414]
@@ -29,6 +31,11 @@ Casos no projeto:
 - PR #55: o "Total Gasto" do Planejamento não abatia estornos e divergia da tela de Transações.
 - 2026-11-11: a linha "Gasto" do gráfico de evolução do Planejamento (`BudgetEvolutionChart`) divergia do card
   "Total Gasto" da mesma tela.
+- 2026-11-25: Relatórios → Planejamento (`ProjectsPlanningTab`) tinha a regra do quadro por categoria e do gráfico
+  "Orçado vs Realizado" montada à mão: usava `isMonthlyExpense` sem abater estorno (até R$ 371/mês), deixava gasto sem
+  categoria e subcategoria sem meta fora do quadro (o total não fechava com o gráfico) e chamava de "Variação %" a
+  mudança do realizado sobre o MÊS ANTERIOR, exibida ao lado do orçado. Corrigido reaproveitando a árvore do
+  Planejamento mês a mês (ver "Correção aplicada").
 
 ## Erro exato
 Sem mensagem de erro. Só números diferentes entre telas.
@@ -55,6 +62,12 @@ do próprio módulo.
   (`competenceRangeFilter` + `getCompetenceDate`), paginado (ver [SOL-0001](SOL-0001-postgrest-trunca-em-1000-sem-erro.md)),
   sem filtrar `type` nem `user_id` no banco. O card também não filtra `user_id`: quem recorta é o RLS.
 
+- 2026-11-25: `buildCategorySpending` (`categorySpending.ts`, o gasto por categoria com a filha somada no pai, que
+  estava inline no `Planning.tsx`) e `leafPlannedTotal` (em `buildHierarchicalBudgets.ts`, que estava inline no
+  `useBudgets`) viraram funções compartilhadas. `buildBudgetPeriodReport` monta cada mês do período com
+  `buildHierarchicalBudgets` e soma os meses DEPOIS, porque meta e a regra "pai ignora a própria meta quando os filhos
+  têm" variam de mês a mês. Toda despesa cai numa linha; as sem meta (inclusive meta 0,00) vêm marcadas.
+
 ## Validação
 Executado em 2026-11-11 no PR #143 (merge `7aa1414`):
 - `src/lib/__tests__/budgetEvolutionData.test.ts`: o teste de regra falha com a soma antiga (1480 contra 580),
@@ -65,6 +78,12 @@ Executado em 2026-11-11 no PR #143 (merge `7aa1414`):
 - CI do PR #143 verde (testes, typecheck e lint, Dev Memory).
 - `verified` em 2026-11-11 por decisão do responsável, com base nos testes acima (inclusive a prova negativa).
   Ainda não visto na tela: depois do deploy, a linha "Gasto" do mês aberto deve bater com o card "Total Gasto".
+
+Executado em 2026-11-25 (branch `feat/orcado-realizado-periodo`): `budgetPeriodReport.test.ts` (8 testes: folha,
+estorno, variação contra o orçado, quadro fecha com o total, meta só em um mês, filha sem meta no pai, sem categoria,
+meta zero); `npm test` 840/840, typecheck e lint limpos. Com os dados reais (backup de 25/11, Postgres local), o
+quadro soma exatamente o realizado em 3, 6 e 12 meses, e o realizado de cada mês bate com o SQL independente
+(despesa paga − estornos). **Não visto na tela.** A correção da variação mora no componente, sem teste próprio.
 
 ## Quando reutilizar
 - Toda tela nova que soma ou filtra despesa ou receita do mês: chame os helpers de `transactionFilters.ts`.
@@ -81,3 +100,4 @@ Executado em 2026-11-11 no PR #143 (merge `7aa1414`):
 - PR #55: "Total Gasto" = pagas + previstas, com estorno abatendo.
 - Auditoria M17: consolidação das cópias em `transactionFilters.ts`.
 - PR #143 (merge `7aa1414`, 2026-11-11): gráfico de evolução alinhado ao card.
+- 2026-11-25: relatório de Planejamento por período usando as regras do Planejamento (`budgetPeriodReport.ts`).

@@ -1,37 +1,24 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useDate } from "@/contexts/DateContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useProjects } from "@/hooks/useProjects";
 import { useCategories } from "@/hooks/useCategories";
+import type { Budget } from "@/hooks/useBudgets";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { getCompetenceDate } from "@/lib/reportUtils";
-import { isMonthlyExpense } from "@/lib/transactionFilters";
+import { fetchAllRows } from "@/lib/fetchAllRows";
+import { buildBudgetPeriodReport, type MonthKey } from "@/lib/budgetPeriodReport";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { BudgetCurrentMonth } from "./planning/BudgetCurrentMonth";
 import { BudgetChart } from "./planning/BudgetChart";
 import { BudgetAccumulatedCard } from "./planning/BudgetAccumulatedCard";
 import { ProjectsSection } from "./planning/ProjectsSection";
 
-interface BudgetRow {
-  id: string;
-  category_id: string | null;
-  month: number;
-  year: number;
-  planned_amount: number;
-}
-
-/** Linha de subcategoria agrupada sob a categoria pai, no quadro de metas. */
-interface CategoriaFilha {
-  id: string;
-  name: string;
-  icon: string;
-  planned: number;
-  spent: number;
-  pct: number;
-}
+const PERIOD_OPTIONS = [3, 6, 12] as const;
+type Period = (typeof PERIOD_OPTIONS)[number];
 
 export function ProjectsPlanningTab() {
   const { month, year } = useDate();
@@ -42,11 +29,12 @@ export function ProjectsPlanningTab() {
     loadedCount: 10000,
   });
   const { activeProjects } = useProjects();
+  const [period, setPeriod] = useState<Period>(6);
 
-  // Generate last 6 month keys
+  // Os últimos `period` meses, terminando no mês selecionado no topo do app.
   const monthKeys = useMemo(() => {
-    const keys: { month: number; year: number; key: string; label: string }[] = [];
-    for (let i = 5; i >= 0; i--) {
+    const keys: MonthKey[] = [];
+    for (let i = period - 1; i >= 0; i--) {
       const d = subMonths(new Date(year, month - 1), i);
       keys.push({
         month: d.getMonth() + 1,
@@ -56,195 +44,42 @@ export function ProjectsPlanningTab() {
       });
     }
     return keys;
-  }, [month, year]);
+  }, [month, year, period]);
 
-  // Fetch 6 months of budgets directly
-  const { data: allBudgets = [], isLoading: budgetsLoading } = useQuery({
-    queryKey: ["budgets-6m", user?.id, monthKeys[0]?.key, monthKeys[5]?.key],
+  const firstKey = monthKeys[0].key;
+  const lastKey = monthKeys[monthKeys.length - 1].key;
+
+  // Metas do período, em páginas: 12 meses atravessam dois anos, e o recorte por
+  // ano inteiro passa das 1000 linhas em que o PostgREST corta sem avisar.
+  // A categoria vem junto porque a árvore e o total por folha dependem do pai.
+  const { data: periodBudgets = [], isLoading: budgetsLoading } = useQuery({
+    queryKey: ["budgets-period", user?.id, firstKey, lastKey],
     queryFn: async () => {
-      const firstM = monthKeys[0];
-      const lastM = monthKeys[5];
-
-      const { data, error } = await supabase
-        .from("budgets")
-        .select("id, category_id, month, year, planned_amount")
-        .gte("year", firstM.year)
-        .lte("year", lastM.year)
-        .order("month");
-
-      if (error) throw error;
-
-      // Filter to exact range
-      return (data as BudgetRow[]).filter((b) => {
+      const first = monthKeys[0];
+      const last = monthKeys[monthKeys.length - 1];
+      const rows = await fetchAllRows((from, to) =>
+        supabase
+          .from("budgets")
+          .select("*, categories (id, name, icon, color, parent_id)")
+          .gte("year", first.year)
+          .lte("year", last.year)
+          .order("id")
+          .range(from, to),
+      );
+      return (rows as Budget[]).filter((b) => {
         const bk = `${b.year}-${String(b.month).padStart(2, "0")}`;
-        return bk >= firstM.key && bk <= lastM.key;
+        return bk >= firstKey && bk <= lastKey;
       });
     },
     enabled: !!user,
   });
 
-  const currentMonthKey = `${year}-${String(month).padStart(2, "0")}`;
-
-  // Current month budgets
-  const currentBudgets = useMemo(
-    () => allBudgets.filter((b) => b.month === month && b.year === year),
-    [allBudgets, month, year]
+  const report = useMemo(
+    () => buildBudgetPeriodReport(periodBudgets, transactions, categories, monthKeys),
+    [periodBudgets, transactions, categories, monthKeys],
   );
 
-  // Pure expenses grouped by month-key and category
-  const expensesByMonthCat = useMemo(() => {
-    // Despesa pessoal paga, sem estorno: é exatamente `isMonthlyExpense`.
-    // Antes isto era `filterPureExpenses(...).filter(t => !t.is_refund)`, a
-    // mesma regra remontada à mão em cima de outra.
-    const pureExpenses = transactions.filter(isMonthlyExpense);
-    const map: Record<string, Record<string, number>> = {};
-    for (const t of pureExpenses) {
-      const mk = getCompetenceDate(t).substring(0, 7);
-      if (!map[mk]) map[mk] = {};
-      const catId = t.category_id || "uncategorized";
-      map[mk][catId] = (map[mk][catId] || 0) + Number(t.amount);
-    }
-    return map;
-  }, [transactions]);
-
-  // Build parent-grouped budget items for current month
-  const { parentItems, leafItems } = useMemo(() => {
-    if (!currentBudgets.length) return { parentItems: [], leafItems: [] };
-
-    const catMap = new Map(categories.map((c) => [c.id, c]));
-    const spentMap = expensesByMonthCat[currentMonthKey] || {};
-
-    // Find which category IDs are parents (have children in budgets)
-    const childCatIds = new Set<string>();
-    const parentCatIds = new Set<string>();
-
-    for (const b of currentBudgets) {
-      const cat = catMap.get(b.category_id || "");
-      if (cat?.parent_id) {
-        childCatIds.add(cat.id);
-        parentCatIds.add(cat.parent_id);
-      }
-    }
-
-    // Group children under parents
-    const parentGroups: Record<
-      string,
-      { planned: number; spent: number; children: CategoriaFilha[] }
-    > = {};
-
-    for (const b of currentBudgets) {
-      const cat = catMap.get(b.category_id || "");
-      if (!cat) continue;
-
-      if (cat.parent_id && parentCatIds.has(cat.parent_id)) {
-        if (!parentGroups[cat.parent_id]) {
-          parentGroups[cat.parent_id] = { planned: 0, spent: 0, children: [] };
-        }
-        const spent = spentMap[cat.id] || 0;
-        parentGroups[cat.parent_id].planned += b.planned_amount;
-        parentGroups[cat.parent_id].spent += spent;
-        parentGroups[cat.parent_id].children.push({
-          id: b.id,
-          name: cat.name,
-          icon: cat.icon || "📊",
-          planned: b.planned_amount,
-          spent: Math.round(spent),
-          pct: b.planned_amount > 0 ? Math.round((spent / b.planned_amount) * 100) : 0,
-        });
-      }
-    }
-
-    const parents = Object.entries(parentGroups).map(([parentId, g]) => {
-      const parentCat = catMap.get(parentId);
-      const pct = g.planned > 0 ? Math.round((g.spent / g.planned) * 100) : 0;
-      return {
-        id: parentId,
-        name: parentCat?.name || "Sem nome",
-        icon: parentCat?.icon || "📊",
-        planned: g.planned,
-        spent: Math.round(g.spent),
-        pct,
-        overBudget: pct > 100,
-        children: g.children.sort((a, b) => b.pct - a.pct),
-      };
-    }).sort((a, b) => b.pct - a.pct);
-
-    // Leaf categories (no parent, and not a parent themselves)
-    const leaves = currentBudgets
-      .filter((b) => {
-        const cat = catMap.get(b.category_id || "");
-        if (!cat) return false;
-        return !cat.parent_id && !parentCatIds.has(cat.id);
-      })
-      .map((b) => {
-        const cat = catMap.get(b.category_id || "")!;
-        const spent = spentMap[cat.id] || 0;
-        const pct = b.planned_amount > 0 ? Math.round((spent / b.planned_amount) * 100) : 0;
-        return {
-          id: b.id,
-          name: cat.name,
-          icon: cat.icon || "📊",
-          planned: b.planned_amount,
-          spent: Math.round(spent),
-          pct,
-          overBudget: pct > 100,
-        };
-      })
-      .sort((a, b) => b.pct - a.pct);
-
-    return { parentItems: parents, leafItems: leaves };
-  }, [currentBudgets, categories, expensesByMonthCat, currentMonthKey]);
-
-  // Chart data: 6 months budget vs actual
-  const chartData = useMemo(() => {
-    const catMap = new Map(categories.map((c) => [c.id, c]));
-
-    return monthKeys.map((mk) => {
-      const monthBudgets = allBudgets.filter(
-        (b) => b.month === mk.month && b.year === mk.year
-      );
-
-      // Sum planned (leaf only)
-      const parentCatIdsInBudgets = new Set<string>();
-      for (const b of monthBudgets) {
-        const cat = catMap.get(b.category_id || "");
-        if (cat?.parent_id) parentCatIdsInBudgets.add(cat.parent_id);
-      }
-      const planned = monthBudgets
-        .filter((b) => !parentCatIdsInBudgets.has(b.category_id || ""))
-        .reduce((s, b) => s + b.planned_amount, 0);
-
-      // Sum actual
-      const spentMap = expensesByMonthCat[mk.key] || {};
-      const actual = Object.values(spentMap).reduce((s, v) => s + v, 0);
-
-      return {
-        label: mk.label,
-        planned: Math.round(planned),
-        actual: Math.round(actual),
-        variance: 0, // will be calculated below
-      };
-    });
-  }, [monthKeys, allBudgets, categories, expensesByMonthCat]);
-
-  // Add variance %
-  const chartDataWithVariance = useMemo(() => {
-    return chartData.map((d, i) => {
-      if (i === 0) return { ...d, variance: 0 };
-      const prev = chartData[i - 1].actual;
-      const variance = prev > 0 ? Math.round(((d.actual - prev) / prev) * 100) : 0;
-      return { ...d, variance };
-    });
-  }, [chartData]);
-
-  // Accumulated totals
-  const accumulated = useMemo(() => {
-    const totalPlanned = chartData.reduce((s, d) => s + d.planned, 0);
-    const totalActual = chartData.reduce((s, d) => s + d.actual, 0);
-    const pct = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 0;
-    const diff = totalActual - totalPlanned;
-    return { totalPlanned, totalActual, pct, diff };
-  }, [chartData]);
+  const periodLabel = `${monthKeys[0].label} a ${monthKeys[monthKeys.length - 1].label}`;
 
   const isLoading = budgetsLoading || txLoading;
 
@@ -252,22 +87,38 @@ export function ProjectsPlanningTab() {
     return <div className="h-[300px] flex items-center justify-center text-muted-foreground">Carregando...</div>;
   }
 
-  const monthLabel = format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR });
-
   return (
     <div className="space-y-4">
-      {/* Accumulated Card */}
-      <BudgetAccumulatedCard accumulated={accumulated} />
+      {/* O período vale para o card, o gráfico e o quadro. */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-muted-foreground">Período</span>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          value={String(period)}
+          onValueChange={(v) => v && setPeriod(Number(v) as Period)}
+        >
+          {PERIOD_OPTIONS.map((m) => (
+            <ToggleGroupItem key={m} value={String(m)} aria-label={`Últimos ${m} meses`}>
+              {m} meses
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
 
-      {/* Chart */}
-      <BudgetChart data={chartDataWithVariance} />
-
-      {/* Current Month Budget vs Actual */}
-      <BudgetCurrentMonth
-        monthLabel={monthLabel}
-        parentItems={parentItems}
-        leafItems={leafItems}
+      <BudgetAccumulatedCard
+        title={`Acumulado — ${period} meses`}
+        accumulated={{
+          totalPlanned: report.totalPlanned,
+          totalActual: report.totalActual,
+          pct: report.pct,
+          diff: report.diff,
+        }}
       />
+
+      <BudgetChart title={`Evolução Orçado vs Realizado (${period} meses)`} data={report.months} />
+
+      <BudgetCurrentMonth periodLabel={`${periodLabel} (acumulado)`} items={report.items} />
 
       {/* Projects Section */}
       <ProjectsSection projects={activeProjects} />
