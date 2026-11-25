@@ -9,6 +9,7 @@ import { isMonthlyExpense, isMonthlyExpenseRefund, isMonthlyIncome } from "@/lib
 import { sharedSplitFields } from "@/lib/splitTransaction";
 import { competenceRangeFilter } from "@/lib/reportUtils";
 import { dateToYmd, endOfMonthYmd, invoicePeriodFromDueDate, startOfMonthYmd } from "@/lib/dateUtils";
+import { fetchRowsUpTo } from "@/lib/fetchAllRows";
 
 // Utility to check if invoice is closed for a given card/month/year
 async function checkInvoiceClosed(creditCardId: string | null | undefined, dueDate: string | null | undefined): Promise<{ isClosed: boolean; message?: string }> {
@@ -202,117 +203,130 @@ export function useTransactions(overrideMonth?: number, overrideYear?: number, o
     // e a identidade não serve de chave.
     queryKey: ["transactions", user?.id, showAll ? "all" : `${month}-${year}`, loadedCount, filterByDueDate, creditCardFilter, searchQuery, useHybridDateFilter, JSON.stringify(advancedFilters ?? null)],
     queryFn: async () => {
-      let query = supabase
-        .from("transactions")
-        .select(`
-          *,
-          categories (id, name, icon, color),
-          accounts (name),
-          credit_cards (id, name, last_digits, color),
-          projects (id, name, icon, color)
-        `, { count: "exact" });
+      // Monta a consulta do zero a cada página: o builder do supabase-js é
+      // mutável, e reaproveitá-lo acumularia `order`/`range` de páginas anteriores.
+      const buildQuery = () => {
+        let query = supabase
+          .from("transactions")
+          .select(`
+            *,
+            categories (id, name, icon, color),
+            accounts (name),
+            credit_cards (id, name, last_digits, color),
+            projects (id, name, icon, color)
+          `, { count: "exact" });
 
-      // Apply date filter only if not showing all
-      if (!showAll) {
-        if (useHybridDateFilter) {
-          // Competência do Dashboard: conta pela data, cartão pelo vencimento,
-          // e cartão sem vencimento volta a valer pela data.
-          //
-          // Faltava esse terceiro caso aqui: uma transação de cartão com
-          // due_date nulo não satisfazia nenhum ramo e sumia do Dashboard em
-          // todos os meses. A regra agora é única — ver competenceRangeFilter.
-          query = query.or(competenceRangeFilter(startDate, endDate));
-        } else if (filterByDueDate) {
-          // Filter by due_date for credit card invoices
-          // Include transactions where:
-          // 1. due_date is within the period, OR
-          // 2. due_date is NULL and date is within the period (for refunds/adjustments without due_date)
-          query = query.or(`and(due_date.gte.${startDate},due_date.lte.${endDate}),and(due_date.is.null,date.gte.${startDate},date.lte.${endDate})`);
-        } else {
-          // Filter by transaction date
-          query = query.gte("date", startDate).lte("date", endDate);
-        }
-      }
-
-      // Apply credit card filter
-      if (creditCardFilter === "only") {
-        query = query.not("credit_card_id", "is", null);
-      } else if (creditCardFilter === "exclude") {
-        query = query.is("credit_card_id", null);
-      }
-
-      // Apply search filter on database level
-      if (searchQuery && searchQuery.trim() !== "") {
-        query = query.ilike("description", `%${searchQuery}%`);
-      }
-
-      // Filtros avançados no BANCO, não no cliente.
-      //
-      // Antes eles eram aplicados em `transactions.filter(...)`, sobre o
-      // resultado já paginado: com 20 linhas carregadas, filtrar por uma
-      // categoria que só aparece na linha 300 devolvia lista vazia — a tela
-      // dizia "nenhuma transação" com o dado existindo. Filtrando aqui, o
-      // `.range()` recorta o conjunto JÁ filtrado, e o `count` passa a ser o
-      // total de verdade.
-      if (advancedFilters) {
-        const f = advancedFilters;
-
-        if (f.categoryIds && f.categoryIds.length > 0) {
-          query = query.in("category_id", f.categoryIds);
-        }
-        if (f.type && f.type !== "all") {
-          query = query.eq("type", f.type);
-        }
-        if (f.accountId) {
-          query = query.eq("account_id", f.accountId);
-        }
-        if (f.creditCardId) {
-          query = query.eq("credit_card_id", f.creditCardId);
-        }
-        if (f.status && f.status !== "all") {
-          query = query.eq("status", f.status);
+        // Apply date filter only if not showing all
+        if (!showAll) {
+          if (useHybridDateFilter) {
+            // Competência do Dashboard: conta pela data, cartão pelo vencimento,
+            // e cartão sem vencimento volta a valer pela data.
+            //
+            // Faltava esse terceiro caso aqui: uma transação de cartão com
+            // due_date nulo não satisfazia nenhum ramo e sumia do Dashboard em
+            // todos os meses. A regra agora é única — ver competenceRangeFilter.
+            query = query.or(competenceRangeFilter(startDate, endDate));
+          } else if (filterByDueDate) {
+            // Filter by due_date for credit card invoices
+            // Include transactions where:
+            // 1. due_date is within the period, OR
+            // 2. due_date is NULL and date is within the period (for refunds/adjustments without due_date)
+            query = query.or(`and(due_date.gte.${startDate},due_date.lte.${endDate}),and(due_date.is.null,date.gte.${startDate},date.lte.${endDate})`);
+          } else {
+            // Filter by transaction date
+            query = query.gte("date", startDate).lte("date", endDate);
+          }
         }
 
-        // dateToYmd e não toISOString: a data vem de um date-picker (meia-noite
-        // LOCAL) e a coluna é `date` puro. Convertida para UTC, a data inicial
-        // virava o dia anterior e a transação do primeiro dia do intervalo
-        // ficava de fora.
-        if (f.dateRange?.from) {
-          query = query.gte("date", dateToYmd(f.dateRange.from));
-        }
-        if (f.dateRange?.to) {
-          query = query.lte("date", dateToYmd(f.dateRange.to));
+        // Apply credit card filter
+        if (creditCardFilter === "only") {
+          query = query.not("credit_card_id", "is", null);
+        } else if (creditCardFilter === "exclude") {
+          query = query.is("credit_card_id", null);
         }
 
-        if (f.installmentFilter === "only_installments") {
-          query = query.gt("total_installments", 1);
-        } else if (f.installmentFilter === "no_installments") {
-          // Avulsas: sem parcelamento (null) ou com uma parcela só.
-          query = query.or("total_installments.is.null,total_installments.lte.1");
+        // Apply search filter on database level
+        if (searchQuery && searchQuery.trim() !== "") {
+          query = query.ilike("description", `%${searchQuery}%`);
         }
 
-        // Nos dois abaixo o "no_*" precisa incluir NULL: a coluna é opcional, e
-        // `not.eq.true` descartaria as linhas nulas junto (NULL <> true é NULL).
-        if (f.corporateFilter === "only_corporate") {
-          query = query.eq("is_corporate_expense", true);
-        } else if (f.corporateFilter === "no_corporate") {
-          query = query.or("is_corporate_expense.is.null,is_corporate_expense.eq.false");
+        // Filtros avançados no BANCO, não no cliente.
+        //
+        // Antes eles eram aplicados em `transactions.filter(...)`, sobre o
+        // resultado já paginado: com 20 linhas carregadas, filtrar por uma
+        // categoria que só aparece na linha 300 devolvia lista vazia — a tela
+        // dizia "nenhuma transação" com o dado existindo. Filtrando aqui, o
+        // `.range()` recorta o conjunto JÁ filtrado, e o `count` passa a ser o
+        // total de verdade.
+        if (advancedFilters) {
+          const f = advancedFilters;
+
+          if (f.categoryIds && f.categoryIds.length > 0) {
+            query = query.in("category_id", f.categoryIds);
+          }
+          if (f.type && f.type !== "all") {
+            query = query.eq("type", f.type);
+          }
+          if (f.accountId) {
+            query = query.eq("account_id", f.accountId);
+          }
+          if (f.creditCardId) {
+            query = query.eq("credit_card_id", f.creditCardId);
+          }
+          if (f.status && f.status !== "all") {
+            query = query.eq("status", f.status);
+          }
+
+          // dateToYmd e não toISOString: a data vem de um date-picker (meia-noite
+          // LOCAL) e a coluna é `date` puro. Convertida para UTC, a data inicial
+          // virava o dia anterior e a transação do primeiro dia do intervalo
+          // ficava de fora.
+          if (f.dateRange?.from) {
+            query = query.gte("date", dateToYmd(f.dateRange.from));
+          }
+          if (f.dateRange?.to) {
+            query = query.lte("date", dateToYmd(f.dateRange.to));
+          }
+
+          if (f.installmentFilter === "only_installments") {
+            query = query.gt("total_installments", 1);
+          } else if (f.installmentFilter === "no_installments") {
+            // Avulsas: sem parcelamento (null) ou com uma parcela só.
+            query = query.or("total_installments.is.null,total_installments.lte.1");
+          }
+
+          // Nos dois abaixo o "no_*" precisa incluir NULL: a coluna é opcional, e
+          // `not.eq.true` descartaria as linhas nulas junto (NULL <> true é NULL).
+          if (f.corporateFilter === "only_corporate") {
+            query = query.eq("is_corporate_expense", true);
+          } else if (f.corporateFilter === "no_corporate") {
+            query = query.or("is_corporate_expense.is.null,is_corporate_expense.eq.false");
+          }
+
+          if (f.cardPaymentFilter === "only_card_payment") {
+            query = query.eq("is_card_payment", true);
+          } else if (f.cardPaymentFilter === "no_card_payment") {
+            query = query.or("is_card_payment.is.null,is_card_payment.eq.false");
+          }
         }
+        return query;
+      };
 
-        if (f.cardPaymentFilter === "only_card_payment") {
-          query = query.eq("is_card_payment", true);
-        } else if (f.cardPaymentFilter === "no_card_payment") {
-          query = query.or("is_card_payment.is.null,is_card_payment.eq.false");
-        }
-      }
+      // Em páginas até `loadedCount`. Um `.range(0, loadedCount - 1)` único era
+      // cortado em 1000 linhas pelo PostgREST, sem erro — os Relatórios pedem
+      // 10.000 e recebiam só os 1000 lançamentos mais recentes (ver fetchRowsUpTo).
+      // `id` desempata a data: sem ordem estável, a paginação repete e pula linhas.
+      let totalCount = 0;
+      const transactions = await fetchRowsUpTo<Transaction>(async (from, to) => {
+        const { data, error, count } = await buildQuery()
+          .order("date", { ascending: false })
+          .order("id")
+          .range(from, to);
+        if (count != null) totalCount = count;
+        return { data: data as Transaction[] | null, error };
+      }, loadedCount);
 
-      // Use loadedCount to limit results (for "load more" functionality)
-      const { data, error, count } = await query
-        .order("date", { ascending: false })
-        .range(0, loadedCount - 1);
-
-      if (error) throw error;
-      return { transactions: data as Transaction[], totalCount: count || 0 };
+      return { transactions, totalCount };
     },
     enabled: !!user,
   });

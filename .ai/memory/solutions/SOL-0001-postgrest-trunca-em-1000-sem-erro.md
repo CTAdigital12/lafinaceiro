@@ -86,8 +86,11 @@ Executado em 2026-11-11 na branch `fix/paginacao-budget-exportacao`:
 
 ## Quando NÃO reutilizar
 - Consultas estreitas por construção (um lançamento, um grupo de parcelas ou de rateio, `.single()`, `head: true`).
-- Listas paginadas para a pessoa (`useTransactions` usa `.range()` com `count: "exact"` para a paginação da tela):
-  ali o recorte é intencional, e trazer tudo seria regressão de desempenho.
+- Listas paginadas para a pessoa, quando o limite pedido é **menor que o teto** (a tela de Transações pede 20 e
+  carrega mais aos poucos): ali o recorte é intencional, e trazer tudo seria regressão de desempenho.
+  **Ter `.range()` não basta:** `.range(0, 9999)` numa consulta só também volta cortado em 1000. Esse engano
+  deixou o `useTransactions` fora da triagem, e os Relatórios, que pedem `loadedCount: 10000`, viam só os 1000
+  lançamentos mais recentes. Para um teto acima de 1000 use `fetchRowsUpTo` (mesmo arquivo do `fetchAllRows`).
 - `fetchAllRows` não substitui agregação no banco: se o volume crescer muito, uma RPC/view que já devolve a soma
   é melhor do que trazer todas as linhas.
 

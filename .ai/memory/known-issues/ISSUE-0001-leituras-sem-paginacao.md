@@ -15,6 +15,7 @@ files:
   - src/hooks/useProjects.ts
   - src/components/accounts/AccountReconciliationModal.tsx
   - src/hooks/useCreditCardReconciliation.ts
+  - src/hooks/useTransactions.ts
 deps:
   - name: "@supabase/supabase-js"
     version: "^2"
@@ -29,7 +30,8 @@ resultado fica plausível, mas errado.
 
 ## Impacto
 Triagem de 2026-11-11, feita lendo o código, das 22 leituras de `transactions` sem `.range()`/`fetchAllRows` e
-sem filtro estreito na sintaxe (uma era falso positivo: `useTransactions` pagina de propósito, para a tela):
+sem filtro estreito na sintaxe (uma foi descartada como falso positivo, o `useTransactions`, e **não era**:
+ver "Achado depois da triagem" abaixo):
 
 | Risco | Leitura | Por quê |
 |---|---|---|
@@ -43,6 +45,20 @@ sem filtro estreito na sintaxe (uma era falso positivo: `useTransactions` pagina
 
 As outras 14 são estreitas pela lógica (um cartão num mês, um grupo de parcelas ou de divisão, uma janela de
 datas) e ficam como estão, conforme "Quando NÃO reutilizar" da SOL-0001.
+
+### Achado depois da triagem (2026-11-25): `useTransactions` mordeu em produção, corrigido
+
+A triagem descartou o `useTransactions` porque ele tem `.range()`. Só que ele fazia **uma** consulta
+`.range(0, loadedCount - 1)`, e as abas de Relatórios pedem `loadedCount: 10000` (Fluxo de Caixa, Patrimônio,
+Projetos, Raio-X; Estornos pede 1000). O PostgREST devolvia 1000 de 1591, só de 22/03/2026 em diante. Sintoma
+real: o "Acumulado" do Fluxo de Caixa em nov/2026 mostrava R$ 7.895, e o certo era R$ 4.257. As parcelas de
+cartão compradas antes do corte, e vencidas de junho a setembro, sumiam das despesas.
+Reproduzido no Postgres local restaurado do backup: com os 1000 mais recentes sai exatamente o valor da tela.
+
+Correção: o hook lê em páginas até `loadedCount` (`fetchRowsUpTo`), com `id` desempatando `date`. Com limite
+pequeno continua sendo uma requisição só. Teste `useTransactions.paginacao.test.tsx` falha sem a correção
+(`expected … to have a length of 1591 but got 1000`). A correção **ainda não foi vista na tela**.
+**Lição para a busca:** procurar também `loadedCount:` com valor acima de 1000, não só leituras sem `.range()`.
 
 ## Workaround
 Nenhum necessário enquanto o volume de cada recorte ficar abaixo de 1000. O volume de produção **não foi medido**
