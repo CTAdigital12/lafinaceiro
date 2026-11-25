@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fetchAllRows, MAX_ROWS, PAGE_SIZE } from "@/lib/fetchAllRows";
+import { fetchAllRows, fetchRowsUpTo, MAX_ROWS, PAGE_SIZE } from "@/lib/fetchAllRows";
 
 /**
  * O PostgREST corta a resposta no teto do projeto (1000 no Supabase) sem
@@ -59,5 +59,34 @@ describe("fetchAllRows", () => {
 
     await expect(fetchAllRows(page)).rejects.toThrow(/acima do previsto/);
     expect(page).toHaveBeenCalledTimes(MAX_ROWS / PAGE_SIZE + 1);
+  });
+});
+
+describe("fetchRowsUpTo", () => {
+  it("lê além do teto de 1000 até o limite pedido", async () => {
+    const { linhas, page } = servidor(1591);
+    expect(await fetchRowsUpTo(page, 10_000)).toEqual(linhas);
+  });
+
+  it("para no limite, mesmo havendo mais linhas", async () => {
+    const { linhas, page } = servidor(2000);
+    expect(await fetchRowsUpTo(page, 1200)).toEqual(linhas.slice(0, 1200));
+  });
+
+  it("com limite menor que a página, faz uma requisição só", async () => {
+    const { page } = servidor(500);
+    expect(await fetchRowsUpTo(page, 20)).toHaveLength(20);
+    expect(page).toHaveBeenCalledTimes(1);
+    expect(page).toHaveBeenCalledWith(0, 19);
+  });
+
+  it("não pula linhas sob um teto menor que a página", async () => {
+    const { linhas, page } = servidor(1300, 300);
+    expect(await fetchRowsUpTo(page, 10_000)).toEqual(linhas);
+  });
+
+  it("propaga o erro em vez de devolver o que já leu", async () => {
+    const page = vi.fn(() => Promise.resolve({ data: null, error: new Error("falhou") }));
+    await expect(fetchRowsUpTo(page, 100)).rejects.toThrow("falhou");
   });
 });
